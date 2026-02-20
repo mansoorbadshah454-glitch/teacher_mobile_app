@@ -99,7 +99,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                     description: "Update scores",
                     icon: Icons.bar_chart,
                     color: const Color(0xFF8b5cf6), // Violet
-                    onTap: () {},
+                    onTap: () => context.push('/my-class'),
                   ),
                   StatCard(
                     title: "Next Class",

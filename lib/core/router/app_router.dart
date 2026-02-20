@@ -9,6 +9,8 @@ import 'package:teacher_mobile_app/features/profile/presentation/screens/profile
 import 'package:teacher_mobile_app/features/contact/presentation/screens/contact_admins_screen.dart';
 import 'package:teacher_mobile_app/features/attendance/presentation/screens/attendance_screen.dart';
 import 'package:teacher_mobile_app/features/attendance/presentation/screens/attendance_report_screen.dart';
+import 'package:teacher_mobile_app/features/my_class/presentation/screens/my_class_screen.dart';
+import 'package:teacher_mobile_app/features/my_class/presentation/screens/student_performance_screen.dart';
 
 final appRouter = GoRouter(
   initialLocation: '/welcome',
@@ -66,6 +68,17 @@ final appRouter = GoRouter(
     GoRoute(
       path: '/attendance-report',
       builder: (context, state) => const AttendanceReportScreen(),
+    ),
+    GoRoute(
+      path: '/my-class',
+      builder: (context, state) => const MyClassScreen(),
+    ),
+    GoRoute(
+      path: '/my-class/student/:id',
+      builder: (context, state) {
+        final id = state.pathParameters['id']!;
+        return StudentPerformanceScreen(studentId: id);
+      },
     ),
   ],
 );
