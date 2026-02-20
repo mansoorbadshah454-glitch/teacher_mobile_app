@@ -109,25 +109,7 @@ class ProfileScreen extends ConsumerWidget {
                             const SizedBox(height: 16),
                             _buildChipRow("Subjects", subjectsList.isNotEmpty ? subjectsList : ["General"], isDark),
 
-                            const SizedBox(height: 40),
-                            SizedBox(
-                              width: double.infinity,
-                              child: ElevatedButton.icon(
-                                onPressed: () {
-                                  ScaffoldMessenger.of(context).showSnackBar(
-                                    const SnackBar(content: Text("Edit Profile feature coming soon!")),
-                                  );
-                                },
-                                style: ElevatedButton.styleFrom(
-                                  backgroundColor: AppTheme.accent,
-                                  foregroundColor: Colors.white,
-                                  padding: const EdgeInsets.symmetric(vertical: 16),
-                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                                ),
-                                icon: const Icon(Icons.edit),
-                                label: const Text("Edit Profile", style: TextStyle(fontSize: 16, fontWeight: FontWeight.bold)),
-                              ),
-                            )
+
                           ],
                         ),
                       ),

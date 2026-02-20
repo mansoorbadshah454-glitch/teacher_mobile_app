@@ -11,12 +11,8 @@ class AppDrawer extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final teacherAsync = ref.watch(teacherDataProvider);
     final schoolAsync = ref.watch(schoolDataProvider);
 
-    final teacherName = teacherAsync.value?['name'] ?? 'Teacher Name';
-    final teacherEmail = teacherAsync.value?['email'] ?? 'teacher@school.com';
-    
     final schoolName = schoolAsync.value?['name'] ?? 'School Name';
     final schoolLogo = schoolAsync.value?['logo'] ?? '';
 
@@ -33,32 +29,31 @@ class AppDrawer extends ConsumerWidget {
               crossAxisAlignment: CrossAxisAlignment.start,
               mainAxisAlignment: MainAxisAlignment.end,
               children: [
-                CircleAvatar(
-                  radius: 30,
-                  backgroundColor: Colors.white,
-                  backgroundImage: schoolLogo.isNotEmpty 
-                      ? CachedNetworkImageProvider(schoolLogo)
-                      : null,
-                  child: schoolLogo.isEmpty 
-                      ? const Icon(Icons.school, size: 40, color: AppTheme.primary)
-                      : null,
-                ),
-                const SizedBox(height: 8),
-                Text(
-                  schoolName,
-                  style: AppTheme.labelSmall.copyWith(
-                    color: Colors.white70,
-                    fontWeight: FontWeight.bold,
+                Center(
+                  child: Column(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      CircleAvatar(
+                        radius: 42,
+                        backgroundColor: Colors.white,
+                        backgroundImage: schoolLogo.isNotEmpty 
+                            ? CachedNetworkImageProvider(schoolLogo)
+                            : null,
+                        child: schoolLogo.isEmpty 
+                            ? const Icon(Icons.school, size: 45, color: AppTheme.primary)
+                            : null,
+                      ),
+                      const SizedBox(height: 8),
+                      Text(
+                        schoolName,
+                        textAlign: TextAlign.center,
+                        style: AppTheme.labelSmall.copyWith(
+                          color: Colors.white70,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ],
                   ),
-                ),
-                const SizedBox(height: 4),
-                Text(
-                  teacherName,
-                  style: AppTheme.titleLarge.copyWith(fontSize: 18),
-                ),
-                Text(
-                  teacherEmail,
-                  style: AppTheme.labelSmall.copyWith(color: Colors.white70),
                 ),
               ],
             ),
