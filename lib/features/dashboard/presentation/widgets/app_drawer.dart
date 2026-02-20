@@ -47,9 +47,10 @@ class AppDrawer extends ConsumerWidget {
                       Text(
                         schoolName,
                         textAlign: TextAlign.center,
-                        style: AppTheme.labelSmall.copyWith(
-                          color: Colors.white70,
-                          fontWeight: FontWeight.bold,
+                        style: AppTheme.titleLarge.copyWith(
+                          color: Colors.white,
+                          fontWeight: FontWeight.w700,
+                          fontSize: 20,
                         ),
                       ),
                     ],
@@ -119,7 +120,7 @@ class _DrawerItem extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final color = isDark ? Colors.white : Colors.black87;
+    final color = isDark ? Colors.white : AppTheme.primary;
     return ListTile(
       leading: Icon(icon, color: color),
       title: Text(title, style: TextStyle(color: color, fontWeight: FontWeight.w500)),
