@@ -92,7 +92,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                     description: "Mark presence",
                     icon: Icons.check_circle_outline,
                     color: const Color(0xFF6366f1), // Indigo
-                    onTap: () {},
+                    onTap: () => context.push('/attendance'),
                   ),
                   StatCard(
                     title: "My Class",
