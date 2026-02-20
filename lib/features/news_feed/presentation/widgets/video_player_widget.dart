@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:video_player/video_player.dart';
-import 'package:teacher_mobile_app/core/theme/app_theme.dart';
 
 class VideoPlayerWidget extends StatefulWidget {
   final String videoUrl;
@@ -34,7 +33,6 @@ class _VideoPlayerWidgetState extends State<VideoPlayerWidget> {
       });
   }
 
-  @override
   @override
   void dispose() {
     _controller.dispose();

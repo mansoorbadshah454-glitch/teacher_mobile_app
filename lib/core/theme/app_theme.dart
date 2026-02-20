@@ -85,4 +85,31 @@ class AppTheme {
       ),
     );
   }
+
+  static ThemeData get lightTheme {
+    return ThemeData(
+      useMaterial3: true,
+      brightness: Brightness.light,
+      scaffoldBackgroundColor: Colors.grey[50],
+      primaryColor: primary,
+      colorScheme: const ColorScheme.light(
+        primary: primary,
+        secondary: secondary,
+        surface: Colors.white,
+        background: Color(0xFFF9FAFB),
+      ),
+      fontFamily: GoogleFonts.inter().fontFamily,
+      appBarTheme: AppBarTheme(
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        centerTitle: false,
+        titleTextStyle: GoogleFonts.outfit(
+          fontSize: 20,
+          fontWeight: FontWeight.bold,
+          color: Colors.black87,
+        ),
+        iconTheme: const IconThemeData(color: Colors.black87),
+      ),
+    );
+  }
 }

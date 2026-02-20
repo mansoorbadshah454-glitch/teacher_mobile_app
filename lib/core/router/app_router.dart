@@ -5,6 +5,8 @@ import 'package:teacher_mobile_app/features/auth/presentation/screens/welcome_sc
 import 'package:teacher_mobile_app/features/dashboard/presentation/screens/dashboard_screen.dart';
 import 'package:teacher_mobile_app/features/settings/presentation/screens/settings_screen.dart';
 import 'package:teacher_mobile_app/features/news_feed/presentation/screens/news_feed_screen.dart';
+import 'package:teacher_mobile_app/features/profile/presentation/screens/profile_screen.dart';
+import 'package:teacher_mobile_app/features/contact/presentation/screens/contact_admins_screen.dart';
 
 final appRouter = GoRouter(
   initialLocation: '/welcome',
@@ -46,6 +48,14 @@ final appRouter = GoRouter(
     GoRoute(
       path: '/news-feed',
       builder: (context, state) => const NewsFeedScreen(),
+    ),
+    GoRoute(
+      path: '/profile',
+      builder: (context, state) => const ProfileScreen(),
+    ),
+    GoRoute(
+      path: '/contact-admins',
+      builder: (context, state) => const ContactAdminsScreen(),
     ),
   ],
 );

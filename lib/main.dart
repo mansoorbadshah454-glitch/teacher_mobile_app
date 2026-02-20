@@ -1,9 +1,9 @@
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:teacher_mobile_app/core/providers/theme_provider.dart';
 import 'package:teacher_mobile_app/core/router/app_router.dart';
 import 'package:teacher_mobile_app/core/theme/app_theme.dart';
-// import 'package:teacher_mobile_app/firebase_options.dart';
 
 import 'dart:async';
 
@@ -42,11 +42,13 @@ class TeacherApp extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
+    final themeMode = ref.watch(themeProvider);
+
     return MaterialApp.router(
       title: 'Teacher App',
-      theme: AppTheme.darkTheme, // Default to dark as per webapp
+      theme: AppTheme.lightTheme,
       darkTheme: AppTheme.darkTheme,
-      themeMode: ThemeMode.dark, // Enforce dark for now to match "Modern Prime" look
+      themeMode: themeMode,
       routerConfig: appRouter,
       debugShowCheckedModeBanner: false,
     );

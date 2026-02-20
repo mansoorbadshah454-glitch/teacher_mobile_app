@@ -19,9 +19,6 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   @override
   Widget build(BuildContext context) {
     print("🏠 [Dashboard] Build Started");
-    // Mock Data
-    const schoolName = "School Name";
-    const logoUrl = ""; // Empty for placeholder icon
 
     return Scaffold(
       backgroundColor: AppTheme.backgroundDark,

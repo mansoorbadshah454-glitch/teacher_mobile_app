@@ -1,21 +1,25 @@
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:teacher_mobile_app/core/theme/app_theme.dart';
+import 'package:teacher_mobile_app/core/providers/theme_provider.dart';
 
-class SettingsScreen extends StatefulWidget {
+class SettingsScreen extends ConsumerStatefulWidget {
   const SettingsScreen({super.key});
 
   @override
-  State<SettingsScreen> createState() => _SettingsScreenState();
+  ConsumerState<SettingsScreen> createState() => _SettingsScreenState();
 }
 
-class _SettingsScreenState extends State<SettingsScreen> {
-  bool isDarkMode = true; // Mock state
-
+class _SettingsScreenState extends ConsumerState<SettingsScreen> {
   @override
   Widget build(BuildContext context) {
+    final themeMode = ref.watch(themeProvider);
+    final isDarkMode = themeMode == ThemeMode.dark;
+    final isDarkBackground = Theme.of(context).brightness == Brightness.dark;
+
     return Scaffold(
-      backgroundColor: AppTheme.backgroundDark,
+      backgroundColor: Theme.of(context).colorScheme.background,
       appBar: AppBar(
         title: const Text("Settings"),
         leading: IconButton(
@@ -26,21 +30,18 @@ class _SettingsScreenState extends State<SettingsScreen> {
       body: ListView(
         children: [
           SwitchListTile(
-            title: const Text("Dark Mode", style: TextStyle(color: Colors.white)),
-            secondary: const Icon(Icons.dark_mode, color: Colors.white),
+            title: Text("Dark Mode", style: TextStyle(color: isDarkBackground ? Colors.white : Colors.black87)),
+            secondary: Icon(Icons.dark_mode, color: isDarkBackground ? Colors.white : Colors.black87),
             value: isDarkMode,
             onChanged: (val) {
-              setState(() {
-                isDarkMode = val;
-                // Add actual theme toggle logic here later (e.g. Riverpod provider)
-              });
+              ref.read(themeProvider.notifier).toggleTheme(val);
               ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text("Theme set to ${val ? 'Dark' : 'Light'} (UI Mock)")),
+                SnackBar(content: Text("Theme set to ${val ? 'Dark' : 'Light'}")),
               );
             },
             activeColor: AppTheme.primary,
           ),
-          const Divider(color: Colors.white24),
+          Divider(color: isDarkBackground ? Colors.white24 : Colors.black12),
           ListTile(
             leading: const Icon(Icons.info_outline, color: Colors.white),
             title: const Text("About App", style: TextStyle(color: Colors.white)),
