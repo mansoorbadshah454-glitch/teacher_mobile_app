@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "550173587112",
+    "project_id": "mai-sms-a8dad",
+    "storage_bucket": "mai-sms-a8dad.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:550173587112:android:1e4e4a3b3776f33300349d",
+        "android_client_info": {
+          "package_name": "com.schoolv5.teacher"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA8i3n65iyiSbwr5l4kfPCdRNoTX_g1sog"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

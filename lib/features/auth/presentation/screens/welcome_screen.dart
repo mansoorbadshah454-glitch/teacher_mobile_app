@@ -1,0 +1,95 @@
+import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
+import 'package:teacher_mobile_app/core/theme/app_theme.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+
+class WelcomeScreen extends StatefulWidget {
+  const WelcomeScreen({super.key});
+
+  @override
+  State<WelcomeScreen> createState() => _WelcomeScreenState();
+}
+
+class _WelcomeScreenState extends State<WelcomeScreen> with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  late Animation<Offset> _slideAnimation;
+
+  @override
+  void initState() {
+    super.initState();
+    print("👋 [WelcomeScreen] InitState");
+    _controller = AnimationController(
+      vsync: this,
+      duration: const Duration(milliseconds: 1500), // Slower for effect
+    );
+
+    // Slide from 0 to -1 (Off screen to left)
+    // Wait, the user wants "welcome screen animate to left to open dashboard screen".
+    // This usually means the Welcome Screen slides OUT to the Left, revealing Dashboard.
+    // OR Dashboard slides IN from Right.
+    // Let's assume standard "Push" navigation where new screen comes from Right, 
+    // effectively pushing old screen to Left.
+    // BUT user said "animate to left".
+    
+    // Let's make it auto-navigate after a delay with a specific transition.
+
+    Future.delayed(const Duration(seconds: 2), () {
+      if (mounted) {
+        final user = FirebaseAuth.instance.currentUser;
+        if (user != null) {
+          print("🚀 [WelcomeScreen] User logged in: ${user.uid}. Navigating to /dashboard");
+          context.go('/dashboard');
+        } else {
+           print("🔒 [WelcomeScreen] No user logged in. Navigating to /login");
+           context.go('/login');
+        }
+      } else {
+         print("⚠️ [WelcomeScreen] Widget unmounted before navigation");
+      }
+    });
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Scaffold(
+      backgroundColor: AppTheme.backgroundDark,
+      body: Container(
+        decoration: const BoxDecoration(
+          gradient: AppTheme.primaryGradient,
+        ),
+        child: Center(
+          child: Column(
+            mainAxisAlignment: MainAxisAlignment.center,
+            children: [
+              const Icon(
+                Icons.school, // Placeholder for Graduation Cap
+                size: 80,
+                color: Colors.white,
+              ),
+              const SizedBox(height: 20),
+              Text(
+                "MAI SMS",
+                style: AppTheme.displayLarge.copyWith(fontSize: 40),
+              ),
+              const SizedBox(height: 10),
+              Text(
+                "Teacher App",
+                style: AppTheme.titleLarge.copyWith(color: Colors.white70),
+              ),
+              const SizedBox(height: 40),
+              const CircularProgressIndicator(
+                color: Colors.white,
+              )
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
