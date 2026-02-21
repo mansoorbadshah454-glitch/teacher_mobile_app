@@ -13,10 +13,17 @@ import 'package:teacher_mobile_app/features/my_class/presentation/screens/my_cla
 import 'package:teacher_mobile_app/features/my_class/presentation/screens/student_performance_screen.dart';
 import 'package:teacher_mobile_app/features/next_class/presentation/screens/next_class_screen.dart';
 import 'package:teacher_mobile_app/features/contact_parents/presentation/screens/contact_parents_screen.dart';
+import 'package:teacher_mobile_app/features/notebook/screens/notebook_screen.dart';
+import 'package:teacher_mobile_app/features/notebook/screens/note_editor_screen.dart';
+import 'package:teacher_mobile_app/features/notebook/models/note_model.dart';
 
 final appRouter = GoRouter(
   initialLocation: '/welcome',
   routes: [
+    GoRoute(
+      path: '/',
+      redirect: (context, state) => '/welcome',
+    ),
     GoRoute(
       path: '/welcome',
       builder: (context, state) => const WelcomeScreen(),
@@ -89,6 +96,17 @@ final appRouter = GoRouter(
     GoRoute(
       path: '/contact-parents',
       builder: (context, state) => const ContactParentsScreen(),
+    ),
+    GoRoute(
+      path: '/notebook',
+      builder: (context, state) => const NotebookScreen(),
+    ),
+    GoRoute(
+      path: '/notebook/editor',
+      builder: (context, state) {
+        final note = state.extra as Note?;
+        return NoteEditorScreen(note: note);
+      },
     ),
   ],
 );

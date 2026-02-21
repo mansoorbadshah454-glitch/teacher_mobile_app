@@ -1,0 +1,69 @@
+import 'package:path/path.dart';
+import 'package:sqflite/sqflite.dart';
+import '../models/note_model.dart';
+
+class NotebookStorageService {
+  static final NotebookStorageService _instance = NotebookStorageService._internal();
+  factory NotebookStorageService() => _instance;
+  NotebookStorageService._internal();
+
+  Database? _database;
+
+  Future<Database> get database async {
+    if (_database != null) return _database!;
+    _database = await _initDb();
+    return _database!;
+  }
+
+  Future<Database> _initDb() async {
+    final databasesPath = await getDatabasesPath();
+    final path = join(databasesPath, 'notebook.db');
+
+    return await openDatabase(
+      path,
+      version: 1,
+      onCreate: (db, version) async {
+        await db.execute('''
+          CREATE TABLE notes(
+            id TEXT PRIMARY KEY,
+            title TEXT,
+            content TEXT,
+            color INTEGER,
+            createdAt TEXT,
+            updatedAt TEXT,
+            reminderDateTime TEXT
+          )
+        ''');
+      },
+    );
+  }
+
+  Future<void> saveNote(Note note) async {
+    final db = await database;
+    await db.insert(
+      'notes',
+      note.toMap(),
+      conflictAlgorithm: ConflictAlgorithm.replace,
+    );
+  }
+
+  Future<void> deleteNote(String id) async {
+    final db = await database;
+    await db.delete(
+      'notes',
+      where: 'id = ?',
+      whereArgs: [id],
+    );
+  }
+
+  Future<List<Note>> getNotes() async {
+    final db = await database;
+    final List<Map<String, dynamic>> maps = await db.query(
+      'notes',
+      orderBy: 'updatedAt DESC',
+    );
+    return List.generate(maps.length, (i) {
+      return Note.fromMap(maps[i]);
+    });
+  }
+}
