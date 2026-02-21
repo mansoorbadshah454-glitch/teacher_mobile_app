@@ -12,6 +12,7 @@ import 'package:teacher_mobile_app/features/attendance/presentation/screens/atte
 import 'package:teacher_mobile_app/features/my_class/presentation/screens/my_class_screen.dart';
 import 'package:teacher_mobile_app/features/my_class/presentation/screens/student_performance_screen.dart';
 import 'package:teacher_mobile_app/features/next_class/presentation/screens/next_class_screen.dart';
+import 'package:teacher_mobile_app/features/contact_parents/presentation/screens/contact_parents_screen.dart';
 
 final appRouter = GoRouter(
   initialLocation: '/welcome',
@@ -84,6 +85,10 @@ final appRouter = GoRouter(
     GoRoute(
       path: '/next-class',
       builder: (context, state) => const NextClassScreen(),
+    ),
+    GoRoute(
+      path: '/contact-parents',
+      builder: (context, state) => const ContactParentsScreen(),
     ),
   ],
 );

@@ -120,7 +120,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                     description: "Messages",
                     icon: Icons.people_outline,
                     color: const Color(0xFF3b82f6), // Blue
-                    onTap: () {},
+                    onTap: () => context.push('/contact-parents'),
                   ),
                 ],
               ),
