@@ -11,6 +11,8 @@ import 'package:teacher_mobile_app/features/attendance/presentation/screens/atte
 import 'package:teacher_mobile_app/features/attendance/presentation/screens/attendance_report_screen.dart';
 import 'package:teacher_mobile_app/features/my_class/presentation/screens/my_class_screen.dart';
 import 'package:teacher_mobile_app/features/my_class/presentation/screens/student_performance_screen.dart';
+import 'package:teacher_mobile_app/features/results/presentation/screens/all_students_result_screen.dart';
+import 'package:teacher_mobile_app/features/results/presentation/screens/upload_result_screen.dart';
 import 'package:teacher_mobile_app/features/next_class/presentation/screens/next_class_screen.dart';
 import 'package:teacher_mobile_app/features/contact_parents/presentation/screens/contact_parents_screen.dart';
 import 'package:teacher_mobile_app/features/notebook/screens/notebook_screen.dart';
@@ -87,6 +89,17 @@ final appRouter = GoRouter(
       builder: (context, state) {
         final id = state.pathParameters['id']!;
         return StudentPerformanceScreen(studentId: id);
+      },
+    ),
+    GoRoute(
+      path: '/my-class/all-results',
+      builder: (context, state) => const AllStudentsResultScreen(),
+    ),
+    GoRoute(
+      path: '/my-class/upload-result/:id',
+      builder: (context, state) {
+        final id = state.pathParameters['id']!;
+        return UploadResultScreen(studentId: id);
       },
     ),
     GoRoute(

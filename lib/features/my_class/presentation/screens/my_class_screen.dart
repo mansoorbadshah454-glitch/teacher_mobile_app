@@ -92,12 +92,30 @@ class MyClassScreen extends ConsumerWidget {
                             ),
                           ),
                           const SizedBox(width: 12),
-                          Column(
-                            crossAxisAlignment: CrossAxisAlignment.start,
-                            children: [
-                              const Text("Performance", style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: Colors.white)),
-                              Text("${assignedClass['name']} • ${students.length} Students • $absentCount Absent Today", style: const TextStyle(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.w500)),
-                            ],
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                const Text("Performance", style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: Colors.white)),
+                                Text(
+                                  "${assignedClass['name']} • ${students.length} Students", 
+                                  style: const TextStyle(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.w500),
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ],
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          TextButton.icon(
+                            onPressed: () => context.push('/my-class/all-results'),
+                            icon: const Text("Next", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                            label: const Icon(Icons.arrow_forward_ios, color: Colors.white, size: 14),
+                            style: TextButton.styleFrom(
+                              backgroundColor: Colors.indigoAccent.withOpacity(0.2),
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                            ),
                           ),
                         ],
                       ),
