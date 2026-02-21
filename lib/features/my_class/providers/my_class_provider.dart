@@ -112,12 +112,20 @@ final todaysAbsentCountProvider = StreamProvider<int>((ref) {
       .collection('attendance')
       .where('classId', isEqualTo: classId)
       .where('date', isEqualTo: today)
-      .orderBy('timestamp', descending: true)
-      .limit(1)
       .snapshots()
       .map((snapshot) {
         if (snapshot.docs.isNotEmpty) {
-          final data = snapshot.docs.first.data();
+          final docs = snapshot.docs.toList();
+          docs.sort((a, b) {
+            final tA = a.data()['timestamp'] as Timestamp?;
+            final tB = b.data()['timestamp'] as Timestamp?;
+            if (tA == null && tB == null) return 0;
+            if (tA == null) return 1;
+            if (tB == null) return -1;
+            return tB.compareTo(tA); // Descending order
+          });
+
+          final data = docs.first.data();
           final records = List<dynamic>.from(data['records'] ?? []);
           return records.where((r) => r['status'] == 'absent').length;
         }
