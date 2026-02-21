@@ -15,6 +15,7 @@ class NextClassScreen extends ConsumerWidget {
     final state = ref.watch(nextClassProvider);
     final notifier = ref.read(nextClassProvider.notifier);
     final teacherData = ref.watch(teacherDataProvider).value;
+    final schoolData = ref.watch(schoolDataProvider).value;
 
     return Scaffold(
       backgroundColor: AppTheme.backgroundDark,
@@ -27,7 +28,7 @@ class NextClassScreen extends ConsumerWidget {
                 Expanded(
                   child: AnimatedSwitcher(
                     duration: const Duration(milliseconds: 300),
-                    child: _buildBody(context, state, notifier, teacherData),
+                    child: _buildBody(context, state, notifier, teacherData, schoolData),
                   ),
                 ),
               ],
@@ -191,7 +192,7 @@ class NextClassScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildBody(BuildContext context, NextClassState state, NextClassNotifier notifier, Map<String, dynamic>? teacherData) {
+  Widget _buildBody(BuildContext context, NextClassState state, NextClassNotifier notifier, Map<String, dynamic>? teacherData, Map<String, dynamic>? schoolData) {
     if (state.isLoading && state.classes.isEmpty && state.students.isEmpty) {
       return const Center(
         child: CircularProgressIndicator(color: AppTheme.primary),
@@ -206,7 +207,7 @@ class NextClassScreen extends ConsumerWidget {
       case NextClassViewMode.students:
         return _buildStudentsView(state, notifier);
       case NextClassViewMode.test:
-        return _buildTestView(context, state, notifier, teacherData);
+        return _buildTestView(context, state, notifier, teacherData, schoolData);
     }
   }
 
@@ -468,7 +469,7 @@ class NextClassScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildTestView(BuildContext context, NextClassState state, NextClassNotifier notifier, Map<String, dynamic>? teacherData) {
+  Widget _buildTestView(BuildContext context, NextClassState state, NextClassNotifier notifier, Map<String, dynamic>? teacherData, Map<String, dynamic>? schoolData) {
     final filteredStudents = state.students.where((s) {
       final name = (s['name'] ?? '').toString().toLowerCase();
       final roll = (s['rollNo'] ?? '').toString().toLowerCase();
@@ -516,10 +517,11 @@ class NextClassScreen extends ConsumerWidget {
                   onTap: () {
                     PdfGeneratorService.generateTestReport(
                       context: context,
-                      schoolName: teacherData?['schoolName'] ?? "School App",
+                      schoolName: schoolData?['name'] ?? teacherData?['schoolName'] ?? "School App",
                       className: state.selectedClass?['name'] ?? "Class",
                       teacherName: teacherData?['name'] ?? "Teacher",
                       subject: state.selectedSubject ?? "Subject",
+                      chapterName: state.testChapter.trim(),
                       students: state.students,
                       testScores: state.testScores,
                     );
@@ -552,25 +554,49 @@ class NextClassScreen extends ConsumerWidget {
           ),
         ),
 
-        // Search Bar
+        // Search Bar & Chapter Input
         Padding(
           padding: const EdgeInsets.all(16),
-          child: Container(
-            padding: const EdgeInsets.symmetric(horizontal: 16),
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.05),
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: TextField(
-              onChanged: notifier.setSearchTerm,
-              style: const TextStyle(color: Colors.white),
-              decoration: const InputDecoration(
-                icon: Icon(Icons.search, color: Colors.grey, size: 20),
-                border: InputBorder.none,
-                hintText: "Search student...",
-                hintStyle: TextStyle(color: Colors.grey),
+          child: Column(
+            children: [
+              // Chapter Input
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.05),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: TextField(
+                  onChanged: notifier.setTestChapter,
+                  style: const TextStyle(color: Colors.white),
+                  decoration: const InputDecoration(
+                    icon: Icon(Icons.book, color: Colors.indigoAccent, size: 20),
+                    border: InputBorder.none,
+                    hintText: "Chapter (Optional)...",
+                    hintStyle: TextStyle(color: Colors.grey),
+                  ),
+                ),
               ),
-            ),
+              const SizedBox(height: 12),
+              // Search Bar
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16),
+                decoration: BoxDecoration(
+                  color: Colors.white.withOpacity(0.05),
+                  borderRadius: BorderRadius.circular(12),
+                ),
+                child: TextField(
+                  onChanged: notifier.setSearchTerm,
+                  style: const TextStyle(color: Colors.white),
+                  decoration: const InputDecoration(
+                    icon: Icon(Icons.search, color: Colors.grey, size: 20),
+                    border: InputBorder.none,
+                    hintText: "Search student...",
+                    hintStyle: TextStyle(color: Colors.grey),
+                  ),
+                ),
+              ),
+            ],
           ),
         ),
 

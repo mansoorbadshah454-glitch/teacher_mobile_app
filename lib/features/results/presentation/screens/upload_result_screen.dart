@@ -3,7 +3,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:teacher_mobile_app/core/theme/app_theme.dart';
 import 'package:teacher_mobile_app/core/providers/user_data_provider.dart';
-import 'package:teacher_mobile_app/features/my_class/providers/my_class_provider.dart';
 import 'package:teacher_mobile_app/features/attendance/providers/attendance_provider.dart';
 import 'package:teacher_mobile_app/features/results/providers/result_upload_provider.dart';
 import 'package:teacher_mobile_app/features/attendance/presentation/screens/attendance_screen.dart';

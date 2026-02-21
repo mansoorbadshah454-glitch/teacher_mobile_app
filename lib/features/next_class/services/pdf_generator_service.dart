@@ -12,6 +12,7 @@ class PdfGeneratorService {
     required String className,
     required String teacherName,
     required String subject,
+    required String chapterName,
     required List<Map<String, dynamic>> students,
     required Map<String, int> testScores,
   }) async {
@@ -59,6 +60,17 @@ class PdfGeneratorService {
                   fontWeight: pw.FontWeight.bold,
                 ),
               ),
+              if (chapterName.isNotEmpty) ...[
+                pw.SizedBox(height: 4),
+                pw.Text(
+                  'Chapter: $chapterName', 
+                  style: pw.TextStyle(
+                    fontSize: 12, 
+                    fontWeight: pw.FontWeight.bold,
+                    color: PdfColors.grey700,
+                  ),
+                ),
+              ],
               pw.SizedBox(height: 10),
               
               pw.Row(

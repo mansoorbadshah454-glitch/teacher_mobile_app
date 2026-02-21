@@ -13,6 +13,7 @@ class NextClassState {
   final bool isLoading;
   final bool isSaving;
   final String searchTerm;
+  final String testChapter;
   
   // Maps studentId to a map of { 'academic': score, 'homework': score }
   final Map<String, Map<String, int>> scoreUpdates;
@@ -29,6 +30,7 @@ class NextClassState {
     this.isLoading = false,
     this.isSaving = false,
     this.searchTerm = '',
+    this.testChapter = '',
     this.scoreUpdates = const {},
     this.testScores = const {},
   });
@@ -42,6 +44,7 @@ class NextClassState {
     bool? isLoading,
     bool? isSaving,
     String? searchTerm,
+    String? testChapter,
     Map<String, Map<String, int>>? scoreUpdates,
     Map<String, int>? testScores,
   }) {
@@ -54,6 +57,7 @@ class NextClassState {
       isLoading: isLoading ?? this.isLoading,
       isSaving: isSaving ?? this.isSaving,
       searchTerm: searchTerm ?? this.searchTerm,
+      testChapter: testChapter ?? this.testChapter,
       scoreUpdates: scoreUpdates ?? this.scoreUpdates,
       testScores: testScores ?? this.testScores,
     );
@@ -194,6 +198,10 @@ class NextClassNotifier extends StateNotifier<NextClassState> {
 
   void setSearchTerm(String term) {
     state = state.copyWith(searchTerm: term);
+  }
+
+  void setTestChapter(String chapter) {
+    state = state.copyWith(testChapter: chapter);
   }
 
   // --- Scoring Logic ---

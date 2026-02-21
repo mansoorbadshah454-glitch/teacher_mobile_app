@@ -98,7 +98,7 @@ class MyClassScreen extends ConsumerWidget {
                               children: [
                                 const Text("Performance", style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: Colors.white)),
                                 Text(
-                                  "${assignedClass['name']} • ${students.length} Students", 
+                                  "${assignedClass['name']} • ${students.length} Students • $absentCount Absent", 
                                   style: const TextStyle(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.w500),
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
