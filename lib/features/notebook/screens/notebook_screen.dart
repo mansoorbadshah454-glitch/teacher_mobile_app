@@ -5,6 +5,7 @@ import 'package:google_fonts/google_fonts.dart';
 import 'package:intl/intl.dart';
 import '../providers/notebook_provider.dart';
 import '../models/note_model.dart';
+import '../../../core/theme/app_theme.dart';
 
 class NotebookScreen extends ConsumerWidget {
   const NotebookScreen({super.key});
@@ -16,9 +17,15 @@ class NotebookScreen extends ConsumerWidget {
     return Scaffold(
       backgroundColor: const Color(0xFFF8FAFC), // Modern light background
       appBar: AppBar(
-        title: Text('Notebook', style: GoogleFonts.outfit(fontWeight: FontWeight.w600)),
-        backgroundColor: Colors.white,
-        foregroundColor: const Color(0xFF1E293B),
+        title: Text(
+          'My Notebook & Reminders',
+          style: GoogleFonts.outfit(
+            fontWeight: FontWeight.w600,
+            color: Colors.white,
+          ),
+        ),
+        backgroundColor: AppTheme.primary,
+        foregroundColor: Colors.white,
         elevation: 0,
         centerTitle: true,
       ),
@@ -59,7 +66,7 @@ class NotebookScreen extends ConsumerWidget {
       ),
       floatingActionButton: FloatingActionButton(
         onPressed: () => context.push('/notebook/editor'),
-        backgroundColor: const Color(0xFF0F172A), // Premium dark action button
+        backgroundColor: AppTheme.primary,
         child: const Icon(Icons.add, color: Colors.white),
       ),
     );
