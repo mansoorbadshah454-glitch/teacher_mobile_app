@@ -11,6 +11,7 @@ import 'package:teacher_mobile_app/features/attendance/presentation/screens/atte
 import 'package:teacher_mobile_app/features/attendance/presentation/screens/attendance_report_screen.dart';
 import 'package:teacher_mobile_app/features/my_class/presentation/screens/my_class_screen.dart';
 import 'package:teacher_mobile_app/features/my_class/presentation/screens/student_performance_screen.dart';
+import 'package:teacher_mobile_app/features/next_class/presentation/screens/next_class_screen.dart';
 
 final appRouter = GoRouter(
   initialLocation: '/welcome',
@@ -79,6 +80,10 @@ final appRouter = GoRouter(
         final id = state.pathParameters['id']!;
         return StudentPerformanceScreen(studentId: id);
       },
+    ),
+    GoRoute(
+      path: '/next-class',
+      builder: (context, state) => const NextClassScreen(),
     ),
   ],
 );

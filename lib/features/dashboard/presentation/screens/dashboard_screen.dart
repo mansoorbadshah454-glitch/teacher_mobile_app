@@ -106,7 +106,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                     description: "Subjects period",
                     icon: Icons.access_time,
                     color: const Color(0xFFf59e0b), // Amber
-                    onTap: () {},
+                    onTap: () => context.push('/next-class'),
                   ),
                   StatCard(
                     title: "Notebook",
