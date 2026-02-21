@@ -53,14 +53,19 @@ class _StatCardState extends State<StatCard> {
         curve: Curves.easeInOut,
         child: Container(
           decoration: BoxDecoration(
-            color: AppTheme.surfaceDark,
+            color: Theme.of(context).colorScheme.surface,
             borderRadius: BorderRadius.circular(20),
             border: Border.all(
-              color: Colors.white.withOpacity(0.05),
+              color: Theme.of(context).dividerColor.withOpacity(0.05),
             ),
             boxShadow: [
               BoxShadow(
-                color: widget.color.withOpacity(0.1),
+                color: Colors.black.withOpacity(0.20),
+                blurRadius: 20,
+                offset: const Offset(0, 8),
+              ),
+              BoxShadow(
+                color: widget.color.withOpacity(0.15),
                 blurRadius: 20,
                 offset: const Offset(0, 10),
               ),
@@ -130,14 +135,14 @@ class _StatCardState extends State<StatCard> {
                         children: [
                           Text(
                             widget.title,
-                            style: AppTheme.titleLarge.copyWith(fontSize: 18),
+                            style: Theme.of(context).textTheme.titleLarge?.copyWith(fontSize: 18) ?? const TextStyle(fontSize: 18, fontWeight: FontWeight.w600),
                           ),
                           const SizedBox(height: 4),
                           Text(
                             widget.description,
-                            style: AppTheme.labelSmall.copyWith(
-                              color: Colors.white.withOpacity(0.6),
-                            ),
+                            style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                                  color: Theme.of(context).textTheme.bodySmall?.color?.withOpacity(0.6) ?? Colors.grey,
+                                ) ?? const TextStyle(fontSize: 12, color: Colors.grey),
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
                           ),

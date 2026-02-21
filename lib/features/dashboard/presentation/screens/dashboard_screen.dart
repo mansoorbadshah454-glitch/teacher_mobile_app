@@ -21,10 +21,18 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     print("🏠 [Dashboard] Build Started");
 
     return Scaffold(
-      backgroundColor: AppTheme.backgroundDark,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       drawer: const AppDrawer(),
       appBar: AppBar(
         // Removed Title / School Logo here
+        backgroundColor: Colors.transparent, // Let Container gradient show through
+        elevation: 0,
+        iconTheme: const IconThemeData(color: Colors.white), // Forces Drawer Icon to be White
+        flexibleSpace: Container(
+          decoration: const BoxDecoration(
+            gradient: AppTheme.primaryGradient,
+          ),
+        ),
         actions: [
           // Duty Toggle
           Container(
@@ -34,14 +42,23 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 Text(
                   isOnDuty ? "On Duty" : "Off Duty",
                   style: TextStyle(
-                    color: isOnDuty ? Colors.greenAccent : Colors.grey,
+                    color: isOnDuty ? Colors.green : Colors.white,
                     fontSize: 12,
                     fontWeight: FontWeight.bold,
                   ),
                 ),
                 Switch(
                   value: isOnDuty,
-                  activeColor: Colors.greenAccent,
+                  activeColor: Colors.white, // The dot when ON
+                  activeTrackColor: Colors.green, // The background when ON
+                  inactiveThumbColor: Colors.white, // The dot when OFF
+                  inactiveTrackColor: Colors.white24, // The background when OFF
+                  trackOutlineColor: MaterialStateProperty.resolveWith((states) {
+                    if (states.contains(MaterialState.selected)) {
+                      return Colors.green; // Outline when ON
+                    }
+                    return Colors.white; // Outline when OFF
+                  }),
                   onChanged: (val) {
                     setState(() {
                       isOnDuty = val;
@@ -54,25 +71,36 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           )
         ],
       ),
-      body: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            // Welcome Section
-            Text(
-              "Welcome back, ${FirebaseAuth.instance.currentUser?.displayName ?? 'Teacher'}!",
-              style: AppTheme.displayLarge.copyWith(fontSize: 24),
+      body: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Welcome Section
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16.0, 8.0, 16.0, 16.0),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(
+                  "Welcome back, ${FirebaseAuth.instance.currentUser?.displayName ?? 'Teacher'}!",
+                  style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                        fontWeight: FontWeight.bold,
+                        color: Theme.of(context).primaryColor,
+                      ) ?? TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Theme.of(context).primaryColor),
+                ),
+                const SizedBox(height: 2),
+                Text(
+                  "Please start your day by toggling the Duty On button.",
+                  style: Theme.of(context).textTheme.bodySmall?.copyWith(fontSize: 12) ?? const TextStyle(fontSize: 12, color: Colors.grey),
+                ),
+              ],
             ),
-            const SizedBox(height: 4),
-            Text(
-              "Please start your day by toggling the Duty On button.",
-              style: AppTheme.labelSmall.copyWith(fontSize: 14),
-            ),
-            const SizedBox(height: 24),
+          ),
+          const SizedBox(height: 24),
 
-            // Grid
-            Expanded(
+          // Grid
+          Expanded(
+            child: Padding(
+              padding: const EdgeInsets.symmetric(horizontal: 16.0),
               child: GridView.count(
                 crossAxisCount: 2,
                 crossAxisSpacing: 16,
@@ -125,8 +153,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 ],
               ),
             ),
-          ],
-        ),
+          ),
+        ],
       ),
     );
   }
