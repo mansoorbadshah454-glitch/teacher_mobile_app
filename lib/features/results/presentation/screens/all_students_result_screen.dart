@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:teacher_mobile_app/core/theme/app_theme.dart';
 import 'package:teacher_mobile_app/core/providers/user_data_provider.dart';
 import 'package:teacher_mobile_app/features/my_class/providers/my_class_provider.dart';
 import 'package:teacher_mobile_app/features/attendance/providers/attendance_provider.dart';
@@ -16,25 +15,28 @@ class AllStudentsResultScreen extends ConsumerWidget {
     final teacherDataAsync = ref.watch(teacherDataProvider);
     final searchQuery = ref.watch(myClassSearchQueryProvider);
 
+    final isLight = Theme.of(context).brightness == Brightness.light;
+    final isDark = !isLight;
+
     return Scaffold(
-      backgroundColor: AppTheme.backgroundDark,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.chevron_left, color: Colors.white, size: 30),
+          icon: Icon(Icons.chevron_left, color: isDark ? Colors.white : const Color(0xFF6366f1), size: 30),
           onPressed: () => context.pop(),
         ),
-        title: const Column(
+        title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
               "Upload Result Cards",
-              style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18),
+              style: TextStyle(color: isDark ? Colors.white : Colors.indigo[900], fontWeight: FontWeight.bold, fontSize: 18),
             ),
             Text(
               "for parents",
-              style: TextStyle(color: Colors.grey, fontSize: 12),
+              style: TextStyle(color: isDark ? Colors.grey : Colors.grey[600], fontSize: 12),
             ),
           ],
         ),
@@ -63,18 +65,20 @@ class AllStudentsResultScreen extends ConsumerWidget {
                   padding: const EdgeInsets.all(16.0),
                   child: Container(
                     decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.05),
+                      color: isDark ? Colors.white.withOpacity(0.05) : Colors.white,
                       borderRadius: BorderRadius.circular(18),
+                      border: Border.all(color: isDark ? Colors.transparent : Colors.black.withOpacity(0.05)),
+                      boxShadow: isLight ? [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 4))] : [],
                     ),
                     child: TextField(
-                      style: const TextStyle(color: Colors.white),
+                      style: TextStyle(color: isDark ? Colors.white : Colors.indigo[900]),
                       onChanged: (val) => ref.read(myClassSearchQueryProvider.notifier).state = val,
-                      decoration: const InputDecoration(
+                      decoration: InputDecoration(
                         hintText: "Search students...",
-                        hintStyle: TextStyle(color: Colors.grey),
-                        prefixIcon: Icon(Icons.search, color: Colors.grey),
+                        hintStyle: TextStyle(color: isDark ? Colors.grey : Colors.grey[400]),
+                        prefixIcon: Icon(Icons.search, color: isDark ? Colors.grey : Colors.indigo[300]),
                         border: InputBorder.none,
-                        contentPadding: EdgeInsets.all(16),
+                        contentPadding: const EdgeInsets.all(16),
                       ),
                     ),
                   ),
@@ -97,11 +101,12 @@ class AllStudentsResultScreen extends ConsumerWidget {
 
                             return Container(
                               margin: const EdgeInsets.only(bottom: 12),
-                              padding: const EdgeInsets.all(16),
+                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
                               decoration: BoxDecoration(
-                                color: Colors.white.withOpacity(0.03),
+                                color: isDark ? Colors.white.withOpacity(0.03) : Colors.white,
                                 borderRadius: BorderRadius.circular(22),
-                                border: Border.all(color: Colors.white.withOpacity(0.05)),
+                                border: Border.all(color: isDark ? Colors.white.withOpacity(0.05) : Colors.black.withOpacity(0.05)),
+                                boxShadow: isLight ? [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8, offset: const Offset(0, 4))] : [],
                               ),
                               child: Row(
                                 children: [
@@ -116,9 +121,9 @@ class AllStudentsResultScreen extends ConsumerWidget {
                                     child: Column(
                                       crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
-                                        Text(student['name'] ?? 'Unknown', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.white)),
+                                        Text(student['name'] ?? 'Unknown', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: isDark ? Colors.white : Colors.indigo[900])),
                                         const SizedBox(height: 4),
-                                        Text("Roll No: ${student['rollNo'] ?? student['roll'] ?? '-'}", style: const TextStyle(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.w500)),
+                                        Text("Roll No: ${student['rollNo'] ?? student['roll'] ?? '-'}", style: TextStyle(fontSize: 12, color: isLight ? Colors.grey[600] : Colors.grey, fontWeight: FontWeight.w500)),
                                       ],
                                     ),
                                   ),
@@ -137,10 +142,12 @@ class AllStudentsResultScreen extends ConsumerWidget {
                                       context.push('/my-class/upload-result/${student['id']}');
                                     },
                                     style: ElevatedButton.styleFrom(
-                                        backgroundColor: Colors.indigoAccent,
+                                        backgroundColor: isLight ? const Color(0xFF6366f1) : Colors.indigoAccent,
                                         shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
                                         padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
-                                        minimumSize: Size.zero
+                                        minimumSize: Size.zero,
+                                        elevation: isLight ? 4 : 0,
+                                        shadowColor: const Color(0xFF6366f1).withOpacity(0.5),
                                     ),
                                     child: const Text("Upload", style: TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold)),
                                   ),

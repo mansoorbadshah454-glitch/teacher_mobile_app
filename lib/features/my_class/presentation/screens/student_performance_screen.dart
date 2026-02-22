@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:teacher_mobile_app/core/theme/app_theme.dart';
 import 'package:teacher_mobile_app/core/providers/user_data_provider.dart';
 import 'package:teacher_mobile_app/features/attendance/providers/attendance_provider.dart';
 import 'package:teacher_mobile_app/features/my_class/providers/student_performance_provider.dart';
@@ -27,15 +26,18 @@ class _StudentPerformanceScreenState extends ConsumerState<StudentPerformanceScr
     final student = studentsData?.firstWhere((s) => s['id'] == widget.studentId, orElse: () => {});
     final teacherAssignedSubjects = List<String>.from(teacherData?['subjects'] ?? []);
 
+    final isLight = Theme.of(context).brightness == Brightness.light;
+    final isDark = !isLight;
+
     return Scaffold(
-      backgroundColor: AppTheme.backgroundDark,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: SafeArea(
         child: performanceAsync.when(
           loading: () => const Center(child: CircularProgressIndicator(color: Colors.indigoAccent)),
           error: (e, st) => Center(child: Text('Error: $e', style: const TextStyle(color: Colors.red))),
           data: (data) {
             if (student == null || student.isEmpty || data == null) {
-              return const Center(child: Text("Student not found", style: TextStyle(color: Colors.white)));
+              return Center(child: Text("Student not found", style: TextStyle(color: isDark ? Colors.white : Colors.redAccent)));
             }
             
             return Stack(
@@ -55,24 +57,26 @@ class _StudentPerformanceScreenState extends ConsumerState<StudentPerformanceScr
                               child: Container(
                                 width: 44,
                                 height: 44,
-                                decoration: BoxDecoration(
-                                  color: Colors.white.withOpacity(0.05),
-                                  borderRadius: BorderRadius.circular(14),
-                                ),
-                                child: const Icon(Icons.chevron_left, color: Colors.white),
+                              decoration: BoxDecoration(
+                                color: isDark ? Colors.white.withOpacity(0.05) : Colors.white,
+                                borderRadius: BorderRadius.circular(14),
+                                border: Border.all(color: isDark ? Colors.transparent : Colors.black.withOpacity(0.05)),
+                                boxShadow: isLight ? [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 4))] : [],
                               ),
+                              child: Icon(Icons.chevron_left, color: isDark ? Colors.white : const Color(0xFF6366f1)),
                             ),
-                            const SizedBox(width: 12),
-                            Column(
-                              crossAxisAlignment: CrossAxisAlignment.start,
-                              children: [
-                                Text(student['name'] ?? 'Student', style: const TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: Colors.white)),
-                                const Text("Editing", style: TextStyle(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.w500)),
-                              ],
-                            ),
-                          ],
-                        ),
+                          ),
+                          const SizedBox(width: 12),
+                          Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(student['name'] ?? 'Student', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: isDark ? Colors.white : Colors.indigo[900])),
+                              const Text("Editing", style: TextStyle(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.w500)),
+                            ],
+                          ),
+                        ],
                       ),
+                    ),
 
                       // --- 1. Academic Scores ---
                       Padding(
@@ -80,18 +84,19 @@ class _StudentPerformanceScreenState extends ConsumerState<StudentPerformanceScr
                         child: Container(
                           padding: const EdgeInsets.all(20),
                           decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.03),
+                            color: isDark ? Colors.white.withOpacity(0.03) : Colors.white,
                             borderRadius: BorderRadius.circular(28),
-                            border: Border.all(color: Colors.white.withOpacity(0.05)),
+                            border: Border.all(color: isDark ? Colors.white.withOpacity(0.05) : Colors.black.withOpacity(0.05)),
+                            boxShadow: isLight ? [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 15, offset: const Offset(0, 8))] : [],
                           ),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Row(
-                                children: const [
-                                  Icon(Icons.emoji_events, color: Colors.greenAccent, size: 20),
-                                  SizedBox(width: 8),
-                                  Text("Academic Results", style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Colors.white)),
+                                children: [
+                                  const Icon(Icons.emoji_events, color: Colors.greenAccent, size: 20),
+                                  const SizedBox(width: 8),
+                                  Text("Academic Results", style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: isDark ? Colors.white : Colors.indigo[900])),
                                 ],
                               ),
                               const SizedBox(height: 16),
@@ -102,18 +107,18 @@ class _StudentPerformanceScreenState extends ConsumerState<StudentPerformanceScr
                                     Row(
                                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                       children: [
-                                        Text(entry.key, style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600)),
-                                        Text("${entry.value}%", style: TextStyle(color: isEditable ? Colors.greenAccent : Colors.grey, fontSize: 14, fontWeight: FontWeight.w600)),
+                                        Text(entry.key, style: TextStyle(color: isDark ? Colors.white : Colors.indigo[700], fontSize: 14, fontWeight: FontWeight.w600)),
+                                        Text("${entry.value}%", style: TextStyle(color: isEditable ? (isLight ? const Color(0xFF10b981) : Colors.greenAccent) : Colors.grey, fontSize: 14, fontWeight: FontWeight.w600)),
                                       ],
                                     ),
                                     Opacity(
                                       opacity: isEditable ? 1.0 : 0.4,
                                       child: SliderTheme(
                                         data: SliderThemeData(
-                                          activeTrackColor: Colors.greenAccent,
-                                          inactiveTrackColor: Colors.greenAccent.withOpacity(0.2),
-                                          thumbColor: Colors.greenAccent,
-                                          overlayColor: Colors.greenAccent.withOpacity(0.1),
+                                          activeTrackColor: isLight ? const Color(0xFF10b981) : Colors.greenAccent,
+                                          inactiveTrackColor: (isLight ? const Color(0xFF10b981) : Colors.greenAccent).withOpacity(0.2),
+                                          thumbColor: isLight ? const Color(0xFF10b981) : Colors.greenAccent,
+                                          overlayColor: (isLight ? const Color(0xFF10b981) : Colors.greenAccent).withOpacity(0.1),
                                           trackHeight: 6,
                                         ),
                                         child: Slider(
@@ -141,18 +146,19 @@ class _StudentPerformanceScreenState extends ConsumerState<StudentPerformanceScr
                         child: Container(
                           padding: const EdgeInsets.all(20),
                           decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.03),
+                            color: isDark ? Colors.white.withOpacity(0.03) : Colors.white,
                             borderRadius: BorderRadius.circular(28),
-                            border: Border.all(color: Colors.white.withOpacity(0.05)),
+                            border: Border.all(color: isDark ? Colors.white.withOpacity(0.05) : Colors.black.withOpacity(0.05)),
+                            boxShadow: isLight ? [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 15, offset: const Offset(0, 8))] : [],
                           ),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Row(
-                                children: const [
-                                  Icon(Icons.assignment, color: Colors.orangeAccent, size: 20),
-                                  SizedBox(width: 8),
-                                  Text("Homework Scores", style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Colors.white)),
+                                children: [
+                                  const Icon(Icons.assignment, color: Colors.orangeAccent, size: 20),
+                                  const SizedBox(width: 8),
+                                  Text("Homework Scores", style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: isDark ? Colors.white : Colors.indigo[900])),
                                 ],
                               ),
                               const SizedBox(height: 16),
@@ -163,18 +169,18 @@ class _StudentPerformanceScreenState extends ConsumerState<StudentPerformanceScr
                                     Row(
                                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                       children: [
-                                        Text(entry.key, style: const TextStyle(color: Colors.white, fontSize: 14, fontWeight: FontWeight.w600)),
-                                        Text("${entry.value}%", style: TextStyle(color: isEditable ? Colors.orangeAccent : Colors.grey, fontSize: 14, fontWeight: FontWeight.w600)),
+                                        Text(entry.key, style: TextStyle(color: isDark ? Colors.white : Colors.indigo[700], fontSize: 14, fontWeight: FontWeight.w600)),
+                                        Text("${entry.value}%", style: TextStyle(color: isEditable ? (isLight ? const Color(0xFFeab308) : Colors.orangeAccent) : Colors.grey, fontSize: 14, fontWeight: FontWeight.w600)),
                                       ],
                                     ),
                                     Opacity(
                                       opacity: isEditable ? 1.0 : 0.4,
                                       child: SliderTheme(
                                         data: SliderThemeData(
-                                          activeTrackColor: Colors.orangeAccent,
-                                          inactiveTrackColor: Colors.orangeAccent.withOpacity(0.2),
-                                          thumbColor: Colors.orangeAccent,
-                                          overlayColor: Colors.orangeAccent.withOpacity(0.1),
+                                          activeTrackColor: isLight ? const Color(0xFFeab308) : Colors.orangeAccent,
+                                          inactiveTrackColor: (isLight ? const Color(0xFFeab308) : Colors.orangeAccent).withOpacity(0.2),
+                                          thumbColor: isLight ? const Color(0xFFeab308) : Colors.orangeAccent,
+                                          overlayColor: (isLight ? const Color(0xFFeab308) : Colors.orangeAccent).withOpacity(0.1),
                                           trackHeight: 6,
                                         ),
                                         child: Slider(
@@ -202,18 +208,19 @@ class _StudentPerformanceScreenState extends ConsumerState<StudentPerformanceScr
                         child: Container(
                           padding: const EdgeInsets.all(20),
                           decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.03),
+                            color: isDark ? Colors.white.withOpacity(0.03) : Colors.white,
                             borderRadius: BorderRadius.circular(28),
-                            border: Border.all(color: Colors.white.withOpacity(0.05)),
+                            border: Border.all(color: isDark ? Colors.white.withOpacity(0.05) : Colors.black.withOpacity(0.05)),
+                            boxShadow: isLight ? [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 15, offset: const Offset(0, 8))] : [],
                           ),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Row(
-                                children: const [
-                                  Icon(Icons.favorite, color: Colors.pinkAccent, size: 20),
-                                  SizedBox(width: 8),
-                                  Text("Wellness Profile", style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Colors.white)),
+                                children: [
+                                  const Icon(Icons.favorite, color: Colors.pinkAccent, size: 20),
+                                  const SizedBox(width: 8),
+                                  Text("Wellness Profile", style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: isDark ? Colors.white : Colors.indigo[900])),
                                 ],
                               ),
                               const SizedBox(height: 16),
@@ -224,7 +231,7 @@ class _StudentPerformanceScreenState extends ConsumerState<StudentPerformanceScr
                                     Row(
                                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                       children: [
-                                        Text(metric[0].toUpperCase() + metric.substring(1), style: const TextStyle(color: Colors.grey, fontSize: 14, fontWeight: FontWeight.w600)),
+                                        Text(metric[0].toUpperCase() + metric.substring(1), style: TextStyle(color: isLight ? Colors.grey[600] : Colors.grey, fontSize: 14, fontWeight: FontWeight.w600)),
                                         Text("$score%", style: const TextStyle(color: Color(0xFF6366f1), fontSize: 14, fontWeight: FontWeight.w600)),
                                       ],
                                     ),
@@ -260,34 +267,35 @@ class _StudentPerformanceScreenState extends ConsumerState<StudentPerformanceScr
                         child: Container(
                           padding: const EdgeInsets.all(20),
                           decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.03),
+                            color: isDark ? Colors.white.withOpacity(0.03) : Colors.white,
                             borderRadius: BorderRadius.circular(28),
-                            border: Border.all(color: Colors.white.withOpacity(0.05)),
+                            border: Border.all(color: isDark ? Colors.white.withOpacity(0.05) : Colors.black.withOpacity(0.05)),
+                            boxShadow: isLight ? [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 15, offset: const Offset(0, 8))] : [],
                           ),
                           child: Column(
                             crossAxisAlignment: CrossAxisAlignment.start,
                             children: [
                               Row(
-                                children: const [
-                                  Icon(Icons.calendar_today, color: Colors.tealAccent, size: 20),
-                                  SizedBox(width: 8),
-                                  Text("Attendance Percentage", style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: Colors.white)),
+                                children: [
+                                  const Icon(Icons.calendar_today, color: Colors.tealAccent, size: 20),
+                                  const SizedBox(width: 8),
+                                  Text("Attendance Percentage", style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: isDark ? Colors.white : Colors.indigo[900])),
                                 ],
                               ),
                               const SizedBox(height: 16),
                               Row(
                                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
                                 children: [
-                                  const Text("Attendance", style: TextStyle(color: Colors.grey, fontSize: 14, fontWeight: FontWeight.w600)),
-                                  Text("${data.attendance}%", style: const TextStyle(color: Colors.tealAccent, fontSize: 14, fontWeight: FontWeight.w600)),
+                                  Text("Attendance", style: TextStyle(color: isLight ? Colors.grey[600] : Colors.grey, fontSize: 14, fontWeight: FontWeight.w600)),
+                                  Text("${data.attendance}%", style: TextStyle(color: isLight ? const Color(0xFF10b981) : Colors.tealAccent, fontSize: 14, fontWeight: FontWeight.w600)),
                                 ],
                               ),
                               SliderTheme(
                                 data: SliderThemeData(
-                                  activeTrackColor: Colors.tealAccent,
-                                  inactiveTrackColor: Colors.redAccent,
-                                  thumbColor: Colors.tealAccent,
-                                  overlayColor: Colors.tealAccent.withOpacity(0.1),
+                                  activeTrackColor: isLight ? const Color(0xFF10b981) : Colors.tealAccent,
+                                  inactiveTrackColor: isLight ? Colors.redAccent.withOpacity(0.2) : Colors.redAccent,
+                                  thumbColor: isLight ? const Color(0xFF10b981) : Colors.tealAccent,
+                                  overlayColor: (isLight ? const Color(0xFF10b981) : Colors.tealAccent).withOpacity(0.1),
                                   trackHeight: 6,
                                 ),
                                 child: Slider(
@@ -335,7 +343,7 @@ class _StudentPerformanceScreenState extends ConsumerState<StudentPerformanceScr
                       decoration: BoxDecoration(
                         color: const Color(0xFF6366f1),
                         borderRadius: BorderRadius.circular(20),
-                        boxShadow: [BoxShadow(color: const Color(0xFF6366f1).withOpacity(0.5), blurRadius: 20, offset: const Offset(0, 10))],
+                        boxShadow: [BoxShadow(color: const Color(0xFF6366f1).withOpacity(isLight ? 0.3 : 0.5), blurRadius: 20, offset: const Offset(0, 10))],
                       ),
                       alignment: Alignment.center,
                       child: _saving 

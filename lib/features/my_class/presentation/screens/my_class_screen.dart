@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:teacher_mobile_app/core/theme/app_theme.dart';
 import 'package:teacher_mobile_app/core/providers/user_data_provider.dart';
 import 'package:teacher_mobile_app/features/attendance/providers/attendance_provider.dart';
 import 'package:teacher_mobile_app/features/my_class/providers/my_class_provider.dart';
@@ -19,8 +18,11 @@ class MyClassScreen extends ConsumerWidget {
     final absentCountAsync = ref.watch(todaysAbsentCountProvider);
     final searchQuery = ref.watch(myClassSearchQueryProvider);
 
+    final isLight = Theme.of(context).brightness == Brightness.light;
+    final isDark = !isLight;
+
     return Scaffold(
-      backgroundColor: AppTheme.backgroundDark,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: SafeArea(
         child: assignedClassAsync.when(
           loading: () => const Center(child: CircularProgressIndicator(color: Colors.indigoAccent)),
@@ -85,10 +87,12 @@ class MyClassScreen extends ConsumerWidget {
                               width: 44,
                               height: 44,
                               decoration: BoxDecoration(
-                                color: Colors.white.withOpacity(0.05),
+                                color: isDark ? Colors.white.withOpacity(0.05) : Colors.white,
                                 borderRadius: BorderRadius.circular(14),
+                                border: Border.all(color: isDark ? Colors.transparent : Colors.black.withOpacity(0.05)),
+                                boxShadow: isLight ? [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 4))] : [],
                               ),
-                              child: const Icon(Icons.chevron_left, color: Colors.white),
+                              child: Icon(Icons.chevron_left, color: isDark ? Colors.white : const Color(0xFF6366f1)),
                             ),
                           ),
                           const SizedBox(width: 12),
@@ -96,10 +100,10 @@ class MyClassScreen extends ConsumerWidget {
                             child: Column(
                               crossAxisAlignment: CrossAxisAlignment.start,
                               children: [
-                                const Text("Performance", style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: Colors.white)),
+                                Text("Performance", style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: isDark ? Colors.white : Colors.indigo[900])),
                                 Text(
                                   "${assignedClass['name']} • ${students.length} Students • $absentCount Absent", 
-                                  style: const TextStyle(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.w500),
+                                  style: TextStyle(fontSize: 12, color: isLight ? Colors.grey[600] : Colors.grey, fontWeight: FontWeight.w500),
                                   maxLines: 1,
                                   overflow: TextOverflow.ellipsis,
                                 ),
@@ -109,10 +113,10 @@ class MyClassScreen extends ConsumerWidget {
                           const SizedBox(width: 8),
                           TextButton.icon(
                             onPressed: () => context.push('/my-class/all-results'),
-                            icon: const Text("Next", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                            label: const Icon(Icons.arrow_forward_ios, color: Colors.white, size: 14),
+                            icon: Text("Next", style: TextStyle(color: isLight ? const Color(0xFF6366f1) : Colors.white, fontWeight: FontWeight.bold)),
+                            label: Icon(Icons.arrow_forward_ios, color: isLight ? const Color(0xFF6366f1) : Colors.white, size: 14),
                             style: TextButton.styleFrom(
-                              backgroundColor: Colors.indigoAccent.withOpacity(0.2),
+                              backgroundColor: isLight ? const Color(0xFF6366f1).withOpacity(0.1) : Colors.indigoAccent.withOpacity(0.2),
                               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
                             ),
@@ -131,17 +135,17 @@ class MyClassScreen extends ConsumerWidget {
                             child: Container(
                               padding: const EdgeInsets.symmetric(vertical: 16),
                               decoration: BoxDecoration(
-                                color: Colors.white.withOpacity(0.03),
+                                color: isLight ? const Color(0xFF6366f1) : Colors.white.withOpacity(0.03),
                                 borderRadius: BorderRadius.circular(20),
-                                border: Border.all(color: Colors.white.withOpacity(0.05)),
-                                boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 10, offset: const Offset(0, 4))],
+                                border: Border.all(color: isDark ? Colors.white.withOpacity(0.05) : Colors.transparent),
+                                boxShadow: [BoxShadow(color: isLight ? const Color(0xFF6366f1).withOpacity(0.3) : Colors.black.withOpacity(0.1), blurRadius: 10, offset: const Offset(0, 4))],
                               ),
                               child: Column(
                                 children: [
-                                  const Icon(Icons.trending_up, color: Colors.blueAccent),
+                                  Icon(Icons.trending_up, color: isLight ? Colors.white : Colors.blueAccent),
                                   const SizedBox(height: 8),
-                                  Text("${metrics.classScore}%", style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: Colors.white)),
-                                  const Text("Class Score", style: TextStyle(fontSize: 10, color: Colors.grey, fontWeight: FontWeight.w600)),
+                                  Text("${metrics.classScore}%", style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: isDark ? Colors.white : Colors.white)),
+                                  Text("Class Score", style: TextStyle(fontSize: 10, color: isLight ? Colors.white70 : Colors.grey, fontWeight: FontWeight.w600)),
                                 ],
                               ),
                             ),
@@ -152,17 +156,17 @@ class MyClassScreen extends ConsumerWidget {
                             child: Container(
                               padding: const EdgeInsets.symmetric(vertical: 16),
                               decoration: BoxDecoration(
-                                color: Colors.white.withOpacity(0.03),
+                                color: isLight ? const Color(0xFF10b981) : Colors.white.withOpacity(0.03),
                                 borderRadius: BorderRadius.circular(20),
-                                border: Border.all(color: Colors.white.withOpacity(0.05)),
-                                boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 10, offset: const Offset(0, 4))],
+                                border: Border.all(color: isDark ? Colors.white.withOpacity(0.05) : Colors.transparent),
+                                boxShadow: [BoxShadow(color: isLight ? const Color(0xFF10b981).withOpacity(0.3) : Colors.black.withOpacity(0.1), blurRadius: 10, offset: const Offset(0, 4))],
                               ),
                               child: Column(
                                 children: [
-                                  const Icon(Icons.menu_book, color: Colors.orangeAccent),
+                                  Icon(Icons.menu_book, color: isLight ? Colors.white : Colors.orangeAccent),
                                   const SizedBox(height: 8),
-                                  Text("${metrics.subjectScore}%", style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: Colors.white)),
-                                  const Text("Subject Score", style: TextStyle(fontSize: 10, color: Colors.grey, fontWeight: FontWeight.w600)),
+                                  Text("${metrics.subjectScore}%", style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: isDark ? Colors.white : Colors.white)),
+                                  Text("Subject Score", style: TextStyle(fontSize: 10, color: isLight ? Colors.white70 : Colors.grey, fontWeight: FontWeight.w600)),
                                 ],
                               ),
                             ),
@@ -173,17 +177,17 @@ class MyClassScreen extends ConsumerWidget {
                             child: Container(
                               padding: const EdgeInsets.symmetric(vertical: 16),
                               decoration: BoxDecoration(
-                                color: Colors.white.withOpacity(0.03),
+                                color: isLight ? const Color(0xFFeab308) : Colors.white.withOpacity(0.03),
                                 borderRadius: BorderRadius.circular(20),
-                                border: Border.all(color: Colors.white.withOpacity(0.05)),
-                                boxShadow: [BoxShadow(color: Colors.black.withOpacity(0.1), blurRadius: 10, offset: const Offset(0, 4))],
+                                border: Border.all(color: isDark ? Colors.white.withOpacity(0.05) : Colors.transparent),
+                                boxShadow: [BoxShadow(color: isLight ? const Color(0xFFeab308).withOpacity(0.3) : Colors.black.withOpacity(0.1), blurRadius: 10, offset: const Offset(0, 4))],
                               ),
                               child: Column(
                                 children: [
-                                  const Icon(Icons.assignment, color: Colors.purpleAccent),
+                                  Icon(Icons.assignment, color: isLight ? Colors.white : Colors.purpleAccent),
                                   const SizedBox(height: 8),
-                                  Text("${metrics.homeworkScore}%", style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: Colors.white)),
-                                  const Text("Homework", style: TextStyle(fontSize: 10, color: Colors.grey, fontWeight: FontWeight.w600)),
+                                  Text("${metrics.homeworkScore}%", style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: isDark ? Colors.white : Colors.white)),
+                                  Text("Homework", style: TextStyle(fontSize: 10, color: isLight ? Colors.white70 : Colors.grey, fontWeight: FontWeight.w600)),
                                 ],
                               ),
                             ),
@@ -197,18 +201,20 @@ class MyClassScreen extends ConsumerWidget {
                       padding: const EdgeInsets.all(16.0),
                       child: Container(
                         decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.05),
+                          color: isDark ? Colors.white.withOpacity(0.05) : Colors.white,
                           borderRadius: BorderRadius.circular(18),
+                          boxShadow: isLight ? [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 4))] : [],
+                          border: Border.all(color: isDark ? Colors.transparent : Colors.black.withOpacity(0.05)),
                         ),
                         child: TextField(
-                          style: const TextStyle(color: Colors.white),
+                          style: TextStyle(color: isDark ? Colors.white : Colors.indigo[900]),
                           onChanged: (val) => ref.read(myClassSearchQueryProvider.notifier).state = val,
-                          decoration: const InputDecoration(
+                          decoration: InputDecoration(
                             hintText: "Search students...",
-                            hintStyle: TextStyle(color: Colors.grey),
-                            prefixIcon: Icon(Icons.search, color: Colors.grey),
+                            hintStyle: TextStyle(color: isDark ? Colors.grey : Colors.grey[400]),
+                            prefixIcon: Icon(Icons.search, color: isDark ? Colors.grey : Colors.indigo[300]),
                             border: InputBorder.none,
-                            contentPadding: EdgeInsets.all(16),
+                            contentPadding: const EdgeInsets.all(16),
                           ),
                         ),
                       ),
@@ -239,9 +245,10 @@ class MyClassScreen extends ConsumerWidget {
                                           margin: const EdgeInsets.only(bottom: 12),
                                           padding: const EdgeInsets.all(16),
                                           decoration: BoxDecoration(
-                                            color: Colors.white.withOpacity(0.03),
+                                            color: isDark ? Colors.white.withOpacity(0.03) : Colors.white,
                                             borderRadius: BorderRadius.circular(22),
-                                            border: Border.all(color: Colors.white.withOpacity(0.05)),
+                                            border: Border.all(color: isDark ? Colors.white.withOpacity(0.05) : Colors.black.withOpacity(0.05)),
+                                            boxShadow: isLight ? [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 8, offset: const Offset(0, 4))] : [],
                                           ),
                                           child: Row(
                                             children: [
@@ -256,13 +263,13 @@ class MyClassScreen extends ConsumerWidget {
                                                 child: Column(
                                                   crossAxisAlignment: CrossAxisAlignment.start,
                                                   children: [
-                                                    Text(student['name'] ?? 'Unknown', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.white)),
+                                                    Text(student['name'] ?? 'Unknown', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: isDark ? Colors.white : Colors.indigo[900])),
                                                     const SizedBox(height: 4),
-                                                    Text("Roll No: ${student['rollNo'] ?? student['roll'] ?? '-'}", style: const TextStyle(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.w500)),
+                                                    Text("Roll No: ${student['rollNo'] ?? student['roll'] ?? '-'}", style: TextStyle(fontSize: 12, color: isLight ? Colors.grey[600] : Colors.grey, fontWeight: FontWeight.w500)),
                                                   ],
                                                 ),
                                               ),
-                                              const Icon(Icons.school, color: Colors.indigoAccent, size: 24),
+                                              Icon(Icons.school, color: isLight ? const Color(0xFF6366f1) : Colors.indigoAccent, size: 24),
                                             ],
                                           ),
                                         ),

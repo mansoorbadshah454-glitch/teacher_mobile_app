@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:flutter/foundation.dart';
 import 'package:teacher_mobile_app/core/providers/user_data_provider.dart';
 
 // Provides a combined list of Admins (Principal + School Admins)
@@ -11,7 +12,7 @@ final adminsProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async {
   List<Map<String, dynamic>> adminsList = [];
 
   try {
-    print('AdminDataProvider: Fetching admin profiles for school $schoolId');
+    debugPrint('AdminDataProvider: Fetching admin profiles for school $schoolId');
     
     // 1. Fetch Principal from School Root or Settings
     final schoolDoc = await FirebaseFirestore.instance
@@ -52,7 +53,7 @@ final adminsProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async {
                 }
             }
         } catch (e) {
-            print('AdminDataProvider: Could not fetch settings/profile for school logo: $e');
+            debugPrint('AdminDataProvider: Could not fetch settings/profile for school logo: $e');
         }
     }
 
@@ -85,8 +86,8 @@ final adminsProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async {
 
     return adminsList;
   } catch (e, st) {
-    print('Error fetching admins data: $e');
-    print(st);
+    debugPrint('Error fetching admins data: $e');
+    debugPrint(st.toString());
     return [];
   }
 });

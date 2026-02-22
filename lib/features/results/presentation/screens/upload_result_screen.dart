@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:teacher_mobile_app/core/theme/app_theme.dart';
 import 'package:teacher_mobile_app/core/providers/user_data_provider.dart';
 import 'package:teacher_mobile_app/features/attendance/providers/attendance_provider.dart';
 import 'package:teacher_mobile_app/features/results/providers/result_upload_provider.dart';
@@ -55,25 +54,28 @@ class _UploadResultScreenState extends ConsumerState<UploadResultScreen> {
       }
     });
 
+    final isLight = Theme.of(context).brightness == Brightness.light;
+    final isDark = !isLight;
+
     return Scaffold(
-      backgroundColor: AppTheme.backgroundDark,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
         backgroundColor: Colors.transparent,
         elevation: 0,
         leading: IconButton(
-          icon: const Icon(Icons.chevron_left, color: Colors.white, size: 30),
+          icon: Icon(Icons.chevron_left, color: isDark ? Colors.white : const Color(0xFF6366f1), size: 30),
           onPressed: () => context.pop(),
         ),
-        title: const Column(
+        title: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
             Text(
               "Upload Result Cards",
-              style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 18),
+              style: TextStyle(color: isDark ? Colors.white : Colors.indigo[900], fontWeight: FontWeight.bold, fontSize: 18),
             ),
             Text(
               "for parents",
-              style: TextStyle(color: Colors.grey, fontSize: 12),
+              style: TextStyle(color: isDark ? Colors.grey : Colors.grey[600], fontSize: 12),
             ),
           ],
         ),
@@ -106,12 +108,12 @@ class _UploadResultScreenState extends ConsumerState<UploadResultScreen> {
                     width: double.infinity,
                     padding: const EdgeInsets.all(24),
                     decoration: BoxDecoration(
-                      color: Colors.white.withOpacity(0.05),
+                      color: isDark ? Colors.white.withOpacity(0.05) : Colors.white,
                       borderRadius: BorderRadius.circular(24),
-                      border: Border.all(color: Colors.white.withOpacity(0.1)),
+                      border: Border.all(color: isDark ? Colors.white.withOpacity(0.1) : Colors.black.withOpacity(0.05)),
                       boxShadow: [
                         BoxShadow(
-                          color: Colors.black.withOpacity(0.2),
+                          color: isDark ? Colors.black.withOpacity(0.2) : Colors.black.withOpacity(0.05),
                           blurRadius: 20,
                           offset: const Offset(0, 10),
                         ),
@@ -128,12 +130,12 @@ class _UploadResultScreenState extends ConsumerState<UploadResultScreen> {
                         const SizedBox(height: 16),
                         Text(
                           student['name'] ?? 'Unknown',
-                          style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold),
+                          style: TextStyle(color: isDark ? Colors.white : Colors.indigo[900], fontSize: 24, fontWeight: FontWeight.bold),
                         ),
                         const SizedBox(height: 8),
                         Text(
                           "Roll No: ${student['rollNo'] ?? student['roll'] ?? '-'}",
-                          style: const TextStyle(color: Colors.grey, fontSize: 16),
+                          style: TextStyle(color: isDark ? Colors.grey : Colors.grey[600], fontSize: 16),
                         ),
                         if (hasResult) ...[
                           const SizedBox(height: 16),
@@ -173,23 +175,24 @@ class _UploadResultScreenState extends ConsumerState<UploadResultScreen> {
                         width: double.infinity,
                         height: 200,
                         decoration: BoxDecoration(
-                          color: Colors.indigoAccent.withOpacity(0.1),
+                          color: isLight ? Colors.white : Colors.indigoAccent.withOpacity(0.1),
                           borderRadius: BorderRadius.circular(24),
-                          border: Border.all(color: Colors.indigoAccent.withOpacity(0.5), style: BorderStyle.solid, width: 2),
+                          border: Border.all(color: isLight ? Colors.indigoAccent.withOpacity(0.3) : Colors.indigoAccent.withOpacity(0.5), style: BorderStyle.solid, width: 2),
+                          boxShadow: isLight ? [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 10, offset: const Offset(0, 4))] : [],
                         ),
-                        child: const Column(
+                        child: Column(
                           mainAxisAlignment: MainAxisAlignment.center,
                           children: [
-                            Icon(Icons.upload_file, color: Colors.indigoAccent, size: 64),
-                            SizedBox(height: 16),
+                            const Icon(Icons.upload_file, color: Colors.indigoAccent, size: 64),
+                            const SizedBox(height: 16),
                             Text(
                               "Tap to Select File",
-                              style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+                              style: TextStyle(color: isDark ? Colors.white : Colors.indigo[900], fontSize: 18, fontWeight: FontWeight.bold),
                             ),
-                            SizedBox(height: 8),
+                            const SizedBox(height: 8),
                             Text(
                               "Supported: PDF, JPG, PNG",
-                              style: TextStyle(color: Colors.grey, fontSize: 14),
+                              style: TextStyle(color: isDark ? Colors.grey : Colors.grey[600], fontSize: 14),
                             ),
                           ],
                         ),
@@ -200,9 +203,10 @@ class _UploadResultScreenState extends ConsumerState<UploadResultScreen> {
                       width: double.infinity,
                       padding: const EdgeInsets.all(24),
                       decoration: BoxDecoration(
-                        color: Colors.indigoAccent.withOpacity(0.1),
+                        color: isDark ? Colors.indigoAccent.withOpacity(0.1) : Colors.white,
                         borderRadius: BorderRadius.circular(24),
-                        border: Border.all(color: Colors.indigoAccent.withOpacity(0.5)),
+                        border: Border.all(color: isDark ? Colors.indigoAccent.withOpacity(0.5) : Colors.black.withOpacity(0.05)),
+                        boxShadow: isLight ? [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 15, offset: const Offset(0, 8))] : [],
                       ),
                       child: Column(
                         children: [
@@ -210,7 +214,7 @@ class _UploadResultScreenState extends ConsumerState<UploadResultScreen> {
                           const SizedBox(height: 16),
                           Text(
                             uploadState.fileName ?? "Selected File",
-                            style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                            style: TextStyle(color: isDark ? Colors.white : Colors.indigo[900], fontSize: 16, fontWeight: FontWeight.bold),
                             textAlign: TextAlign.center,
                             maxLines: 2,
                             overflow: TextOverflow.ellipsis,
@@ -231,9 +235,11 @@ class _UploadResultScreenState extends ConsumerState<UploadResultScreen> {
                                     ? null
                                     : () => ref.read(resultUploadProvider.notifier).uploadResult(student['id']),
                                 style: ElevatedButton.styleFrom(
-                                  backgroundColor: Colors.indigoAccent,
+                                  backgroundColor: isLight ? const Color(0xFF6366f1) : Colors.indigoAccent,
                                   padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 12),
                                   shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                                  elevation: isLight ? 4 : 0,
+                                  shadowColor: const Color(0xFF6366f1).withOpacity(0.5),
                                 ),
                                 child: uploadState.isLoading
                                     ? const SizedBox(
