@@ -48,10 +48,12 @@ class _StatCardState extends State<StatCard> {
       onTapUp: _handleTapUp,
       onTapCancel: _handleTapCancel,
       child: AnimatedScale(
-        scale: _isPressed ? 0.95 : 1.0,
-        duration: const Duration(milliseconds: 100),
-        curve: Curves.easeInOut,
-        child: Container(
+        scale: _isPressed ? 0.92 : 1.0,
+        duration: const Duration(milliseconds: 150),
+        curve: Curves.easeOutBack,
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 150),
+          curve: Curves.easeInOut,
           decoration: BoxDecoration(
             color: Theme.of(context).colorScheme.surface,
             borderRadius: BorderRadius.circular(20),
@@ -60,14 +62,14 @@ class _StatCardState extends State<StatCard> {
             ),
             boxShadow: [
               BoxShadow(
-                color: Colors.black.withOpacity(0.20),
-                blurRadius: 20,
-                offset: const Offset(0, 8),
+                color: Colors.black.withOpacity(_isPressed ? 0.15 : 0.20),
+                blurRadius: _isPressed ? 10 : 20,
+                offset: _isPressed ? const Offset(0, 4) : const Offset(0, 8),
               ),
               BoxShadow(
-                color: widget.color.withOpacity(0.15),
-                blurRadius: 20,
-                offset: const Offset(0, 10),
+                color: widget.color.withOpacity(_isPressed ? 0.10 : 0.15),
+                blurRadius: _isPressed ? 10 : 20,
+                offset: _isPressed ? const Offset(0, 5) : const Offset(0, 10),
               ),
             ],
           ),
