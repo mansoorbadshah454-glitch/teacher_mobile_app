@@ -5,6 +5,7 @@ import 'package:teacher_mobile_app/core/theme/app_theme.dart';
 import 'package:teacher_mobile_app/core/providers/user_data_provider.dart';
 import 'package:teacher_mobile_app/features/next_class/providers/next_class_provider.dart';
 import 'package:teacher_mobile_app/features/next_class/presentation/widgets/student_score_card.dart';
+import 'package:teacher_mobile_app/features/next_class/presentation/widgets/class_card.dart';
 import 'package:teacher_mobile_app/features/next_class/services/pdf_generator_service.dart';
 
 class NextClassScreen extends ConsumerWidget {
@@ -17,8 +18,10 @@ class NextClassScreen extends ConsumerWidget {
     final teacherData = ref.watch(teacherDataProvider).value;
     final schoolData = ref.watch(schoolDataProvider).value;
 
+    final isLight = Theme.of(context).brightness == Brightness.light;
+
     return Scaffold(
-      backgroundColor: AppTheme.backgroundDark,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: SafeArea(
         child: Stack(
           children: [
@@ -55,11 +58,11 @@ class NextClassScreen extends ConsumerWidget {
                     child: Container(
                       padding: const EdgeInsets.symmetric(vertical: 16),
                       decoration: BoxDecoration(
-                        color: AppTheme.primary,
+                        color: isLight ? const Color(0xFF6366f1) : AppTheme.primary,
                         borderRadius: BorderRadius.circular(16),
                         boxShadow: [
                           BoxShadow(
-                            color: AppTheme.primary.withOpacity(0.4),
+                            color: (isLight ? const Color(0xFF6366f1) : AppTheme.primary).withOpacity(0.4),
                             blurRadius: 16,
                             offset: const Offset(0, 8),
                           ),
@@ -91,6 +94,9 @@ class NextClassScreen extends ConsumerWidget {
   }
 
   Widget _buildHeader(BuildContext context, NextClassState state, NextClassNotifier notifier) {
+    final isLight = Theme.of(context).brightness == Brightness.light;
+    final isDark = !isLight;
+
     String title = "All Classes";
     String subtitle = "Select a class to manage";
     bool showNextBtn = false;
@@ -126,10 +132,12 @@ class NextClassScreen extends ConsumerWidget {
                   width: 44,
                   height: 44,
                   decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.05),
+                    color: isDark ? Colors.white.withOpacity(0.05) : Colors.white,
                     borderRadius: BorderRadius.circular(14),
+                    border: Border.all(color: isLight ? Colors.black.withOpacity(0.05) : Colors.transparent),
+                    boxShadow: isLight ? [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 4))] : [],
                   ),
-                  child: const Icon(Icons.chevron_left, color: Colors.white),
+                  child: Icon(Icons.chevron_left, color: isDark ? Colors.white : const Color(0xFF6366f1)),
                 ),
               ),
               const SizedBox(width: 16),
@@ -138,18 +146,18 @@ class NextClassScreen extends ConsumerWidget {
                 children: [
                   Text(
                     title,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 20,
                       fontWeight: FontWeight.w800,
-                      color: Colors.white,
+                      color: isDark ? Colors.white : Colors.indigo[900],
                     ),
                   ),
                   Text(
                     subtitle,
-                    style: const TextStyle(
+                    style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w500,
-                      color: Colors.grey,
+                      color: isDark ? Colors.grey : Colors.grey[600],
                     ),
                   ),
                 ],
@@ -162,11 +170,11 @@ class NextClassScreen extends ConsumerWidget {
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                 decoration: BoxDecoration(
-                  color: AppTheme.primary,
+                  color: isLight ? const Color(0xFF6366f1) : AppTheme.primary,
                   borderRadius: BorderRadius.circular(12),
                   boxShadow: [
                     BoxShadow(
-                      color: AppTheme.primary.withOpacity(0.3),
+                      color: (isLight ? const Color(0xFF6366f1) : AppTheme.primary).withOpacity(0.3),
                       blurRadius: 8,
                       offset: const Offset(0, 4),
                     ),
@@ -201,17 +209,17 @@ class NextClassScreen extends ConsumerWidget {
 
     switch (state.viewMode) {
       case NextClassViewMode.classes:
-        return _buildClassesView(state, notifier);
+        return _buildClassesView(context, state, notifier);
       case NextClassViewMode.subjects:
-        return _buildSubjectsView(state, notifier, teacherData);
+        return _buildSubjectsView(context, state, notifier, teacherData);
       case NextClassViewMode.students:
-        return _buildStudentsView(state, notifier);
+        return _buildStudentsView(context, state, notifier);
       case NextClassViewMode.test:
         return _buildTestView(context, state, notifier, teacherData, schoolData);
     }
   }
 
-  Widget _buildClassesView(NextClassState state, NextClassNotifier notifier) {
+  Widget _buildClassesView(BuildContext context, NextClassState state, NextClassNotifier notifier) {
     if (state.classes.isEmpty) {
       return const Center(
         child: Text("No classes found.", style: TextStyle(color: Colors.grey)),
@@ -229,64 +237,15 @@ class NextClassScreen extends ConsumerWidget {
       itemCount: state.classes.length,
       itemBuilder: (context, index) {
         final cls = state.classes[index];
-        final subjectCount = (cls['subjects'] as List<dynamic>? ?? []).length;
-
-        return GestureDetector(
+        return ClassCard(
+          cls: cls,
           onTap: () => notifier.selectClass(cls),
-          child: Container(
-            padding: const EdgeInsets.all(20),
-            decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.05),
-              borderRadius: BorderRadius.circular(24),
-              border: Border.all(color: Colors.white.withOpacity(0.1)),
-            ),
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.center,
-              children: [
-                Container(
-                  width: 48,
-                  height: 48,
-                  decoration: BoxDecoration(
-                    color: AppTheme.primary.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(14),
-                  ),
-                  alignment: Alignment.center,
-                  child: const Icon(Icons.people, color: AppTheme.primary),
-                ),
-                const SizedBox(height: 16),
-                Text(
-                  cls['name'] ?? 'Unknown Class',
-                  style: const TextStyle(
-                    color: Colors.white,
-                    fontWeight: FontWeight.bold,
-                    fontSize: 18,
-                  ),
-                ),
-                const SizedBox(height: 4),
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-                  decoration: BoxDecoration(
-                    color: Colors.white.withOpacity(0.1),
-                    borderRadius: BorderRadius.circular(6),
-                  ),
-                  child: Text(
-                    "$subjectCount Subjects",
-                    style: const TextStyle(
-                      color: Colors.grey,
-                      fontSize: 10,
-                    ),
-                  ),
-                ),
-              ],
-            ),
-          ),
         );
       },
     );
   }
 
-  Widget _buildSubjectsView(NextClassState state, NextClassNotifier notifier, Map<String, dynamic>? teacherData) {
+  Widget _buildSubjectsView(BuildContext context, NextClassState state, NextClassNotifier notifier, Map<String, dynamic>? teacherData) {
     final subjects = List<String>.from(state.selectedClass?['subjects'] ?? []);
     final assignedSubjects = List<String>.from(teacherData?['subjects'] ?? []);
 
@@ -300,6 +259,8 @@ class NextClassScreen extends ConsumerWidget {
       padding: const EdgeInsets.all(16),
       itemCount: subjects.length,
       itemBuilder: (context, index) {
+        final isLight = Theme.of(context).brightness == Brightness.light;
+        final isDark = !isLight;
         final subject = subjects[index];
         final isAssigned = assignedSubjects.contains(subject);
 
@@ -315,11 +276,16 @@ class NextClassScreen extends ConsumerWidget {
               margin: const EdgeInsets.only(bottom: 12),
               padding: const EdgeInsets.all(20),
               decoration: BoxDecoration(
-                color: isAssigned ? Colors.white.withOpacity(0.05) : Colors.black.withOpacity(0.2),
+                color: isAssigned
+                    ? (isDark ? Colors.white.withOpacity(0.05) : Colors.white)
+                    : (isDark ? Colors.black.withOpacity(0.2) : Colors.grey[100]),
                 borderRadius: BorderRadius.circular(16),
                 border: Border.all(
-                  color: isAssigned ? Colors.white.withOpacity(0.1) : Colors.transparent,
+                  color: isAssigned
+                      ? (isDark ? Colors.white.withOpacity(0.1) : Colors.black.withOpacity(0.05))
+                      : Colors.transparent,
                 ),
+                boxShadow: isLight && isAssigned ? [BoxShadow(color: Colors.black.withOpacity(0.04), blurRadius: 10, offset: const Offset(0, 4))] : [],
               ),
               child: Row(
                 children: [
@@ -340,8 +306,8 @@ class NextClassScreen extends ConsumerWidget {
                       children: [
                         Text(
                           subject,
-                          style: const TextStyle(
-                            color: Colors.white,
+                          style: TextStyle(
+                            color: isDark ? Colors.white : Colors.indigo[900],
                             fontSize: 16,
                             fontWeight: FontWeight.w600,
                           ),
@@ -377,9 +343,9 @@ class NextClassScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildStudentsView(NextClassState state, NextClassNotifier notifier) {
+  Widget _buildStudentsView(BuildContext context, NextClassState state, NextClassNotifier notifier) {
     if (state.isLoading) {
-      return const Center(child: CircularProgressIndicator(color: AppTheme.primary));
+      return Center(child: CircularProgressIndicator(color: Theme.of(context).primaryColor));
     }
 
     final filteredStudents = state.students.where((s) {
@@ -433,12 +399,14 @@ class NextClassScreen extends ConsumerWidget {
           child: Container(
             padding: const EdgeInsets.symmetric(horizontal: 16),
             decoration: BoxDecoration(
-              color: Colors.white.withOpacity(0.05),
+              color: Theme.of(context).brightness == Brightness.dark ? Colors.white.withOpacity(0.05) : Colors.white,
               borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: Theme.of(context).brightness == Brightness.dark ? Colors.transparent : Colors.black.withOpacity(0.05)),
+              boxShadow: Theme.of(context).brightness == Brightness.light ? [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 5, offset: const Offset(0, 2))] : [],
             ),
             child: TextField(
               onChanged: notifier.setSearchTerm,
-              style: const TextStyle(color: Colors.white),
+              style: TextStyle(color: Theme.of(context).brightness == Brightness.dark ? Colors.white : Colors.black),
               decoration: const InputDecoration(
                 icon: Icon(Icons.search, color: Colors.grey, size: 20),
                 border: InputBorder.none,
@@ -563,12 +531,13 @@ class NextClassScreen extends ConsumerWidget {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.05),
+                  color: Theme.of(context).brightness == Brightness.dark ? Colors.white.withOpacity(0.05) : Colors.white,
                   borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Theme.of(context).brightness == Brightness.dark ? Colors.transparent : Colors.black.withOpacity(0.05)),
                 ),
                 child: TextField(
                   onChanged: notifier.setTestChapter,
-                  style: const TextStyle(color: Colors.white),
+                  style: TextStyle(color: Theme.of(context).brightness == Brightness.dark ? Colors.white : Colors.black),
                   decoration: const InputDecoration(
                     icon: Icon(Icons.book, color: Colors.indigoAccent, size: 20),
                     border: InputBorder.none,
@@ -582,12 +551,13 @@ class NextClassScreen extends ConsumerWidget {
               Container(
                 padding: const EdgeInsets.symmetric(horizontal: 16),
                 decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.05),
+                  color: Theme.of(context).brightness == Brightness.dark ? Colors.white.withOpacity(0.05) : Colors.white,
                   borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: Theme.of(context).brightness == Brightness.dark ? Colors.transparent : Colors.black.withOpacity(0.05)),
                 ),
                 child: TextField(
                   onChanged: notifier.setSearchTerm,
-                  style: const TextStyle(color: Colors.white),
+                  style: TextStyle(color: Theme.of(context).brightness == Brightness.dark ? Colors.white : Colors.black),
                   decoration: const InputDecoration(
                     icon: Icon(Icons.search, color: Colors.grey, size: 20),
                     border: InputBorder.none,
@@ -676,9 +646,9 @@ class NextClassScreen extends ConsumerWidget {
     showDialog(
       context: context,
       builder: (ctx) => AlertDialog(
-        backgroundColor: AppTheme.surfaceDark,
-        title: const Text("Reset Test Scores?", style: TextStyle(color: Colors.white)),
-        content: const Text("Are you sure you want to reset all test scores to 0?", style: TextStyle(color: Colors.grey)),
+        backgroundColor: Theme.of(context).brightness == Brightness.dark ? AppTheme.surfaceDark : Colors.white,
+        title: Text("Reset Test Scores?", style: TextStyle(color: Theme.of(context).brightness == Brightness.dark ? Colors.white : Colors.indigo[900])),
+        content: Text("Are you sure you want to reset all test scores to 0?", style: TextStyle(color: Theme.of(context).brightness == Brightness.dark ? Colors.grey : Colors.grey[600])),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(ctx),

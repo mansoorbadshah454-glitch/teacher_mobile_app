@@ -36,12 +36,17 @@ class StudentScoreCard extends StatelessWidget {
     final rollNo = student['rollNo']?.toString() ?? 'N/A';
     final profilePic = student['profilePic'];
 
+    final isLight = Theme.of(context).brightness == Brightness.light;
+    final isDark = !isLight;
+
     return Container(
       margin: const EdgeInsets.only(bottom: 16),
       padding: const EdgeInsets.all(16),
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.05),
+        color: isDark ? Colors.white.withOpacity(0.05) : Colors.white,
         borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: isDark ? Colors.transparent : Colors.black.withOpacity(0.05)),
+        boxShadow: isLight ? [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 10, offset: const Offset(0, 4))] : [],
       ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
@@ -52,15 +57,15 @@ class StudentScoreCard extends StatelessWidget {
               Container(
                 width: 40,
                 height: 40,
-                decoration: const BoxDecoration(
+                decoration: BoxDecoration(
                   shape: BoxShape.circle,
-                  color: Color(0xFF334155), // slate-700
+                  color: isDark ? const Color(0xFF334155) : Colors.indigo[50]!, // slate-700 or light indigo
                 ),
                 clipBehavior: Clip.hardEdge,
                 child: profilePic != null && profilePic.isNotEmpty
                     ? Image.network(profilePic, fit: BoxFit.cover,
-                        errorBuilder: (_, __, ___) => const Icon(Icons.person, color: Colors.white))
-                    : const Icon(Icons.person, color: Colors.white),
+                        errorBuilder: (_, __, ___) => Icon(Icons.person, color: isDark ? Colors.white : Colors.indigo[200]))
+                    : Icon(Icons.person, color: isDark ? Colors.white : Colors.indigo[200]),
               ),
               const SizedBox(width: 12),
               Expanded(
@@ -69,17 +74,17 @@ class StudentScoreCard extends StatelessWidget {
                   children: [
                     Text(
                       name,
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontWeight: FontWeight.bold,
                         fontSize: 16,
-                        color: Colors.white,
+                        color: isDark ? Colors.white : Colors.indigo[900],
                       ),
                     ),
                     Text(
                       "Roll No: $rollNo",
-                      style: const TextStyle(
+                      style: TextStyle(
                         fontSize: 12,
-                        color: Colors.grey,
+                        color: isDark ? Colors.grey : Colors.grey[600],
                       ),
                     ),
                   ],
@@ -92,6 +97,7 @@ class StudentScoreCard extends StatelessWidget {
           // Sliders based on mode
           if (isTestMode)
             _buildSlider(
+              context: context,
               label: "Test Score",
               value: testScore ?? 0,
               onChanged: (val) {
@@ -102,6 +108,7 @@ class StudentScoreCard extends StatelessWidget {
             )
           else ...[
             _buildSlider(
+              context: context,
               label: "Subject Score",
               value: academicScore ?? 0,
               onChanged: (val) {
@@ -112,6 +119,7 @@ class StudentScoreCard extends StatelessWidget {
             ),
             const SizedBox(height: 12),
             _buildSlider(
+              context: context,
               label: "Homework Score",
               value: homeworkScore ?? 0,
               onChanged: (val) {
@@ -127,6 +135,7 @@ class StudentScoreCard extends StatelessWidget {
   }
 
   Widget _buildSlider({
+    required BuildContext context,
     required String label,
     required int value,
     required ValueChanged<double> onChanged,
@@ -141,8 +150,8 @@ class StudentScoreCard extends StatelessWidget {
           children: [
             Text(
               label,
-              style: const TextStyle(
-                color: Colors.grey,
+              style: TextStyle(
+                color: Theme.of(context).brightness == Brightness.dark ? Colors.grey : Colors.grey[600],
                 fontWeight: FontWeight.w600,
                 fontSize: 12,
               ),
@@ -161,7 +170,7 @@ class StudentScoreCard extends StatelessWidget {
         SliderTheme(
           data: SliderThemeData(
             activeTrackColor: activeColor,
-            inactiveTrackColor: Colors.white.withOpacity(0.1),
+            inactiveTrackColor: Theme.of(context).brightness == Brightness.dark ? Colors.white.withOpacity(0.1) : Colors.grey[200],
             thumbColor: activeColor,
             trackHeight: 4.0,
             overlayColor: activeColor.withOpacity(0.2),
