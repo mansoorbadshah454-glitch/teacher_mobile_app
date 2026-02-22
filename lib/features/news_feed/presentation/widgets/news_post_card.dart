@@ -250,22 +250,24 @@ class _NewsPostCardState extends State<NewsPostCard> {
                         ),
                     ));
                 },
-                child: CachedNetworkImage(
-                  imageUrl: mediaUrl,
-                  width: double.infinity,
-                  fit: BoxFit.cover,
-                  placeholder: (context, url) => Container(
-                      height: 200, 
-                      color: Colors.white10, 
-                      child: const Center(child: CircularProgressIndicator())
-                  ),
-                  errorWidget: (context, url, error) => const SizedBox(),
+            Center(
+              child: CachedNetworkImage(
+                imageUrl: mediaUrl,
+                width: double.infinity,
+                fit: BoxFit.cover,
+                placeholder: (context, url) => Container(
+                    height: 200, 
+                    color: Colors.white10, 
+                    child: const Center(child: CircularProgressIndicator())
                 ),
+                errorWidget: (context, url, error) => const SizedBox(),
+              ),
+            ),
             ),
             
           // Video Content
           if (mediaType == 'video' && mediaUrl != null && mediaUrl.isNotEmpty)
-            VideoPlayerWidget(videoUrl: mediaUrl),
+            Center(child: VideoPlayerWidget(videoUrl: mediaUrl)),
 
           // Stats (Likes/Comments)
           Padding(
