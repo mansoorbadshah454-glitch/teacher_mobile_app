@@ -105,9 +105,21 @@ class _NewsPostCardState extends State<NewsPostCard> {
     // Background style handling
     final bgIndex = data['backgroundIndex'] ?? 0;
 
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
     return Container(
-      margin: const EdgeInsets.only(bottom: 8), // Gap between posts
-      color: AppTheme.surfaceDark, // Card background
+      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8), // Gap between posts
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface, // Card background
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: isDark ? null : [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 20,
+            offset: const Offset(0, 4),
+          ),
+        ],
+      ),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
@@ -119,7 +131,7 @@ class _NewsPostCardState extends State<NewsPostCard> {
                 CircleAvatar(
                   radius: 20,
                   backgroundImage: authorImage.isNotEmpty ? NetworkImage(authorImage) : null,
-                  backgroundColor: AppTheme.primary,
+                  backgroundColor: Theme.of(context).primaryColor,
                   child: authorImage.isEmpty ? const Icon(Icons.person, color: Colors.white) : null,
                 ),
                 const SizedBox(width: 12),
@@ -128,25 +140,27 @@ class _NewsPostCardState extends State<NewsPostCard> {
                   children: [
                     Text(
                       authorName,
-                      style: AppTheme.bodyMedium.copyWith(fontWeight: FontWeight.bold),
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.bold),
                     ),
                     Row(
                       children: [
-                        Text(
-                          "$role • $timeString",
-                          style: AppTheme.labelSmall,
-                        ),
+                          Text(
+                            "$role • $timeString",
+                            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                                  color: Theme.of(context).textTheme.labelSmall?.color?.withOpacity(0.6),
+                                ),
+                          ),
                         if (data['targetClassName'] != null && data['targetClassName'].isNotEmpty)
                            Text(
                             " • ${data['targetClassName']}",
-                             style: AppTheme.labelSmall.copyWith(color: AppTheme.accent),
+                             style: Theme.of(context).textTheme.labelSmall?.copyWith(color: AppTheme.accent),
                            ),
                       ],
                     ),
                     if (timestamp != null)
                       Text(
                         "Expires ${timestamp.toDate().add(const Duration(days: 7)).toString().substring(0, 10)}",
-                        style: AppTheme.labelSmall.copyWith(color: Colors.redAccent, fontSize: 10),
+                        style: Theme.of(context).textTheme.labelSmall?.copyWith(color: Colors.redAccent, fontSize: 10),
                       ),
                   ],
                 ),
@@ -154,7 +168,7 @@ class _NewsPostCardState extends State<NewsPostCard> {
                 // Edit and Delete Options
                 if (FirebaseAuth.instance.currentUser?.uid == data['authorId'] || true) // Assuming principals/teachers have rights based on rules
                   PopupMenuButton<String>(
-                    icon: const Icon(Icons.more_horiz, color: Colors.white54),
+                    icon: Icon(Icons.more_horiz, color: Theme.of(context).iconTheme.color?.withOpacity(0.5)),
                     onSelected: (value) {
                       if (value == 'edit') {
                         _editPost();
@@ -217,7 +231,7 @@ class _NewsPostCardState extends State<NewsPostCard> {
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                 child: Text(
                   text,
-                  style: AppTheme.bodyMedium,
+                  style: Theme.of(context).textTheme.bodyMedium,
                 ),
               ),
           
@@ -259,17 +273,17 @@ class _NewsPostCardState extends State<NewsPostCard> {
             child: Row(
               children: [
                 if (likeCount > 0) ...[
-                    const Icon(Icons.thumb_up, size: 14, color: AppTheme.primary),
+                    Icon(Icons.thumb_up, size: 14, color: Theme.of(context).primaryColor),
                     const SizedBox(width: 4),
-                    Text("$likeCount", style: AppTheme.labelSmall),
+                    Text("$likeCount", style: Theme.of(context).textTheme.labelSmall),
                 ],
                 const Spacer(),
-                Text("${data['commentCount'] ?? 0} comments", style: AppTheme.labelSmall),
+                Text("${data['commentCount'] ?? 0} comments", style: Theme.of(context).textTheme.labelSmall),
               ],
             ),
           ),
 
-          const Divider(height: 1, color: Colors.white10),
+          Divider(height: 1, color: Theme.of(context).dividerColor),
 
           // Action Buttons
           Row(
@@ -280,7 +294,7 @@ class _NewsPostCardState extends State<NewsPostCard> {
                   onPressed: _toggleLike,
                   icon: Icon(
                       isLiked ? Icons.thumb_up : Icons.thumb_up_outlined,
-                      color: isLiked ? AppTheme.primary : Colors.white70,
+                      color: isLiked ? Theme.of(context).primaryColor : Theme.of(context).textTheme.bodyMedium?.color?.withOpacity(0.7),
                       size: 18
                   ),
                   label: FittedBox(
@@ -288,7 +302,7 @@ class _NewsPostCardState extends State<NewsPostCard> {
                     child: Text(
                         "Like",
                         style: TextStyle(
-                            color: isLiked ? AppTheme.primary : Colors.white70,
+                            color: isLiked ? Theme.of(context).primaryColor : Theme.of(context).textTheme.bodyMedium?.color?.withOpacity(0.7),
                         )
                     ),
                   ),
@@ -311,10 +325,10 @@ class _NewsPostCardState extends State<NewsPostCard> {
                         ),
                       );
                   },
-                  icon: const Icon(Icons.mode_comment_outlined, color: Colors.white70, size: 18),
-                  label: const FittedBox(
+                  icon: Icon(Icons.mode_comment_outlined, color: Theme.of(context).textTheme.bodyMedium?.color?.withOpacity(0.7), size: 18),
+                  label: FittedBox(
                     fit: BoxFit.scaleDown,
-                    child: Text("Comment", style: TextStyle(color: Colors.white70))
+                    child: Text("Comment", style: TextStyle(color: Theme.of(context).textTheme.bodyMedium?.color?.withOpacity(0.7)))
                   ),
                 ),
               ),
@@ -322,10 +336,10 @@ class _NewsPostCardState extends State<NewsPostCard> {
                 child: TextButton.icon(
                   style: TextButton.styleFrom(padding: EdgeInsets.zero),
                   onPressed: () {},
-                  icon: const Icon(Icons.share_outlined, color: Colors.white70, size: 18),
-                  label: const FittedBox(
+                  icon: Icon(Icons.share_outlined, color: Theme.of(context).textTheme.bodyMedium?.color?.withOpacity(0.7), size: 18),
+                  label: FittedBox(
                     fit: BoxFit.scaleDown,
-                    child: Text("Share", style: TextStyle(color: Colors.white70))
+                    child: Text("Share", style: TextStyle(color: Theme.of(context).textTheme.bodyMedium?.color?.withOpacity(0.7)))
                   ),
                 ),
               ),
@@ -340,9 +354,11 @@ class _NewsPostCardState extends State<NewsPostCard> {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
-        backgroundColor: AppTheme.surfaceDark,
-        title: const Text("Delete Post", style: TextStyle(color: Colors.white)),
-        content: const Text("Are you sure you want to delete this post?", style: TextStyle(color: Colors.white70)),
+        backgroundColor: Theme.of(context).colorScheme.surface,
+        title: Text("Delete Post", style: Theme.of(context).textTheme.titleLarge),
+        content: Text("Are you sure you want to delete this post?", style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+              color: Theme.of(context).textTheme.bodyMedium?.color?.withOpacity(0.7),
+            )),
         actions: [
           TextButton(
             onPressed: () => Navigator.pop(context),

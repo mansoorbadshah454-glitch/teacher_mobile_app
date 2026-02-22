@@ -81,17 +81,22 @@ class _NewsFeedScreenState extends ConsumerState<NewsFeedScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppTheme.backgroundDark,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: NestedScrollView(
         controller: _scrollController,
         headerSliverBuilder: (context, innerBoxIsScrolled) {
           return [
             SliverAppBar(
-              backgroundColor: AppTheme.backgroundDark,
+              backgroundColor: Colors.transparent,
+              flexibleSpace: Container(
+                decoration: const BoxDecoration(
+                  gradient: AppTheme.primaryGradient,
+                ),
+              ),
               // expandedHeight: 120.0,
               floating: true,
               pinned: true,
-              elevation: 0,
+              elevation: 4,
               leading: IconButton(
                 icon: const Icon(Icons.arrow_back, color: Colors.white),
                 onPressed: () => context.pop(),
@@ -104,12 +109,16 @@ class _NewsFeedScreenState extends ConsumerState<NewsFeedScreen> {
                       radius: 16,
                     )
                   else
-                    const Icon(Icons.shield, color: AppTheme.primary),
+                    const Icon(Icons.shield, color: Colors.white),
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
                       schoolName ?? "School Feed",
-                      style: AppTheme.titleLarge.copyWith(fontSize: 20),
+                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
+                            fontSize: 20,
+                            fontWeight: FontWeight.bold,
+                            color: Colors.white,
+                          ),
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
@@ -128,7 +137,7 @@ class _NewsFeedScreenState extends ConsumerState<NewsFeedScreen> {
                       children: [
                         const Icon(Icons.error_outline, color: Colors.orange, size: 48),
                         const SizedBox(height: 16),
-                        Text(_errorMessage!, style: const TextStyle(color: Colors.white)),
+                        Text(_errorMessage!, style: Theme.of(context).textTheme.bodyMedium),
                         const SizedBox(height: 16),
                         ElevatedButton(
                           onPressed: _fetchSchoolInfo,
@@ -146,7 +155,7 @@ class _NewsFeedScreenState extends ConsumerState<NewsFeedScreen> {
                     .snapshots(),
                 builder: (context, snapshot) {
                   if (snapshot.hasError) {
-                    return Center(child: Text('Error: ${snapshot.error}', style: const TextStyle(color: Colors.white)));
+                    return Center(child: Text('Error: ${snapshot.error}', style: Theme.of(context).textTheme.bodyMedium));
                   }
 
                   if (snapshot.connectionState == ConnectionState.waiting) {
@@ -160,11 +169,13 @@ class _NewsFeedScreenState extends ConsumerState<NewsFeedScreen> {
                       child: Column(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: [
-                          Icon(Icons.feed_outlined, size: 64, color: Colors.white.withOpacity(0.5)),
+                          Icon(Icons.feed_outlined, size: 64, color: Theme.of(context).iconTheme.color?.withOpacity(0.5)),
                           const SizedBox(height: 16),
                           Text(
                             "No posts yet",
-                            style: AppTheme.bodyMedium.copyWith(color: Colors.white54),
+                            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                  color: Theme.of(context).textTheme.bodyMedium?.color?.withOpacity(0.5),
+                                ),
                           ),
                         ],
                       ),
@@ -194,10 +205,22 @@ class _NewsFeedScreenState extends ConsumerState<NewsFeedScreen> {
   }
 
   Widget _buildCreatePostTrigger(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    
     return Container(
-      margin: const EdgeInsets.only(bottom: 8),
+      margin: const EdgeInsets.fromLTRB(16, 8, 16, 8),
       padding: const EdgeInsets.all(12),
-      color: AppTheme.surfaceDark,
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
+        borderRadius: BorderRadius.circular(12),
+        boxShadow: isDark ? null : [
+          BoxShadow(
+            color: Colors.black.withOpacity(0.1),
+            blurRadius: 20,
+            offset: const Offset(0, 2),
+          ),
+        ],
+      ),
       child: Row(
         children: [
           CircleAvatar(
@@ -223,12 +246,15 @@ class _NewsFeedScreenState extends ConsumerState<NewsFeedScreen> {
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                 decoration: BoxDecoration(
+                  color: isDark ? Colors.white.withOpacity(0.05) : Colors.grey[100],
                   borderRadius: BorderRadius.circular(24),
-                  border: Border.all(color: Colors.white24),
+                  border: Border.all(color: Theme.of(context).dividerColor.withOpacity(0.1)),
                 ),
-                child: const Text(
+                child: Text(
                   "Write a post...",
-                  style: TextStyle(color: Colors.white70),
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                        color: Theme.of(context).textTheme.bodyMedium?.color?.withOpacity(0.6),
+                      ),
                 ),
               ),
             ),

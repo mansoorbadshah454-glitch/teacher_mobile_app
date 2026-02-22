@@ -83,9 +83,9 @@ class _CommentsSheetState extends State<CommentsSheet> {
       padding: EdgeInsets.only(
         bottom: MediaQuery.of(context).viewInsets.bottom,
       ),
-      decoration: const BoxDecoration(
-        color: AppTheme.surfaceDark,
-        borderRadius: BorderRadius.vertical(top: Radius.circular(16)),
+      decoration: BoxDecoration(
+        color: Theme.of(context).colorScheme.surface,
+        borderRadius: const BorderRadius.vertical(top: Radius.circular(16)),
       ),
       child: Column(
         mainAxisSize: MainAxisSize.min,
@@ -100,15 +100,15 @@ class _CommentsSheetState extends State<CommentsSheet> {
                   width: 40,
                   height: 4,
                   decoration: BoxDecoration(
-                    color: Colors.white30,
+                    color: Theme.of(context).dividerColor,
                     borderRadius: BorderRadius.circular(2),
                   ),
                 ),
               ],
             ),
           ),
-          const Text("Comments", style: TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold)),
-          const Divider(color: Colors.white10),
+          Text("Comments", style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.bold)),
+          Divider(color: Theme.of(context).dividerColor),
 
           // Comments List
           Expanded(
@@ -125,8 +125,13 @@ class _CommentsSheetState extends State<CommentsSheet> {
                 final comments = snapshot.data?.docs ?? [];
 
                 if (comments.isEmpty) {
-                  return const Center(
-                    child: Text("No comments yet. Be the first to comment!", style: TextStyle(color: Colors.white54)),
+                  return Center(
+                    child: Text(
+                      "No comments yet. Be the first to comment!",
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            color: Theme.of(context).textTheme.bodyMedium?.color?.withOpacity(0.5),
+                          ),
+                    ),
                   );
                 }
 
@@ -145,7 +150,7 @@ class _CommentsSheetState extends State<CommentsSheet> {
                         children: [
                           CircleAvatar(
                             radius: 16,
-                            backgroundColor: AppTheme.primary,
+                            backgroundColor: Theme.of(context).primaryColor,
                             backgroundImage: data['authorImage'] != null && data['authorImage'].isNotEmpty
                                 ? NetworkImage(data['authorImage'])
                                 : null,
@@ -158,7 +163,7 @@ class _CommentsSheetState extends State<CommentsSheet> {
                             child: Container(
                               padding: const EdgeInsets.all(12),
                               decoration: BoxDecoration(
-                                color: Colors.white.withOpacity(0.05),
+                                color: Theme.of(context).dividerColor.withOpacity(0.05),
                                 borderRadius: BorderRadius.circular(12),
                               ),
                               child: Column(
@@ -171,25 +176,29 @@ class _CommentsSheetState extends State<CommentsSheet> {
                                         children: [
                                           Text(
                                             data['authorName'] ?? 'Unknown',
-                                            style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 14),
+                                            style: Theme.of(context).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.bold),
                                           ),
                                           Text(
                                             data['role'] ?? 'Teacher',
-                                            style: const TextStyle(color: Colors.white54, fontSize: 11),
+                                            style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                                                  color: Theme.of(context).textTheme.labelSmall?.color?.withOpacity(0.6),
+                                                ),
                                           ),
                                         ],
                                       ),
                                       const Spacer(),
                                       Text(
                                         timeString,
-                                        style: const TextStyle(color: Colors.white38, fontSize: 12),
+                                        style: Theme.of(context).textTheme.labelSmall?.copyWith(
+                                              color: Theme.of(context).textTheme.labelSmall?.color?.withOpacity(0.4),
+                                            ),
                                       ),
                                     ],
                                   ),
                                   const SizedBox(height: 6),
                                   Text(
                                     data['text'] ?? '',
-                                    style: const TextStyle(color: Colors.white70, fontSize: 14),
+                                    style: Theme.of(context).textTheme.bodyMedium,
                                   ),
                                 ],
                               ),
@@ -209,21 +218,23 @@ class _CommentsSheetState extends State<CommentsSheet> {
             bottom: true,
             child: Container(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
-              decoration: const BoxDecoration(
-                color: AppTheme.backgroundDark,
-                border: Border(top: BorderSide(color: Colors.white10)),
+              decoration: BoxDecoration(
+                color: Theme.of(context).scaffoldBackgroundColor,
+                border: Border(top: BorderSide(color: Theme.of(context).dividerColor)),
               ),
               child: Row(
                 children: [
                   Expanded(
                     child: TextField(
                       controller: _commentController,
-                      style: const TextStyle(color: Colors.white),
+                      style: Theme.of(context).textTheme.bodyMedium,
                       decoration: InputDecoration(
                         hintText: "Write a comment...",
-                        hintStyle: const TextStyle(color: Colors.white38),
+                        hintStyle: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                              color: Theme.of(context).textTheme.bodyMedium?.color?.withOpacity(0.4),
+                            ),
                         filled: true,
-                        fillColor: AppTheme.surfaceDark,
+                        fillColor: Theme.of(context).colorScheme.surface,
                         contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                         border: OutlineInputBorder(
                           borderRadius: BorderRadius.circular(24),
@@ -242,7 +253,9 @@ class _CommentsSheetState extends State<CommentsSheet> {
                         ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
                         : Icon(
                             Icons.send,
-                            color: _commentController.text.trim().isNotEmpty ? AppTheme.primary : Colors.white38,
+                            color: _commentController.text.trim().isNotEmpty 
+                                ? Theme.of(context).primaryColor 
+                                : Theme.of(context).disabledColor,
                           ),
                   ),
                 ],

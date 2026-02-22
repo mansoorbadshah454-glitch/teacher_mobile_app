@@ -219,10 +219,19 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
   @override
   Widget build(BuildContext context) {
     return Scaffold(
-      backgroundColor: AppTheme.backgroundDark,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
-        backgroundColor: AppTheme.surfaceDark,
-        title: Text(widget.postId != null ? "Edit Post" : "Create Post", style: const TextStyle(color: Colors.white)),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        flexibleSpace: Container(
+          decoration: const BoxDecoration(
+            gradient: AppTheme.primaryGradient,
+          ),
+        ),
+        title: Text(
+          widget.postId != null ? "Edit Post" : "Create Post", 
+          style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)
+        ),
         leading: IconButton(
           icon: const Icon(Icons.close, color: Colors.white),
           onPressed: () => context.pop(),
@@ -233,12 +242,12 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
                 ? _createPost
                 : null,
             child: _isPosting 
-                ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+                ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                 : Text(widget.postId != null ? "UPDATE" : "POST", 
                     style: TextStyle(
                       color: (_textController.text.isNotEmpty || _selectedMedia != null || _existingMediaUrl != null) 
-                          ? AppTheme.primary 
-                          : Colors.grey,
+                          ? Colors.white
+                          : Colors.white70,
                       fontWeight: FontWeight.bold
                     )),
           )
@@ -250,18 +259,20 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
           if (!_isLoadingClasses)
           Container(
             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-            color: AppTheme.surfaceDark,
+            color: Theme.of(context).colorScheme.surface,
             child: Row(
               children: [
-                const Text("To: ", style: TextStyle(color: Colors.white70)),
+                Text("To: ", style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                  color: Theme.of(context).textTheme.bodyMedium?.color?.withOpacity(0.7),
+                )),
                 const SizedBox(width: 8),
                 Expanded(
                   child: DropdownButtonHideUnderline(
                     child: DropdownButton<String>(
                       value: _selectedAudience,
-                      dropdownColor: AppTheme.surfaceDark,
-                      style: const TextStyle(color: Colors.white),
-                      icon: const Icon(Icons.arrow_drop_down, color: Colors.white70),
+                      dropdownColor: Theme.of(context).colorScheme.surface,
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontWeight: FontWeight.bold),
+                      icon: Icon(Icons.arrow_drop_down, color: Theme.of(context).iconTheme.color?.withOpacity(0.7)),
                       isExpanded: true,
                       items: [
                         const DropdownMenuItem(
@@ -293,7 +304,7 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
             ),
           ),
           
-          const Divider(height: 1, color: Colors.white10),
+          Divider(height: 1, color: Theme.of(context).dividerColor.withOpacity(0.1)),
 
           Expanded(
             child: SingleChildScrollView(
@@ -312,7 +323,7 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
                     child: TextField(
                       controller: _textController,
                       style: TextStyle(
-                          color: _selectedBackgroundIndex != 0 ? Colors.white : Colors.white, 
+                          color: _selectedBackgroundIndex != 0 ? Colors.white : Theme.of(context).textTheme.bodyLarge?.color, 
                           fontSize: _selectedBackgroundIndex != 0 ? 28 : 18,
                           fontWeight: _selectedBackgroundIndex != 0 ? FontWeight.bold : FontWeight.normal,
                       ),
@@ -322,7 +333,9 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
                       decoration: InputDecoration(
                         hintText: "What's on your mind?",
                         hintStyle: TextStyle(
-                            color: _selectedBackgroundIndex != 0 ? Colors.white70 : Colors.white38,
+                            color: _selectedBackgroundIndex != 0 
+                                ? Colors.white70 
+                                : Theme.of(context).textTheme.bodyLarge?.color?.withOpacity(0.4),
                         ),
                         border: InputBorder.none,
                       ),
@@ -348,12 +361,12 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
                               margin: const EdgeInsets.only(right: 8),
                               decoration: BoxDecoration(
                                 shape: BoxShape.circle,
-                                border: isSelected ? Border.all(color: Colors.white, width: 2) : null,
-                                color: index == 0 ? AppTheme.surfaceDark : null,
+                                border: isSelected ? Border.all(color: Theme.of(context).primaryColor, width: 2) : null,
+                                color: index == 0 ? Theme.of(context).dividerColor.withOpacity(0.1) : null,
                                 gradient: index != 0 ? LinearGradient(colors: _backgroundGradients[index]) : null,
                               ),
                               child: index == 0 
-                                  ? const Icon(Icons.block, color: Colors.white38, size: 20) 
+                                  ? Icon(Icons.block, color: Theme.of(context).disabledColor, size: 20) 
                                   : null,
                             ),
                           );
@@ -363,13 +376,19 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
 
                   // Bottom Actions (Moved up below text field)
                   Container(
+                    margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                    decoration: const BoxDecoration(
-                      border: Border(top: BorderSide(color: Colors.white10), bottom: BorderSide(color: Colors.white10)),
+                    decoration: BoxDecoration(
+                      color: Theme.of(context).primaryColor.withOpacity(0.05),
+                      borderRadius: BorderRadius.circular(12),
+                      border: Border.all(color: Theme.of(context).dividerColor.withOpacity(0.1)),
                     ),
                     child: Row(
                       children: [
-                        const Text("Add to your post", style: TextStyle(color: Colors.white70)),
+                        Text("Add to your post", style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                          fontWeight: FontWeight.bold,
+                          color: Theme.of(context).textTheme.bodySmall?.color?.withOpacity(0.7),
+                        )),
                         const Spacer(),
                         IconButton(
                           icon: const Icon(Icons.image, color: Colors.green),
