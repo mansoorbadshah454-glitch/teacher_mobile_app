@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:timeago/timeago.dart' as timeago;
-import 'package:teacher_mobile_app/core/theme/app_theme.dart';
 
 class CommentsSheet extends StatefulWidget {
   final String schoolId;

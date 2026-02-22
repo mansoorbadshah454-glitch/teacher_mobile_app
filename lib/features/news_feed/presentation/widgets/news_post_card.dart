@@ -250,7 +250,7 @@ class _NewsPostCardState extends State<NewsPostCard> {
                         ),
                     ));
                 },
-            Center(
+                child: Center(
               child: CachedNetworkImage(
                 imageUrl: mediaUrl,
                 width: double.infinity,

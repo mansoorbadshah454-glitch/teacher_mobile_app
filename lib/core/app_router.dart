@@ -1,3 +1,4 @@
+import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:teacher_mobile_app/core/go_router_refresh_stream.dart';
@@ -14,7 +15,7 @@ final goRouterProvider = Provider<GoRouter>((ref) {
     initialLocation: '/',
     debugLogDiagnostics: true,
     // Use a RefreshStream to listen to auth state changes
-    refreshListenable: GoRouterRefreshStream(ref.watch(authStateChangesProvider.stream)),
+    refreshListenable: GoRouterRefreshStream(FirebaseAuth.instance.authStateChanges()),
     
     redirect: (context, state) {
       final isLoggedIn = ref.read(currentUserProvider) != null;
