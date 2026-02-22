@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:teacher_mobile_app/core/theme/app_theme.dart';
 import 'package:teacher_mobile_app/features/attendance/providers/attendance_provider.dart';
 import 'package:teacher_mobile_app/core/providers/user_data_provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
@@ -174,10 +173,11 @@ class _AttendanceReportScreenState extends ConsumerState<AttendanceReportScreen>
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     final assignedClassAsync = ref.watch(assignedClassProvider);
 
     return Scaffold(
-      backgroundColor: AppTheme.backgroundDark,
+      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: SafeArea(
         child: assignedClassAsync.when(
           loading: () => const Center(child: CircularProgressIndicator(color: Colors.indigoAccent)),
@@ -202,18 +202,20 @@ class _AttendanceReportScreenState extends ConsumerState<AttendanceReportScreen>
                           width: 44,
                           height: 44,
                           decoration: BoxDecoration(
-                            color: Colors.white.withOpacity(0.05),
+                            color: isDark ? Colors.white.withOpacity(0.05) : Colors.white,
                             borderRadius: BorderRadius.circular(14),
+                            border: Border.all(color: isDark ? Colors.transparent : Colors.black.withOpacity(0.05)),
+                            boxShadow: !isDark ? [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 4))] : [],
                           ),
-                          child: const Icon(Icons.chevron_left, color: Colors.white),
+                          child: Icon(Icons.chevron_left, color: isDark ? Colors.white : const Color(0xFF6366f1)),
                         ),
                       ),
                       const SizedBox(width: 16),
                       Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
-                        children: const [
-                          Text("Attendance Report", style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: Colors.white)),
-                          Text("Download detailed reports", style: TextStyle(fontSize: 12, color: Colors.grey)),
+                        children: [
+                          Text("Attendance Report", style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: isDark ? Colors.white : Colors.indigo[900])),
+                          const Text("Download detailed reports", style: TextStyle(fontSize: 12, color: Colors.grey)),
                         ],
                       ),
                     ],
@@ -228,9 +230,10 @@ class _AttendanceReportScreenState extends ConsumerState<AttendanceReportScreen>
                       child: Container(
                         padding: const EdgeInsets.symmetric(vertical: 40, horizontal: 24),
                         decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.03),
+                          color: isDark ? Colors.white.withOpacity(0.03) : Colors.white,
                           borderRadius: BorderRadius.circular(32),
-                          border: Border.all(color: Colors.white.withOpacity(0.05)),
+                          border: Border.all(color: isDark ? Colors.white.withOpacity(0.05) : Colors.black.withOpacity(0.05)),
+                          boxShadow: !isDark ? [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 15, offset: const Offset(0, 10))] : [],
                         ),
                         child: Column(
                           mainAxisSize: MainAxisSize.min,
@@ -249,7 +252,7 @@ class _AttendanceReportScreenState extends ConsumerState<AttendanceReportScreen>
                             Container(
                               padding: const EdgeInsets.all(4),
                               decoration: BoxDecoration(
-                                color: Colors.white.withOpacity(0.05),
+                                color: isDark ? Colors.white.withOpacity(0.05) : Colors.black.withOpacity(0.04),
                                 borderRadius: BorderRadius.circular(16)
                               ),
                               child: Row(
@@ -264,7 +267,7 @@ class _AttendanceReportScreenState extends ConsumerState<AttendanceReportScreen>
                                           borderRadius: BorderRadius.circular(12)
                                         ),
                                         alignment: Alignment.center,
-                                        child: Text("Monthly", style: TextStyle(color: _reportType == 'monthly' ? Colors.white : Colors.grey, fontWeight: FontWeight.bold)),
+                                        child: Text("Monthly", style: TextStyle(color: _reportType == 'monthly' ? Colors.white : (isDark ? Colors.grey : Colors.grey[600]), fontWeight: FontWeight.bold)),
                                       ),
                                     ),
                                   ),
@@ -278,7 +281,7 @@ class _AttendanceReportScreenState extends ConsumerState<AttendanceReportScreen>
                                           borderRadius: BorderRadius.circular(12)
                                         ),
                                         alignment: Alignment.center,
-                                        child: Text("Yearly", style: TextStyle(color: _reportType == 'yearly' ? Colors.white : Colors.grey, fontWeight: FontWeight.bold)),
+                                        child: Text("Yearly", style: TextStyle(color: _reportType == 'yearly' ? Colors.white : (isDark ? Colors.grey : Colors.grey[600]), fontWeight: FontWeight.bold)),
                                       ),
                                     ),
                                   ),
@@ -302,9 +305,10 @@ class _AttendanceReportScreenState extends ConsumerState<AttendanceReportScreen>
                                     child: Container(
                                       padding: const EdgeInsets.symmetric(horizontal: 16),
                                       decoration: BoxDecoration(
-                                        color: Colors.white,
+                                        color: isDark ? Colors.white : Colors.white,
                                         borderRadius: BorderRadius.circular(16),
-                                        border: Border.all(color: const Color(0xFF6366f1).withOpacity(0.5), width: 2)
+                                        border: Border.all(color: const Color(0xFF6366f1).withOpacity(isDark ? 0.3 : 0.5), width: 2),
+                                        boxShadow: [BoxShadow(color: const Color(0xFF6366f1).withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 4))],
                                       ),
                                       child: DropdownButtonHideUnderline(
                                         child: DropdownButton<int>(
@@ -327,9 +331,10 @@ class _AttendanceReportScreenState extends ConsumerState<AttendanceReportScreen>
                                     child: Container(
                                       padding: const EdgeInsets.symmetric(horizontal: 16),
                                       decoration: BoxDecoration(
-                                        color: Colors.white,
+                                        color: isDark ? Colors.white : Colors.white,
                                         borderRadius: BorderRadius.circular(16),
-                                        border: Border.all(color: const Color(0xFF6366f1).withOpacity(0.5), width: 2)
+                                        border: Border.all(color: const Color(0xFF6366f1).withOpacity(isDark ? 0.3 : 0.5), width: 2),
+                                        boxShadow: [BoxShadow(color: const Color(0xFF6366f1).withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 4))],
                                       ),
                                       child: DropdownButtonHideUnderline(
                                         child: DropdownButton<int>(
@@ -352,9 +357,10 @@ class _AttendanceReportScreenState extends ConsumerState<AttendanceReportScreen>
                               Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 16),
                                 decoration: BoxDecoration(
-                                  color: Colors.white,
+                                  color: isDark ? Colors.white : Colors.white,
                                   borderRadius: BorderRadius.circular(16),
-                                  border: Border.all(color: const Color(0xFF6366f1).withOpacity(0.5), width: 2)
+                                  border: Border.all(color: const Color(0xFF6366f1).withOpacity(isDark ? 0.3 : 0.5), width: 2),
+                                  boxShadow: [BoxShadow(color: const Color(0xFF6366f1).withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 4))],
                                 ),
                                 child: DropdownButtonHideUnderline(
                                   child: DropdownButton<int>(
@@ -384,7 +390,7 @@ class _AttendanceReportScreenState extends ConsumerState<AttendanceReportScreen>
                                 decoration: BoxDecoration(
                                   color: const Color(0xFF6366f1),
                                   borderRadius: BorderRadius.circular(20),
-                                  boxShadow: [BoxShadow(color: const Color(0xFF6366f1).withOpacity(0.5), blurRadius: 16, offset: const Offset(0, 8))],
+                                  boxShadow: [BoxShadow(color: const Color(0xFF6366f1).withOpacity(isDark ? 0.5 : 0.3), blurRadius: 16, offset: const Offset(0, 8))],
                                 ),
                                 alignment: Alignment.center,
                                 child: _loading 

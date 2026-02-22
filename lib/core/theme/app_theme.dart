@@ -96,7 +96,7 @@ class AppTheme {
         primary: primary,
         secondary: secondary,
         surface: Colors.white,
-        background: Color(0xFFF9FAFB),
+        background: Color(0xFFF0F2F5),
       ),
       fontFamily: GoogleFonts.inter().fontFamily,
       appBarTheme: AppBarTheme(

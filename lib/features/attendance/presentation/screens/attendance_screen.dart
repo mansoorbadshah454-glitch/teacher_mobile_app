@@ -5,7 +5,6 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:cached_network_image/cached_network_image.dart';
-import 'package:teacher_mobile_app/core/theme/app_theme.dart';
 import 'package:teacher_mobile_app/features/attendance/providers/attendance_provider.dart';
 import 'package:teacher_mobile_app/core/providers/user_data_provider.dart';
 import 'package:intl/intl.dart';
@@ -62,34 +61,36 @@ class _StudentAvatarState extends State<StudentAvatar> {
     }
   }
 
-  Widget _buildFallback() {
+  Widget _buildFallback(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
       width: widget.size,
       height: widget.size,
       decoration: BoxDecoration(
-        color: Colors.white.withOpacity(0.05),
+        color: isDark ? Colors.white.withOpacity(0.05) : Colors.black.withOpacity(0.03),
         borderRadius: BorderRadius.circular(14),
-        border: Border.all(color: Colors.white.withOpacity(0.1), width: 2),
+        border: Border.all(color: isDark ? Colors.white.withOpacity(0.1) : Colors.black.withOpacity(0.05), width: 2),
       ),
       alignment: Alignment.center,
-      child: Icon(Icons.person, size: widget.size * 0.5, color: Colors.grey),
+      child: Icon(Icons.person, size: widget.size * 0.5, color: isDark ? Colors.grey : Colors.grey[400]),
     );
   }
 
   @override
   Widget build(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
     if (_loading) {
       return Container(
         width: widget.size,
         height: widget.size,
         decoration: BoxDecoration(
-          color: Colors.white.withOpacity(0.05),
+          color: isDark ? Colors.white.withOpacity(0.05) : Colors.black.withOpacity(0.03),
           borderRadius: BorderRadius.circular(14),
         ),
         alignment: Alignment.center,
-        child: const SizedBox(
+        child: SizedBox(
           width: 20, height: 20,
-          child: CircularProgressIndicator(strokeWidth: 2, color: Colors.grey),
+          child: CircularProgressIndicator(strokeWidth: 2, color: isDark ? Colors.grey : Colors.indigoAccent),
         ),
       );
     }
@@ -100,7 +101,7 @@ class _StudentAvatarState extends State<StudentAvatar> {
         height: widget.size,
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(14),
-          border: Border.all(color: Colors.white.withOpacity(0.1), width: 2),
+          border: Border.all(color: isDark ? Colors.white.withOpacity(0.1) : Colors.black.withOpacity(0.05), width: 2),
           image: DecorationImage(
             image: CachedNetworkImageProvider(_imageUrl!),
             fit: BoxFit.cover,
@@ -118,7 +119,7 @@ class _StudentAvatarState extends State<StudentAvatar> {
           height: widget.size,
           decoration: BoxDecoration(
             borderRadius: BorderRadius.circular(14),
-            border: Border.all(color: Colors.white.withOpacity(0.1), width: 2),
+            border: Border.all(color: isDark ? Colors.white.withOpacity(0.1) : Colors.black.withOpacity(0.05), width: 2),
             image: DecorationImage(
               image: MemoryImage(bytes),
               fit: BoxFit.cover,
@@ -126,11 +127,11 @@ class _StudentAvatarState extends State<StudentAvatar> {
           ),
         );
       } catch (e) {
-        return _buildFallback();
+        return _buildFallback(context);
       }
     }
 
-    return _buildFallback();
+    return _buildFallback(context);
   }
 }
 
@@ -159,8 +160,11 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
     final searchFilter = ref.watch(classSearchQueryProvider);
     final statsFilter = ref.watch(statsFilterProvider);
 
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final theme = Theme.of(context);
+
     return Scaffold(
-      backgroundColor: AppTheme.backgroundDark,
+      backgroundColor: theme.scaffoldBackgroundColor,
       body: SafeArea(
         child: assignedClassAsync.when(
           loading: () => const Center(child: CircularProgressIndicator(color: Colors.indigoAccent)),
@@ -236,18 +240,20 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
                                       width: 44,
                                       height: 44,
                                       decoration: BoxDecoration(
-                                        color: Colors.white.withOpacity(0.05),
+                                        color: isDark ? Colors.white.withOpacity(0.05) : Colors.white,
                                         borderRadius: BorderRadius.circular(14),
+                                        border: Border.all(color: isDark ? Colors.transparent : Colors.black.withOpacity(0.05)),
+                                        boxShadow: !isDark ? [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 4))] : [],
                                       ),
-                                      child: const Icon(Icons.chevron_left, color: Colors.white),
+                                      child: Icon(Icons.chevron_left, color: isDark ? Colors.white : const Color(0xFF6366f1)),
                                     ),
                                   ),
                                   const SizedBox(width: 12),
                                   Column(
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
-                                      const Text("Mark Attendance", style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: Colors.white)),
-                                      Text("${assignedClass['name']} • ${DateFormat('EEEE, MMMM d').format(DateTime.now())}", style: const TextStyle(fontSize: 12, color: Colors.grey)),
+                                      Text("Mark Attendance", style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: isDark ? Colors.white : Colors.indigo[900])),
+                                      Text("${assignedClass['name']} • ${DateFormat('EEEE, MMMM d').format(DateTime.now())}", style: TextStyle(fontSize: 12, color: isDark ? Colors.grey : Colors.grey[600])),
                                     ],
                                   ),
                                 ],
@@ -258,11 +264,12 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
                                   width: 44,
                                   height: 44,
                                   decoration: BoxDecoration(
-                                    color: const Color(0xFF6366f1),
+                                    color: isDark ? const Color(0xFF6366f1) : Colors.white,
                                     borderRadius: BorderRadius.circular(14),
-                                    boxShadow: [BoxShadow(color: const Color(0xFF6366f1).withOpacity(0.5), blurRadius: 12, offset: const Offset(0, 4))],
+                                    boxShadow: [BoxShadow(color: const Color(0xFF6366f1).withOpacity(isDark ? 0.5 : 0.2), blurRadius: 12, offset: const Offset(0, 4))],
+                                    border: isDark ? null : Border.all(color: Colors.black.withOpacity(0.05)),
                                   ),
-                                  child: const Icon(Icons.chevron_right, color: Colors.white),
+                                  child: Icon(Icons.chevron_right, color: isDark ? Colors.white : const Color(0xFF6366f1)),
                                 ),
                               ),
                             ],
@@ -281,16 +288,24 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
                                     duration: const Duration(milliseconds: 200),
                                     padding: const EdgeInsets.all(20),
                                     decoration: BoxDecoration(
-                                      color: statsFilter == 'present' ? Colors.greenAccent.withOpacity(0.1) : Colors.white.withOpacity(0.03),
+                                      color: statsFilter == 'present' 
+                                          ? Colors.greenAccent.withOpacity(0.1) 
+                                          : (isDark ? Colors.white.withOpacity(0.03) : Colors.white),
                                       borderRadius: BorderRadius.circular(24),
-                                      border: Border.all(color: statsFilter == 'present' ? Colors.greenAccent : Colors.white.withOpacity(0.05)),
+                                      border: Border.all(
+                                        color: statsFilter == 'present' 
+                                            ? Colors.greenAccent 
+                                            : (isDark ? Colors.white.withOpacity(0.05) : Colors.black.withOpacity(0.05)),
+                                        width: statsFilter == 'present' ? 2 : 1,
+                                      ),
+                                      boxShadow: !isDark ? [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 4))] : [],
                                     ),
                                     child: Column(
                                       crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
-                                        Text("TOTAL PRESENTS", style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: statsFilter == 'present' ? Colors.greenAccent : Colors.grey)),
+                                        Text("TOTAL PRESENTS", style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: statsFilter == 'present' ? (isDark ? Colors.greenAccent : Colors.green[700]) : Colors.grey)),
                                         const SizedBox(height: 4),
-                                        Text("$presentCount", style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: Colors.white)),
+                                        Text("$presentCount", style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: isDark ? Colors.white : Colors.black87)),
                                       ],
                                     ),
                                   ),
@@ -304,16 +319,24 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
                                     duration: const Duration(milliseconds: 200),
                                     padding: const EdgeInsets.all(20),
                                     decoration: BoxDecoration(
-                                      color: statsFilter == 'absent' ? Colors.pinkAccent.withOpacity(0.1) : Colors.white.withOpacity(0.03),
+                                      color: statsFilter == 'absent' 
+                                          ? Colors.pinkAccent.withOpacity(0.1) 
+                                          : (isDark ? Colors.white.withOpacity(0.03) : Colors.white),
                                       borderRadius: BorderRadius.circular(24),
-                                      border: Border.all(color: statsFilter == 'absent' ? Colors.pinkAccent : Colors.white.withOpacity(0.05)),
+                                      border: Border.all(
+                                        color: statsFilter == 'absent' 
+                                            ? Colors.pinkAccent 
+                                            : (isDark ? Colors.white.withOpacity(0.05) : Colors.black.withOpacity(0.05)),
+                                        width: statsFilter == 'absent' ? 2 : 1,
+                                      ),
+                                      boxShadow: !isDark ? [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 4))] : [],
                                     ),
                                     child: Column(
                                       crossAxisAlignment: CrossAxisAlignment.start,
                                       children: [
-                                        Text("TOTAL ABSENTS", style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: statsFilter == 'absent' ? Colors.pinkAccent : Colors.grey)),
+                                        Text("TOTAL ABSENTS", style: TextStyle(fontSize: 10, fontWeight: FontWeight.w600, color: statsFilter == 'absent' ? (isDark ? Colors.pinkAccent : Colors.pink[700]) : Colors.grey)),
                                         const SizedBox(height: 4),
-                                        Text("$absentCount", style: const TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: Colors.white)),
+                                        Text("$absentCount", style: TextStyle(fontSize: 24, fontWeight: FontWeight.w800, color: isDark ? Colors.white : Colors.black87)),
                                       ],
                                     ),
                                   ),
@@ -328,18 +351,20 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
                           padding: const EdgeInsets.all(16.0),
                           child: Container(
                             decoration: BoxDecoration(
-                              color: Colors.white.withOpacity(0.05),
+                              color: isDark ? Colors.white.withOpacity(0.05) : Colors.white,
                               borderRadius: BorderRadius.circular(18),
+                              border: Border.all(color: isDark ? Colors.white.withOpacity(0.05) : Colors.black.withOpacity(0.05)),
+                              boxShadow: !isDark ? [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 10, offset: const Offset(0, 4))] : [],
                             ),
                             child: TextField(
-                              style: const TextStyle(color: Colors.white),
+                              style: TextStyle(color: isDark ? Colors.white : Colors.black87),
                               onChanged: (val) => ref.read(classSearchQueryProvider.notifier).state = val,
-                              decoration: const InputDecoration(
+                              decoration: InputDecoration(
                                 hintText: "Search by Name or Roll No...",
-                                hintStyle: TextStyle(color: Colors.grey),
-                                prefixIcon: Icon(Icons.search, color: Colors.grey),
+                                hintStyle: TextStyle(color: isDark ? Colors.grey : Colors.grey[500]),
+                                prefixIcon: Icon(Icons.search, color: isDark ? Colors.grey : Colors.grey[500]),
                                 border: InputBorder.none,
-                                contentPadding: EdgeInsets.all(16),
+                                contentPadding: const EdgeInsets.all(16),
                               ),
                             ),
                           ),
@@ -362,9 +387,10 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
                                       margin: const EdgeInsets.only(bottom: 12),
                                       padding: const EdgeInsets.all(16),
                                       decoration: BoxDecoration(
-                                        color: Colors.white.withOpacity(0.03),
+                                        color: isDark ? Colors.white.withOpacity(0.03) : Colors.white,
                                         borderRadius: BorderRadius.circular(22),
-                                        border: Border.all(color: isPresent ? const Color(0xFF6366f1) : Colors.white.withOpacity(0.05)),
+                                        border: Border.all(color: isPresent ? const Color(0xFF6366f1) : (isDark ? Colors.white.withOpacity(0.05) : Colors.black.withOpacity(0.05))),
+                                        boxShadow: !isDark ? [BoxShadow(color: (isPresent ? const Color(0xFF6366f1) : Colors.black).withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 4))] : [],
                                       ),
                                       child: Row(
                                         children: [
@@ -378,9 +404,9 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
                                             child: Column(
                                               crossAxisAlignment: CrossAxisAlignment.start,
                                               children: [
-                                                Text(student['name'] ?? 'Unknown', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Colors.white)),
+                                                Text(student['name'] ?? 'Unknown', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: isDark ? Colors.white : Colors.indigo[900])),
                                                 const SizedBox(height: 4),
-                                                Text("Roll: ${student['rollNo'] ?? student['roll'] ?? '-'} • Class: ${assignedClass['name']}", style: const TextStyle(fontSize: 12, color: Colors.grey, fontWeight: FontWeight.w500)),
+                                                Text("Roll: ${student['rollNo'] ?? student['roll'] ?? '-'} • Class: ${assignedClass['name']}", style: TextStyle(fontSize: 12, color: isDark ? Colors.grey : Colors.grey[600], fontWeight: FontWeight.w500)),
                                               ],
                                             ),
                                           ),
@@ -393,10 +419,10 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
                                               width: 90,
                                               padding: const EdgeInsets.symmetric(vertical: 12),
                                               decoration: BoxDecoration(
-                                                color: isPresent ? const Color(0xFF6366f1) : Colors.white.withOpacity(0.03),
+                                                color: isPresent ? const Color(0xFF6366f1) : (isDark ? Colors.white.withOpacity(0.03) : Colors.black.withOpacity(0.03)),
                                                 borderRadius: BorderRadius.circular(14),
-                                                border: Border.all(color: isPresent ? Colors.transparent : Colors.white.withOpacity(0.05)),
-                                                boxShadow: isPresent ? [BoxShadow(color: const Color(0xFF6366f1).withOpacity(0.4), blurRadius: 8, offset: const Offset(0, 4))] : [],
+                                                border: Border.all(color: isPresent ? Colors.transparent : (isDark ? Colors.white.withOpacity(0.05) : Colors.black.withOpacity(0.05))),
+                                                boxShadow: isPresent ? [BoxShadow(color: const Color(0xFF6366f1).withOpacity(isDark ? 0.4 : 0.3), blurRadius: 8, offset: const Offset(0, 4))] : [],
                                               ),
                                               alignment: Alignment.center,
                                               child: Text(
@@ -443,22 +469,22 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
                         },
                         child: Container(
                           height: 60,
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF6366f1),
-                            borderRadius: BorderRadius.circular(20),
-                            boxShadow: [BoxShadow(color: const Color(0xFF6366f1).withOpacity(0.5), blurRadius: 20, offset: const Offset(0, 10))],
-                          ),
+                            decoration: BoxDecoration(
+                              color: const Color(0xFF6366f1),
+                              borderRadius: BorderRadius.circular(20),
+                              boxShadow: [BoxShadow(color: const Color(0xFF6366f1).withOpacity(isDark ? 0.5 : 0.3), blurRadius: 20, offset: const Offset(0, 10))],
+                            ),
                           alignment: Alignment.center,
                           child: _saving 
-                              ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 3))
-                              : Row(
-                                  mainAxisAlignment: MainAxisAlignment.center,
-                                  children: const [
-                                    Icon(Icons.how_to_reg, color: Colors.white),
-                                    SizedBox(width: 8),
-                                    Text("CONFIRM ATTENDANCE", style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w900)),
-                                  ],
-                                ),
+                               ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 3))
+                               : Row(
+                                   mainAxisAlignment: MainAxisAlignment.center,
+                                   children: const [
+                                     Icon(Icons.how_to_reg, color: Colors.white),
+                                     SizedBox(width: 8),
+                                     Text("CONFIRM ATTENDANCE", style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w900)),
+                                   ],
+                                 ),
                         ),
                       ),
                     ),
