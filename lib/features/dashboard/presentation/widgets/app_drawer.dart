@@ -5,6 +5,7 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:teacher_mobile_app/core/theme/app_theme.dart';
 import 'package:teacher_mobile_app/core/providers/user_data_provider.dart';
 import 'package:teacher_mobile_app/features/auth/auth_provider.dart';
+import 'package:teacher_mobile_app/features/inbox/providers/inbox_provider.dart';
 
 class AppDrawer extends ConsumerWidget {
   const AppDrawer({super.key});
@@ -12,9 +13,15 @@ class AppDrawer extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final schoolAsync = ref.watch(schoolDataProvider);
+    final messagesAsync = ref.watch(inboxProvider);
 
     final schoolName = schoolAsync.value?['name'] ?? 'School Name';
     final schoolLogo = schoolAsync.value?['logo'] ?? '';
+    
+    int unreadCount = 0;
+    if (messagesAsync.value != null) {
+      unreadCount = messagesAsync.value!.where((msg) => msg['read'] == false).length;
+    }
 
     return Drawer(
       backgroundColor: Theme.of(context).colorScheme.background,
@@ -73,6 +80,7 @@ class AppDrawer extends ConsumerWidget {
           _DrawerItem(
             icon: Icons.inbox_outlined,
             title: 'Inbox',
+            badgeCount: unreadCount,
             onTap: () {
               Navigator.pop(context);
               context.push('/inbox'); // Push allows the device back button to work
@@ -124,11 +132,13 @@ class _DrawerItem extends StatelessWidget {
   final IconData icon;
   final String title;
   final VoidCallback onTap;
+  final int badgeCount;
 
   const _DrawerItem({
     required this.icon,
     required this.title,
     required this.onTap,
+    this.badgeCount = 0,
   });
 
   @override
@@ -137,7 +147,28 @@ class _DrawerItem extends StatelessWidget {
     final color = isDark ? Colors.white : AppTheme.primary;
     return ListTile(
       leading: Icon(icon, color: color),
-      title: Text(title, style: TextStyle(color: color, fontWeight: FontWeight.w500)),
+      title: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Text(title, style: TextStyle(color: color, fontWeight: FontWeight.w500)),
+          if (badgeCount > 0)
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+              decoration: BoxDecoration(
+                color: Colors.red,
+                borderRadius: BorderRadius.circular(12),
+              ),
+              child: Text(
+                badgeCount.toString(),
+                style: const TextStyle(
+                  color: Colors.white,
+                  fontSize: 12,
+                  fontWeight: FontWeight.bold,
+                ),
+              ),
+            ),
+        ],
+      ),
       onTap: onTap,
     );
   }

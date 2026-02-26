@@ -104,10 +104,41 @@ class InboxScreen extends ConsumerWidget {
   }
 }
 
-class _MessageCard extends ConsumerWidget {
+class _MessageCard extends ConsumerStatefulWidget {
   final Map<String, dynamic> msg;
 
   const _MessageCard({required this.msg});
+
+  @override
+  ConsumerState<_MessageCard> createState() => _MessageCardState();
+}
+
+class _MessageCardState extends ConsumerState<_MessageCard> {
+  @override
+  void initState() {
+    super.initState();
+    _markAsReadIfNeeded();
+  }
+
+  Future<void> _markAsReadIfNeeded() async {
+    if (widget.msg['read'] == false) {
+      try {
+          final rawData = await ref.read(teacherDataProvider.future);
+          final Map<String, dynamic>? userData = rawData;
+          final schoolId = userData?['schoolId'];
+          if (schoolId != null && widget.msg['id'] != null) {
+              await FirebaseFirestore.instance
+                  .collection('schools')
+                  .doc(schoolId)
+                  .collection('messages')
+                  .doc(widget.msg['id'])
+                  .update({'read': true});
+          }
+      } catch (e) {
+         print("Failed to mark message as read: \$e");
+      }
+    }
+  }
 
   Future<void> _deleteMessage(BuildContext context, WidgetRef ref) async {
     final confirmed = await showDialog<bool>(
@@ -131,14 +162,14 @@ class _MessageCard extends ConsumerWidget {
     if (confirmed == true && context.mounted) {
        try {
           final rawData = await ref.read(teacherDataProvider.future);
-          final Map<String, dynamic>? userData = rawData; // teacherDataProvider already returns Map<String, dynamic>?
+          final Map<String, dynamic>? userData = rawData;
           final schoolId = userData?['schoolId'];
           if (schoolId != null) {
               await FirebaseFirestore.instance
                  .collection('schools')
                  .doc(schoolId)
                  .collection('messages')
-                 .doc(msg['id'])
+                 .doc(widget.msg['id'])
                  .delete();
               
               if (context.mounted) {
@@ -150,7 +181,7 @@ class _MessageCard extends ConsumerWidget {
        } catch (e) {
           if (context.mounted) {
               ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Failed to delete message: $e')),
+                  SnackBar(content: Text('Failed to delete message: \$e')),
               );
           }
        }
@@ -158,18 +189,18 @@ class _MessageCard extends ConsumerWidget {
   }
 
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final isUnread = msg['read'] == false;
+    final isUnread = widget.msg['read'] == false;
     
     // Format timestamp securely
     String formattedTime = '';
-    if (msg['timestamp'] != null) {
-        if (msg['timestamp'] is Timestamp) {
-            final DateTime dt = (msg['timestamp'] as Timestamp).toDate();
+    if (widget.msg['timestamp'] != null) {
+        if (widget.msg['timestamp'] is Timestamp) {
+            final DateTime dt = (widget.msg['timestamp'] as Timestamp).toDate();
             formattedTime = DateFormat('MMM d, h:mm a').format(dt);
-        } else if (msg['timestamp'] is String) {
-            formattedTime = msg['timestamp']; // Fallback
+        } else if (widget.msg['timestamp'] is String) {
+            formattedTime = widget.msg['timestamp']; // Fallback
         }
     }
 
@@ -209,7 +240,7 @@ class _MessageCard extends ConsumerWidget {
                            children: [
                              Flexible(
                                child: Text(
-                                 msg['fromName'] ?? 'Principal',
+                                 widget.msg['fromName'] ?? 'Principal',
                                  style: TextStyle(
                                    fontSize: 16,
                                    fontWeight: isUnread ? FontWeight.bold : FontWeight.w600,
@@ -240,7 +271,7 @@ class _MessageCard extends ConsumerWidget {
                                 ),
                               ),
                               Text(
-                                msg['from']?.toString().toUpperCase() ?? 'ADMIN',
+                                widget.msg['from']?.toString().toUpperCase() ?? 'ADMIN',
                                 style: const TextStyle(
                                   fontSize: 12,
                                   color: AppTheme.primary,
@@ -263,7 +294,7 @@ class _MessageCard extends ConsumerWidget {
             ),
             const SizedBox(height: 12),
             Text(
-               msg['text'] ?? '',
+               widget.msg['text'] ?? '',
                style: TextStyle(
                   fontSize: 15,
                   height: 1.4,
