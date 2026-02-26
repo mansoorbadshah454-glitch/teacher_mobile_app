@@ -1,5 +1,6 @@
 import 'package:go_router/go_router.dart';
 import 'package:flutter/material.dart';
+import 'package:teacher_mobile_app/features/inbox/presentation/screens/inbox_screen.dart';
 import 'package:teacher_mobile_app/features/auth/presentation/screens/login_screen.dart';
 import 'package:teacher_mobile_app/features/auth/presentation/screens/welcome_screen.dart';
 import 'package:teacher_mobile_app/features/dashboard/presentation/screens/dashboard_screen.dart';
@@ -55,6 +56,10 @@ final appRouter = GoRouter(
           },
         );
       },
+    ),
+    GoRoute(
+      path: '/inbox',
+      builder: (context, state) => const InboxScreen(),
     ),
     GoRoute(
       path: '/settings',

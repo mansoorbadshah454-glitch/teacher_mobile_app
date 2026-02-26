@@ -63,9 +63,20 @@ class AppDrawer extends ConsumerWidget {
             ),
           ),
           _DrawerItem(
-            icon: Icons.home_filled,
-            title: 'Dashboard',
-            onTap: () => Navigator.pop(context),
+            icon: Icons.home_outlined,
+            title: 'Home',
+            onTap: () {
+              Navigator.pop(context);
+              context.go('/dashboard'); // Go explicitly clears the stack to return to root
+            },
+          ),
+          _DrawerItem(
+            icon: Icons.inbox_outlined,
+            title: 'Inbox',
+            onTap: () {
+              Navigator.pop(context);
+              context.push('/inbox'); // Push allows the device back button to work
+            },
           ),
           _DrawerItem(
             icon: Icons.person_outline,

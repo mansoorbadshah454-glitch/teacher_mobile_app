@@ -83,10 +83,12 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           )
         ],
       ),
-      body: Column(
-        crossAxisAlignment: CrossAxisAlignment.start,
-        children: [
-          // Welcome Section
+      body: SingleChildScrollView(
+        physics: const AlwaysScrollableScrollPhysics(),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            // Welcome Section
           Padding(
             padding: const EdgeInsets.fromLTRB(16.0, 8.0, 16.0, 16.0),
             child: Column(
@@ -110,15 +112,16 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
           const SizedBox(height: 24),
 
           // Grid
-          Expanded(
-            child: Padding(
-              padding: const EdgeInsets.symmetric(horizontal: 16.0),
-              child: GridView.count(
-                crossAxisCount: 2,
-                crossAxisSpacing: 16,
-                mainAxisSpacing: 16,
-                childAspectRatio: 0.85, 
-                children: [
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16.0),
+            child: GridView.count(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              crossAxisCount: 2,
+              crossAxisSpacing: 16,
+              mainAxisSpacing: 16,
+              childAspectRatio: 0.85, 
+              children: [
                    StatCard(
                     title: "News Feed",
                     description: "School announcements",
@@ -165,8 +168,8 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 ],
               ),
             ),
-          ),
-        ],
+          ],
+        ),
       ),
     );
   }
