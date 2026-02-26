@@ -5,6 +5,7 @@ import 'package:firebase_auth/firebase_auth.dart';
 import 'package:teacher_mobile_app/core/theme/app_theme.dart';
 import 'package:teacher_mobile_app/features/dashboard/presentation/widgets/app_drawer.dart';
 import 'package:teacher_mobile_app/features/dashboard/presentation/widgets/stat_card.dart';
+import 'package:teacher_mobile_app/features/dashboard/providers/unread_news_feed_provider.dart';
 
 class DashboardScreen extends ConsumerStatefulWidget {
   const DashboardScreen({super.key});
@@ -19,6 +20,14 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
   @override
   Widget build(BuildContext context) {
     print("🏠 [Dashboard] Build Started");
+    
+    // Watch unread news feed count
+    final unreadCountAsyncValue = ref.watch(unreadNewsFeedProvider);
+    final unreadCount = unreadCountAsyncValue.when(
+      data: (count) => count,
+      loading: () => 0,
+      error: (_, __) => 0,
+    );
 
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
@@ -113,7 +122,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                     icon: Icons.newspaper,
                     color: const Color(0xFF10b981), // Emerald
                     onTap: () => context.push('/news-feed'),
-                    badgeCount: 2, // Mock unread
+                    badgeCount: unreadCount, // Dynamic unread count
                   ),
                   StatCard(
                     title: "Attendance",

@@ -58,6 +58,7 @@ class _NewsFeedScreenState extends ConsumerState<NewsFeedScreen> {
           _errorMessage = null;
         });
         print("✅ [NewsFeed] Found school: ${doc.id}");
+        _markFeedAsRead(); // Mark feed as read right after getting school info
       } else {
         setState(() {
           _errorMessage = "No schools found";
@@ -75,6 +76,25 @@ class _NewsFeedScreenState extends ConsumerState<NewsFeedScreen> {
           _isLoading = false;
         });
       }
+    }
+  }
+
+  Future<void> _markFeedAsRead() async {
+    try {
+      final user = FirebaseAuth.instance.currentUser;
+      if (user == null || schoolId == null) return;
+
+      await FirebaseFirestore.instance
+          .collection('schools')
+          .doc(schoolId)
+          .collection('teachers')
+          .doc(user.uid)
+          .set({
+        'lastReadNewsFeed': FieldValue.serverTimestamp(),
+      }, SetOptions(merge: true));
+      print("✅ [NewsFeed] Marked feed as read");
+    } catch (e) {
+      print("💥 [NewsFeed] Error marking feed as read: $e");
     }
   }
 
