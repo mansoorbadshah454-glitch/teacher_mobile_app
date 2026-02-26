@@ -165,8 +165,7 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
 
     return Scaffold(
       backgroundColor: theme.scaffoldBackgroundColor,
-      body: SafeArea(
-        child: assignedClassAsync.when(
+      body: assignedClassAsync.when(
           loading: () => const Center(child: CircularProgressIndicator(color: Colors.indigoAccent)),
           error: (e, st) => Center(child: Text('Error: $e', style: const TextStyle(color: Colors.red))),
           data: (assignedClass) {
@@ -226,9 +225,24 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
                   children: [
                     Column(
                       children: [
-                        // Header
-                        Padding(
-                          padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+                        // Header Container
+                        Container(
+                          padding: EdgeInsets.only(
+                            top: MediaQuery.of(context).padding.top + 16, 
+                            bottom: 16, 
+                            left: 16, 
+                            right: 16,
+                          ),
+                          decoration: BoxDecoration(
+                            gradient: const LinearGradient(
+                              colors: [Color(0xFF10b981), Color(0xFF059669)], // Emerald/Green theme
+                              begin: Alignment.topLeft,
+                              end: Alignment.bottomRight,
+                            ),
+                            boxShadow: [
+                              BoxShadow(color: Colors.black.withOpacity(0.3), blurRadius: 4, offset: const Offset(0, 4))
+                            ],
+                          ),
                           child: Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
@@ -240,20 +254,19 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
                                       width: 44,
                                       height: 44,
                                       decoration: BoxDecoration(
-                                        color: isDark ? Colors.white.withOpacity(0.05) : Colors.white,
+                                        color: Colors.white.withOpacity(0.2), // Transparent white
                                         borderRadius: BorderRadius.circular(14),
-                                        border: Border.all(color: isDark ? Colors.transparent : Colors.black.withOpacity(0.05)),
-                                        boxShadow: !isDark ? [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 4))] : [],
+                                        border: Border.all(color: Colors.white.withOpacity(0.3)),
                                       ),
-                                      child: Icon(Icons.chevron_left, color: isDark ? Colors.white : const Color(0xFF6366f1)),
+                                      child: const Icon(Icons.chevron_left, color: Colors.white),
                                     ),
                                   ),
                                   const SizedBox(width: 12),
                                   Column(
                                     crossAxisAlignment: CrossAxisAlignment.start,
                                     children: [
-                                      Text("Mark Attendance", style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: isDark ? Colors.white : Colors.indigo[900])),
-                                      Text("${assignedClass['name']} • ${DateFormat('EEEE, MMMM d').format(DateTime.now())}", style: TextStyle(fontSize: 12, color: isDark ? Colors.grey : Colors.grey[600])),
+                                      const Text("Mark Attendance", style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: Colors.white)),
+                                      Text("${assignedClass['name']} • ${DateFormat('EEEE, MMMM d').format(DateTime.now())}", style: TextStyle(fontSize: 12, color: Colors.white.withOpacity(0.8))),
                                     ],
                                   ),
                                 ],
@@ -264,12 +277,11 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
                                   width: 44,
                                   height: 44,
                                   decoration: BoxDecoration(
-                                    color: isDark ? const Color(0xFF6366f1) : Colors.white,
+                                    color: Colors.white.withOpacity(0.2),
                                     borderRadius: BorderRadius.circular(14),
-                                    boxShadow: [BoxShadow(color: const Color(0xFF6366f1).withOpacity(isDark ? 0.5 : 0.2), blurRadius: 12, offset: const Offset(0, 4))],
-                                    border: isDark ? null : Border.all(color: Colors.black.withOpacity(0.05)),
+                                    border: Border.all(color: Colors.white.withOpacity(0.3)),
                                   ),
-                                  child: Icon(Icons.chevron_right, color: isDark ? Colors.white : const Color(0xFF6366f1)),
+                                  child: const Icon(Icons.chevron_right, color: Colors.white),
                                 ),
                               ),
                             ],
@@ -494,7 +506,6 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
             );
           },
         ),
-      ),
     );
   }
 }

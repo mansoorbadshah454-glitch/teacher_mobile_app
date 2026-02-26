@@ -28,43 +28,41 @@ class _ContactParentsScreenState extends ConsumerState<ContactParentsScreen> {
 
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      body: SafeArea(
-        child: Column(
-          children: [
-            _buildHeader(context, state),
-            
-            Padding(
-              padding: const EdgeInsets.all(16.0),
-              child: _buildSearchBar(context, state, notifier),
-            ),
-            
-            Expanded(
-              child: _buildStudentList(context, state, notifier),
-            ),
-          ],
-        ),
+      body: Column(
+        children: [
+          _buildHeader(context, state),
+          
+          Padding(
+            padding: const EdgeInsets.all(16.0),
+            child: _buildSearchBar(context, state, notifier),
+          ),
+          
+          Expanded(
+            child: _buildStudentList(context, state, notifier),
+          ),
+        ],
       ),
     );
   }
 
   Widget _buildHeader(BuildContext context, ContactParentsState state) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 24),
-      decoration: const BoxDecoration(
-        gradient: LinearGradient(
+      padding: EdgeInsets.fromLTRB(16, MediaQuery.of(context).padding.top + 16, 16, 24),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
           colors: [Color(0xFFec4899), Color(0xFFdb2777)],
           begin: Alignment.topLeft,
           end: Alignment.bottomRight,
         ),
-        borderRadius: BorderRadius.only(
+        borderRadius: const BorderRadius.only(
           bottomLeft: Radius.circular(24),
           bottomRight: Radius.circular(24),
         ),
         boxShadow: [
           BoxShadow(
-            color: Color(0x33ec4899),
-            blurRadius: 20,
-            offset: Offset(0, 10),
+            color: Colors.black.withOpacity(0.3),
+            blurRadius: 4,
+            offset: const Offset(0, 4),
           ),
         ],
       ),

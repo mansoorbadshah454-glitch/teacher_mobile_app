@@ -38,8 +38,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         elevation: 0,
         iconTheme: const IconThemeData(color: Colors.white), // Forces Drawer Icon to be White
         flexibleSpace: Container(
-          decoration: const BoxDecoration(
+          decoration: BoxDecoration(
             gradient: AppTheme.primaryGradient,
+            boxShadow: [
+              BoxShadow(color: Colors.black.withOpacity(0.3), blurRadius: 4, offset: const Offset(0, 4))
+            ],
           ),
         ),
         actions: [

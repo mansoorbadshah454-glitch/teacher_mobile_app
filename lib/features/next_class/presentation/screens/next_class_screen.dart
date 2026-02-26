@@ -22,81 +22,76 @@ class NextClassScreen extends ConsumerWidget {
 
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      body: SafeArea(
-        child: Stack(
-          children: [
-            Column(
-              children: [
-                _buildHeader(context, state, notifier),
-                Expanded(
-                  child: AnimatedSwitcher(
-                    duration: const Duration(milliseconds: 300),
-                    child: _buildBody(context, state, notifier, teacherData, schoolData),
-                  ),
-                ),
-              ],
-            ),
-            
-            // Floating Save Button for Students mode
-            if (state.viewMode == NextClassViewMode.students && state.scoreUpdates.isNotEmpty)
-              Positioned(
-                bottom: 24,
-                left: 24,
-                right: 24,
-                child: TweenAnimationBuilder(
-                  tween: Tween<double>(begin: 100, end: 0),
+      body: Stack(
+        children: [
+          Column(
+            children: [
+              _buildHeader(context, state, notifier),
+              Expanded(
+                child: AnimatedSwitcher(
                   duration: const Duration(milliseconds: 300),
-                  curve: Curves.easeOutBack,
-                  builder: (context, double val, child) {
-                    return Transform.translate(
-                      offset: Offset(0, val),
-                      child: child,
-                    );
-                  },
-                  child: GestureDetector(
-                    onTap: state.isSaving ? null : () => notifier.saveAllScores(),
-                    child: Container(
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      decoration: BoxDecoration(
-                        color: isLight ? const Color(0xFF6366f1) : AppTheme.primary,
-                        borderRadius: BorderRadius.circular(16),
-                        boxShadow: [
-                          BoxShadow(
-                            color: (isLight ? const Color(0xFF6366f1) : AppTheme.primary).withOpacity(0.4),
-                            blurRadius: 16,
-                            offset: const Offset(0, 8),
-                          ),
-                        ],
-                      ),
-                      alignment: Alignment.center,
-                      child: state.isSaving
-                          ? const SizedBox(
-                              height: 20,
-                              width: 20,
-                              child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
-                            )
-                          : Text(
-                              "Save Changes (${state.scoreUpdates.length})",
-                              style: const TextStyle(
-                                color: Colors.white,
-                                fontSize: 16,
-                                fontWeight: FontWeight.bold,
-                              ),
-                            ),
+                  child: _buildBody(context, state, notifier, teacherData, schoolData),
+                ),
+              ),
+            ],
+          ),
+          
+          // Floating Save Button for Students mode
+          if (state.viewMode == NextClassViewMode.students && state.scoreUpdates.isNotEmpty)
+            Positioned(
+              bottom: 24,
+              left: 24,
+              right: 24,
+              child: TweenAnimationBuilder(
+                tween: Tween<double>(begin: 100, end: 0),
+                duration: const Duration(milliseconds: 300),
+                curve: Curves.easeOutBack,
+                builder: (context, double val, child) {
+                  return Transform.translate(
+                    offset: Offset(0, val),
+                    child: child,
+                  );
+                },
+                child: GestureDetector(
+                  onTap: state.isSaving ? null : () => notifier.saveAllScores(),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    decoration: BoxDecoration(
+                      color: isLight ? const Color(0xFF6366f1) : AppTheme.primary,
+                      borderRadius: BorderRadius.circular(16),
+                      boxShadow: [
+                        BoxShadow(
+                          color: (isLight ? const Color(0xFF6366f1) : AppTheme.primary).withOpacity(0.4),
+                          blurRadius: 16,
+                          offset: const Offset(0, 8),
+                        ),
+                      ],
                     ),
+                    alignment: Alignment.center,
+                    child: state.isSaving
+                        ? const SizedBox(
+                            height: 20,
+                            width: 20,
+                            child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2),
+                          )
+                        : Text(
+                            "Save Changes (${state.scoreUpdates.length})",
+                            style: const TextStyle(
+                              color: Colors.white,
+                              fontSize: 16,
+                              fontWeight: FontWeight.bold,
+                            ),
+                          ),
                   ),
                 ),
               ),
-          ],
-        ),
+            ),
+        ],
       ),
     );
   }
 
   Widget _buildHeader(BuildContext context, NextClassState state, NextClassNotifier notifier) {
-    final isLight = Theme.of(context).brightness == Brightness.light;
-    final isDark = !isLight;
-
     String title = "All Classes";
     String subtitle = "Select a class to manage";
     bool showNextBtn = false;
@@ -113,8 +108,23 @@ class NextClassScreen extends ConsumerWidget {
       subtitle = "Enter scores & generate report";
     }
 
-    return Padding(
-      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 16),
+    return Container(
+      padding: EdgeInsets.only(
+        top: MediaQuery.of(context).padding.top + 16, 
+        bottom: 16, 
+        left: 16, 
+        right: 16,
+      ),
+      decoration: BoxDecoration(
+        gradient: const LinearGradient(
+          colors: [Color(0xFF10b981), Color(0xFF059669)], // Emerald/Green theme
+          begin: Alignment.topLeft,
+          end: Alignment.bottomRight,
+        ),
+        boxShadow: [
+          BoxShadow(color: Colors.black.withOpacity(0.3), blurRadius: 4, offset: const Offset(0, 4))
+        ],
+      ),
       child: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
@@ -132,12 +142,11 @@ class NextClassScreen extends ConsumerWidget {
                   width: 44,
                   height: 44,
                   decoration: BoxDecoration(
-                    color: isDark ? Colors.white.withOpacity(0.05) : Colors.white,
+                    color: Colors.white.withOpacity(0.2), // Transparent white
                     borderRadius: BorderRadius.circular(14),
-                    border: Border.all(color: isLight ? Colors.black.withOpacity(0.05) : Colors.transparent),
-                    boxShadow: isLight ? [BoxShadow(color: Colors.black.withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 4))] : [],
+                    border: Border.all(color: Colors.white.withOpacity(0.3)),
                   ),
-                  child: Icon(Icons.chevron_left, color: isDark ? Colors.white : const Color(0xFF6366f1)),
+                  child: const Icon(Icons.chevron_left, color: Colors.white),
                 ),
               ),
               const SizedBox(width: 16),
@@ -146,10 +155,10 @@ class NextClassScreen extends ConsumerWidget {
                 children: [
                   Text(
                     title,
-                    style: TextStyle(
+                    style: const TextStyle(
                       fontSize: 20,
                       fontWeight: FontWeight.w800,
-                      color: isDark ? Colors.white : Colors.indigo[900],
+                      color: Colors.white,
                     ),
                   ),
                   Text(
@@ -157,7 +166,7 @@ class NextClassScreen extends ConsumerWidget {
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w500,
-                      color: isDark ? Colors.grey : Colors.grey[600],
+                      color: Colors.white.withOpacity(0.8),
                     ),
                   ),
                 ],
@@ -170,15 +179,9 @@ class NextClassScreen extends ConsumerWidget {
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                 decoration: BoxDecoration(
-                  color: isLight ? const Color(0xFF6366f1) : AppTheme.primary,
+                  color: Colors.white.withOpacity(0.2),
                   borderRadius: BorderRadius.circular(12),
-                  boxShadow: [
-                    BoxShadow(
-                      color: (isLight ? const Color(0xFF6366f1) : AppTheme.primary).withOpacity(0.3),
-                      blurRadius: 8,
-                      offset: const Offset(0, 4),
-                    ),
-                  ],
+                  border: Border.all(color: Colors.white.withOpacity(0.3)),
                 ),
                 child: Row(
                   children: const [

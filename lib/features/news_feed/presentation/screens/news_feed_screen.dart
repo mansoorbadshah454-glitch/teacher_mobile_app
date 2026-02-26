@@ -109,8 +109,11 @@ class _NewsFeedScreenState extends ConsumerState<NewsFeedScreen> {
             SliverAppBar(
               backgroundColor: Colors.transparent,
               flexibleSpace: Container(
-                decoration: const BoxDecoration(
+                decoration: BoxDecoration(
                   gradient: AppTheme.primaryGradient,
+                  boxShadow: [
+                    BoxShadow(color: Colors.black.withOpacity(0.3), blurRadius: 4, offset: const Offset(0, 4))
+                  ],
                 ),
               ),
               // expandedHeight: 120.0,
