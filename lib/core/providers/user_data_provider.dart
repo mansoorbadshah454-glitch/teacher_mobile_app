@@ -1,98 +1,107 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:rxdart/rxdart.dart';
 
 // Provides the current teacher's document data by merging global_users + schools/{id}/teachers/{uid} in real-time
-final teacherDataProvider = StreamProvider<Map<String, dynamic>?>((ref) {
+final teacherDataProvider = StreamProvider<Map<String, dynamic>?>((ref) async* {
   final user = FirebaseAuth.instance.currentUser;
-  if (user == null) return Stream.value(null);
+  if (user == null) {
+      yield null;
+      return;
+  }
 
-  // First, we need the global_user doc to get the schoolId. We listen to that too just in case.
-  return FirebaseFirestore.instance
-      .collection('global_users')
-      .doc(user.uid)
-      .snapshots()
-      .switchMap((globalSnapshot) {
-    if (!globalSnapshot.exists) {
-      print('UserDataProvider: global_users document not found!');
-      return Stream.value(null);
-    }
-
-    final globalData = globalSnapshot.data()!;
-    final schoolId = globalData['schoolId'];
-
-    if (schoolId == null) {
-      print('UserDataProvider: No schoolId found in global_users!');
-      return Stream.value(globalData); // Return what we have
-    }
-
-    // Now listen to the specific teacher profile in the school
-    return FirebaseFirestore.instance
-        .collection('schools')
-        .doc(schoolId)
-        .collection('teachers')
-        .doc(user.uid)
-        .snapshots()
-        .map((teacherSnapshot) {
-      if (teacherSnapshot.exists) {
-        // Merge global settings with specific teacher profile
-        return {
-          ...globalData,
-          ...teacherSnapshot.data()!,
-          'schoolId': schoolId,
-        };
+  try {
+      // Fetch global data once
+      final globalDoc = await FirebaseFirestore.instance.collection('global_users').doc(user.uid).get();
+      if (!globalDoc.exists) {
+          yield null;
+          return;
       }
-      return globalData; // Fallback
-    });
-  }).handleError((e, st) {
-    print('Error fetching teacher data stream: $e');
-    print(st);
-  });
+
+      final globalData = globalDoc.data()!;
+      final schoolId = globalData['schoolId'];
+
+      if (schoolId == null) {
+          yield globalData;
+          return;
+      }
+
+      // Stream the local school teacher profile
+      yield* FirebaseFirestore.instance
+          .collection('schools')
+          .doc(schoolId)
+          .collection('teachers')
+          .doc(user.uid)
+          .snapshots()
+          .map((teacherSnapshot) {
+        if (teacherSnapshot.exists) {
+          return {
+            ...globalData,
+            ...teacherSnapshot.data()!,
+            'schoolId': schoolId,
+          };
+        }
+        return globalData;
+      });
+  } catch (e, st) {
+      print('Error in teacherDataProvider stream: $e');
+      print(st);
+  }
 });
 
 // Provides the school data based on the teacher's schoolId
-final schoolDataProvider = StreamProvider<Map<String, dynamic>?>((ref) {
+final schoolDataProvider = StreamProvider<Map<String, dynamic>?>((ref) async* {
   final teacherDataAsync = ref.watch(teacherDataProvider);
   final teacherData = teacherDataAsync.value;
 
   if (teacherData == null || !teacherData.containsKey('schoolId')) {
-    return Stream.value(null);
+    yield null;
+    return;
   }
 
   final schoolId = teacherData['schoolId'];
 
-  // Combine School Document and Settings Document streams to merge the logo & name
-  final schoolDocStream = FirebaseFirestore.instance
-      .collection('schools')
-      .doc(schoolId)
-      .snapshots();
+  try {
+    // School base data stream
+    final schoolDocStream = FirebaseFirestore.instance
+        .collection('schools')
+        .doc(schoolId)
+        .snapshots();
 
-  final settingsDocStream = FirebaseFirestore.instance
-      .collection('schools')
-      .doc(schoolId)
-      .collection('settings')
-      .doc('profile')
-      .snapshots();
-
-  return Rx.combineLatest2(schoolDocStream, settingsDocStream,
-      (schoolSnap, settingsSnap) {
-    if (schoolSnap.exists) {
-      final schoolData = schoolSnap.data()!;
-
-      if (settingsSnap.exists) {
-        final settingsData = settingsSnap.data()!;
-        if (settingsData.containsKey('profileImage')) {
-          schoolData['logo'] = settingsData['profileImage'];
+    // Iterate over the school snapshot stream
+    await for (final schoolSnap in schoolDocStream) {
+        if (!schoolSnap.exists) {
+           yield null;
+           continue;
         }
-        if (settingsData.containsKey('schoolName')) {
-          schoolData['name'] = settingsData['schoolName'];
-        }
-      }
-      return schoolData;
+
+        final schoolData = schoolSnap.data()!;
+
+        // Attempt a concurrent fetch for settings snapshot (or just an await if settings rarely change)
+        // Usually, school settings don't change frequently during a session, but to keep it safe:
+        try {
+            final settingsSnap = await FirebaseFirestore.instance
+                .collection('schools')
+                .doc(schoolId)
+                .collection('settings')
+                .doc('profile')
+                .get();
+
+            if (settingsSnap.exists) {
+                final settingsData = settingsSnap.data()!;
+                if (settingsData.containsKey('profileImage')) {
+                  schoolData['logo'] = settingsData['profileImage'];
+                }
+                if (settingsData.containsKey('schoolName')) {
+                  schoolData['name'] = settingsData['schoolName'];
+                }
+            }
+        } catch (_) {} // Ignore settings errors
+
+        yield schoolData;
     }
-    return null;
-  }).handleError((e) {
+  } catch (e, st) {
     print('Error fetching school data stream: $e');
-  });
+    print(st);
+  }
 });
