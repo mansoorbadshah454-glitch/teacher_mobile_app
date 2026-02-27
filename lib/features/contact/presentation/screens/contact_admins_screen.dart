@@ -4,6 +4,9 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:teacher_mobile_app/core/theme/app_theme.dart';
 import 'package:teacher_mobile_app/core/providers/admin_data_provider.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:teacher_mobile_app/core/providers/user_data_provider.dart';
 
 class ContactAdminsScreen extends ConsumerWidget {
   const ContactAdminsScreen({super.key});
@@ -112,81 +115,150 @@ class ContactAdminsScreen extends ConsumerWidget {
   }
 
   void _showMessageDialog(BuildContext context, String adminName, String adminId, WidgetRef ref) {
+    final TextEditingController messageController = TextEditingController();
+    bool isSending = false;
+
     showModalBottomSheet(
       context: context,
       isScrollControlled: true,
       backgroundColor: Colors.transparent,
       builder: (context) {
         final isDark = Theme.of(context).brightness == Brightness.dark;
-        return Padding(
-          padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
-          child: Container(
-            padding: const EdgeInsets.all(24),
-            decoration: BoxDecoration(
-              color: isDark ? Colors.grey[900] : Colors.white,
-              borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
-            ),
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                  children: [
-                    Expanded(
-                      child: Text(
-                        "Message to $adminName",
-                        style: TextStyle(
-                          fontSize: 20,
-                          fontWeight: FontWeight.bold,
-                          color: isDark ? Colors.white : Colors.black87,
-                        ),
-                        maxLines: 1,
-                        overflow: TextOverflow.ellipsis,
-                      ),
+        return StatefulBuilder(
+          builder: (context, setState) {
+            Future<void> sendMessage() async {
+              final text = messageController.text.trim();
+              if (text.isEmpty) return;
+
+              setState(() {
+                isSending = true;
+              });
+
+              try {
+                final teacherData = await ref.read(teacherDataProvider.future);
+                if (teacherData == null || !teacherData.containsKey('schoolId')) {
+                  throw Exception('Teacher data not found');
+                }
+
+                final schoolId = teacherData['schoolId'];
+                final currentUser = FirebaseAuth.instance.currentUser;
+                
+                await FirebaseFirestore.instance
+                    .collection('schools')
+                    .doc(schoolId)
+                    .collection('messages')
+                    .add({
+                  'to': 'principal',
+                  'toId': adminId,
+                  'from': 'teacher',
+                  'fromName': teacherData['name'] ?? 'Teacher',
+                  'fromId': currentUser?.uid,
+                  'text': text,
+                  'type': 'teacher-reply',
+                  'timestamp': FieldValue.serverTimestamp(),
+                  'read': false,
+                });
+
+                if (context.mounted) {
+                  Navigator.pop(context);
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Message sent to $adminName'),
+                      backgroundColor: Colors.green,
                     ),
-                    IconButton(
-                      icon: Icon(Icons.close, color: isDark ? Colors.white54 : Colors.black54),
-                      onPressed: () => Navigator.pop(context),
+                  );
+                }
+              } catch (e) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text('Failed to send message: $e'),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                }
+              } finally {
+                if (context.mounted) {
+                  setState(() {
+                    isSending = false;
+                  });
+                }
+              }
+            }
+
+            return Padding(
+              padding: EdgeInsets.only(bottom: MediaQuery.of(context).viewInsets.bottom),
+              child: Container(
+                padding: const EdgeInsets.all(24),
+                decoration: BoxDecoration(
+                  color: isDark ? Colors.grey[900] : Colors.white,
+                  borderRadius: const BorderRadius.vertical(top: Radius.circular(24)),
+                ),
+                child: Column(
+                  mainAxisSize: MainAxisSize.min,
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Expanded(
+                          child: Text(
+                            "Message to $adminName",
+                            style: TextStyle(
+                              fontSize: 20,
+                              fontWeight: FontWeight.bold,
+                              color: isDark ? Colors.white : Colors.black87,
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                        ),
+                        IconButton(
+                          icon: Icon(Icons.close, color: isDark ? Colors.white54 : Colors.black54),
+                          onPressed: () => Navigator.pop(context),
+                        )
+                      ],
+                    ),
+                    const SizedBox(height: 16),
+                    TextField(
+                      controller: messageController,
+                      maxLines: 4,
+                      decoration: InputDecoration(
+                        hintText: "Type your message here...",
+                        hintStyle: TextStyle(color: isDark ? Colors.grey[500] : Colors.grey[400]),
+                        filled: true,
+                        fillColor: isDark ? Colors.grey[800] : Colors.grey[100],
+                        border: OutlineInputBorder(
+                          borderRadius: BorderRadius.circular(12),
+                          borderSide: BorderSide.none,
+                        ),
+                      ),
+                      style: TextStyle(color: isDark ? Colors.white : Colors.black87),
+                    ),
+                    const SizedBox(height: 16),
+                    SizedBox(
+                      width: double.infinity,
+                      child: ElevatedButton(
+                        onPressed: isSending ? null : sendMessage,
+                        style: ElevatedButton.styleFrom(
+                          backgroundColor: AppTheme.accent,
+                          padding: const EdgeInsets.symmetric(vertical: 16),
+                          shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                        ),
+                        child: isSending 
+                            ? const SizedBox(
+                                height: 20, 
+                                width: 20, 
+                                child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)
+                              )
+                            : const Text("Send Message", style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+                      ),
                     )
                   ],
                 ),
-                const SizedBox(height: 16),
-                TextField(
-                  maxLines: 4,
-                  decoration: InputDecoration(
-                    hintText: "Type your message here...",
-                    hintStyle: TextStyle(color: isDark ? Colors.grey[500] : Colors.grey[400]),
-                    filled: true,
-                    fillColor: isDark ? Colors.grey[800] : Colors.grey[100],
-                    border: OutlineInputBorder(
-                      borderRadius: BorderRadius.circular(12),
-                      borderSide: BorderSide.none,
-                    ),
-                  ),
-                  style: TextStyle(color: isDark ? Colors.white : Colors.black87),
-                ),
-                const SizedBox(height: 16),
-                SizedBox(
-                  width: double.infinity,
-                  child: ElevatedButton(
-                    onPressed: () {
-                      Navigator.pop(context);
-                      ScaffoldMessenger.of(context).showSnackBar(
-                        SnackBar(content: Text("Sending messages to $adminName is in development.")),
-                      );
-                    },
-                    style: ElevatedButton.styleFrom(
-                      backgroundColor: AppTheme.accent,
-                      padding: const EdgeInsets.symmetric(vertical: 16),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
-                    ),
-                    child: const Text("Send Message", style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
-                  ),
-                )
-              ],
-            ),
-          ),
+              ),
+            );
+          },
         );
       },
     );
