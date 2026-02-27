@@ -128,6 +128,9 @@ class _StudentPerformanceScreenState extends ConsumerState<StudentPerformanceScr
                                           onChanged: isEditable ? (val) {
                                             ref.read(studentPerformanceProvider(widget.studentId).notifier).updateAcademicScore(entry.key, val.toInt());
                                           } : null,
+                                          onChangeEnd: isEditable ? (val) {
+                                            ref.read(studentPerformanceProvider(widget.studentId).notifier).silentSave();
+                                          } : null,
                                         ),
                                       ),
                                     ),
@@ -190,6 +193,9 @@ class _StudentPerformanceScreenState extends ConsumerState<StudentPerformanceScr
                                           onChanged: isEditable ? (val) {
                                             ref.read(studentPerformanceProvider(widget.studentId).notifier).updateHomeworkScore(entry.key, val.toInt());
                                           } : null,
+                                          onChangeEnd: isEditable ? (val) {
+                                            ref.read(studentPerformanceProvider(widget.studentId).notifier).silentSave();
+                                          } : null,
                                         ),
                                       ),
                                     ),
@@ -250,6 +256,9 @@ class _StudentPerformanceScreenState extends ConsumerState<StudentPerformanceScr
                                         onChanged: (val) {
                                           ref.read(studentPerformanceProvider(widget.studentId).notifier).updateWellness(metric, val.toInt());
                                         },
+                                        onChangeEnd: (val) {
+                                          ref.read(studentPerformanceProvider(widget.studentId).notifier).silentSave();
+                                        },
                                       ),
                                     ),
                                     const SizedBox(height: 8),
@@ -305,6 +314,9 @@ class _StudentPerformanceScreenState extends ConsumerState<StudentPerformanceScr
                                   onChanged: (val) {
                                     ref.read(studentPerformanceProvider(widget.studentId).notifier).updateAttendance(val.toInt());
                                   },
+                                  onChangeEnd: (val) {
+                                    ref.read(studentPerformanceProvider(widget.studentId).notifier).silentSave();
+                                  },
                                 ),
                               ),
                             ],
@@ -348,14 +360,14 @@ class _StudentPerformanceScreenState extends ConsumerState<StudentPerformanceScr
                       alignment: Alignment.center,
                       child: _saving 
                           ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 3))
-                          : Row(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: const [
-                                Icon(Icons.save, color: Colors.white),
-                                SizedBox(width: 8),
-                                Text("SAVE CHANGES", style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w900)),
-                              ],
-                            ),
+                            : const Row(
+                                mainAxisAlignment: MainAxisAlignment.center,
+                                children: [
+                                  Icon(Icons.save, color: Colors.white),
+                                  SizedBox(width: 8),
+                                  Text("SAVE & NOTIFY PARENTS", style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w900)),
+                                ],
+                              ),
                     ),
                   ),
                 ),

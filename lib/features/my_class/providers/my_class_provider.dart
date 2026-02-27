@@ -43,46 +43,42 @@ final classMetricsProvider = Provider<AsyncValue<ClassMetrics>>((ref) {
   final currentSubjects = List<String>.from(assignedClass['subjects'] ?? []);
   final studentCount = students.length;
 
-  double totalSubjectScore = 0;
-  double totalHomeworkScore = 0;
-  double totalAttendance = 0;
+  int totalSubjectScoresSum = 0;
+  int totalSubjectScoresCount = 0;
+
+  int totalHomeworkScoresSum = 0;
+  int totalHomeworkScoresCount = 0;
 
   for (var s in students) {
-    // Subject Score Avg
+    // Subject Scores
     final subScoresRaw = List<dynamic>.from(s['academicScores'] ?? []);
     final subScores = subScoresRaw
         .where((i) => currentSubjects.contains(i['subject']))
         .map((i) => int.tryParse(i['score'].toString()) ?? 0)
         .toList();
 
-    double subAvg = 0;
-    if (subScores.isNotEmpty) {
-      subAvg = subScores.reduce((a, b) => a + b) / subScores.length;
+    for (var score in subScores) {
+      totalSubjectScoresSum += score;
+      totalSubjectScoresCount++;
     }
-    totalSubjectScore += subAvg;
 
-    // Homework Score Avg
+    // Homework Scores
     final hwScoresRaw = List<dynamic>.from(s['homeworkScores'] ?? []);
     final hwScores = hwScoresRaw
         .where((i) => currentSubjects.contains(i['subject']))
         .map((i) => int.tryParse(i['score'].toString()) ?? 0)
         .toList();
 
-    double hwAvg = 0;
-    if (hwScores.isNotEmpty) {
-      hwAvg = hwScores.reduce((a, b) => a + b) / hwScores.length;
+    for (var score in hwScores) {
+      totalHomeworkScoresSum += score;
+      totalHomeworkScoresCount++;
     }
-    totalHomeworkScore += hwAvg;
-
-    // Attendance
-    totalAttendance += (int.tryParse(s['attendance'].toString()) ?? 85);
   }
 
-  final avgSubject = studentCount > 0 ? (totalSubjectScore / studentCount) : 0;
-  final avgHomework = studentCount > 0 ? (totalHomeworkScore / studentCount) : 0;
-  final avgAttendance = studentCount > 0 ? (totalAttendance / studentCount) : 0;
+  final avgSubject = totalSubjectScoresCount > 0 ? (totalSubjectScoresSum / totalSubjectScoresCount) : 0;
+  final avgHomework = totalHomeworkScoresCount > 0 ? (totalHomeworkScoresSum / totalHomeworkScoresCount) : 0;
 
-  final classScore = (avgSubject + avgHomework + avgAttendance) / 3;
+  final classScore = (avgSubject + avgHomework) / 2;
 
   return AsyncValue.data(ClassMetrics(
     classScore: classScore.round(),
