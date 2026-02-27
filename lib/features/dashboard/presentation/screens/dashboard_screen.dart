@@ -6,6 +6,7 @@ import 'package:teacher_mobile_app/core/theme/app_theme.dart';
 import 'package:teacher_mobile_app/features/dashboard/presentation/widgets/app_drawer.dart';
 import 'package:teacher_mobile_app/features/dashboard/presentation/widgets/stat_card.dart';
 import 'package:teacher_mobile_app/features/dashboard/providers/unread_news_feed_provider.dart';
+import 'package:teacher_mobile_app/features/dashboard/providers/duty_provider.dart';
 
 class DashboardScreen extends ConsumerStatefulWidget {
   const DashboardScreen({super.key});
@@ -15,8 +16,6 @@ class DashboardScreen extends ConsumerStatefulWidget {
 }
 
 class _DashboardScreenState extends ConsumerState<DashboardScreen> {
-  bool isOnDuty = false; // Local state for now
-
   @override
   Widget build(BuildContext context) {
     print("🏠 [Dashboard] Build Started");
@@ -47,39 +46,57 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
         ),
         actions: [
           // Duty Toggle
-          Container(
-            margin: const EdgeInsets.only(right: 16),
-            child: Row(
-              children: [
-                Text(
-                  isOnDuty ? "On Duty" : "Off Duty",
-                  style: TextStyle(
-                    color: isOnDuty ? Colors.green : Colors.white,
-                    fontSize: 12,
-                    fontWeight: FontWeight.bold,
-                  ),
+          Consumer(
+            builder: (context, ref, child) {
+              final dutyStatusAsync = ref.watch(dutyStatusProvider);
+              final isOnDuty = dutyStatusAsync.value ?? false;
+              final isLoading = dutyStatusAsync.isLoading;
+
+              return Container(
+                margin: const EdgeInsets.only(right: 16),
+                child: Row(
+                  children: [
+                    Text(
+                      isOnDuty ? "On Duty" : "Off Duty",
+                      style: TextStyle(
+                        color: isOnDuty ? Colors.green : Colors.white,
+                        fontSize: 12,
+                        fontWeight: FontWeight.bold,
+                      ),
+                    ),
+                    if (isLoading)
+                      const Padding(
+                        padding: EdgeInsets.symmetric(horizontal: 16.0),
+                        child: SizedBox(
+                          width: 20,
+                          height: 20,
+                          child: CircularProgressIndicator(
+                            color: Colors.white,
+                            strokeWidth: 2,
+                          ),
+                        ),
+                      )
+                    else
+                      Switch(
+                        value: isOnDuty,
+                        activeColor: Colors.white, // The dot when ON
+                        activeTrackColor: Colors.green, // The background when ON
+                        inactiveThumbColor: Colors.white, // The dot when OFF
+                        inactiveTrackColor: Colors.white24, // The background when OFF
+                        trackOutlineColor: MaterialStateProperty.resolveWith((states) {
+                          if (states.contains(MaterialState.selected)) {
+                            return Colors.green; // Outline when ON
+                          }
+                          return Colors.white; // Outline when OFF
+                        }),
+                        onChanged: (val) {
+                          ref.read(dutyStatusProvider.notifier).toggleDuty(val);
+                        },
+                      ),
+                  ],
                 ),
-                Switch(
-                  value: isOnDuty,
-                  activeColor: Colors.white, // The dot when ON
-                  activeTrackColor: Colors.green, // The background when ON
-                  inactiveThumbColor: Colors.white, // The dot when OFF
-                  inactiveTrackColor: Colors.white24, // The background when OFF
-                  trackOutlineColor: MaterialStateProperty.resolveWith((states) {
-                    if (states.contains(MaterialState.selected)) {
-                      return Colors.green; // Outline when ON
-                    }
-                    return Colors.white; // Outline when OFF
-                  }),
-                  onChanged: (val) {
-                    setState(() {
-                      isOnDuty = val;
-                      // Firestore update logic will go here
-                    });
-                  },
-                ),
-              ],
-            ),
+              );
+            },
           )
         ],
       ),
