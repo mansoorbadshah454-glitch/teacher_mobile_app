@@ -49,79 +49,36 @@ class ContactParentsNotifier extends StateNotifier<ContactParentsState> {
 
   ContactParentsNotifier(this.ref, this.teacherDataAsync) : super(ContactParentsState()) {
     _init();
+
+    // Listen to the class students stream for real-time updates
+    ref.listen<AsyncValue<List<Map<String, dynamic>>>>(classStudentsProvider, (previous, next) {
+      next.whenData((studentsList) {
+        if (mounted) {
+           state = state.copyWith(students: studentsList.toList(), isLoading: false);
+        }
+      });
+    });
+
+    // Listen to assigned class changes
+    ref.listen<AsyncValue<Map<String, dynamic>?>>(assignedClassProvider, (previous, next) {
+        next.whenData((assignedClass) {
+            if (mounted) {
+               state = state.copyWith(assignedClass: assignedClass);
+            }
+        });
+    });
   }
 
   void _init() {
     if (teacherDataAsync.value == null) return;
     final schoolId = teacherDataAsync.value!['schoolId'];
-    final teacherName = teacherDataAsync.value!['name'];
 
-    if (schoolId == null || teacherName == null) return;
-
-    _fetchClassAndStudents(schoolId, teacherName);
-    _fetchParentsMap(schoolId);
-  }
-
-  Future<void> _fetchClassAndStudents(String schoolId, String teacherName) async {
+    if (schoolId == null) return;
+    
+    // We only need to fetch parents map initially or listen to it, 
+    // assignedClass and students are handled by ref.listen above.
     state = state.copyWith(isLoading: true);
-
-    try {
-      // 1. Find assigned class by teacher name
-      final classesSnapshot = await FirebaseFirestore.instance
-          .collection('schools')
-          .doc(schoolId)
-          .collection('classes')
-          .where('teacher', isEqualTo: teacherName)
-          .get();
-
-      if (classesSnapshot.docs.isEmpty) {
-        if (mounted) state = state.copyWith(isLoading: false);
-        return; // No class assigned
-      }
-
-      final classDoc = classesSnapshot.docs.first;
-      final classData = classDoc.data();
-      classData['id'] = classDoc.id;
-
-      if (mounted) {
-        state = state.copyWith(assignedClass: classData);
-      }
-
-      // 2. Listen to students in that class
-      FirebaseFirestore.instance
-          .collection('schools')
-          .doc(schoolId)
-          .collection('classes')
-          .doc(classDoc.id)
-          .collection('students')
-          .snapshots()
-          .listen((snapshot) {
-        final studentsList = snapshot.docs.map((doc) {
-          final data = doc.data();
-          data['id'] = doc.id;
-          return data;
-        }).toList();
-
-        // Sort by roll no
-        studentsList.sort((a, b) {
-          final rollA = a['rollNo']?.toString() ?? '0';
-          final rollB = b['rollNo']?.toString() ?? '0';
-          // Simple numeric-aware compare could go here, fallback to string compare
-          return rollA.compareTo(rollB);
-        });
-
-        if (mounted) {
-          state = state.copyWith(students: studentsList, isLoading: false);
-        }
-      }, onError: (e) {
-        print("ContactParents: Error listening to students $e");
-        if (mounted) state = state.copyWith(isLoading: false);
-      });
-
-    } catch (e) {
-      print("ContactParents: Error fetching class $e");
-      if (mounted) state = state.copyWith(isLoading: false);
-    }
+    _fetchParentsMap(schoolId);
   }
 
   Future<void> _fetchParentsMap(String schoolId) async {

@@ -57,6 +57,7 @@ dependencies:
   uuid: ^4.3.3
   timezone: ^0.9.3
   file_picker: ^8.0.3
+  rxdart: ^0.28.0
 dev_dependencies:
   flutter_test:
     sdk: flutter

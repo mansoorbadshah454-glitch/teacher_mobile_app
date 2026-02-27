@@ -7,64 +7,63 @@ import 'package:teacher_mobile_app/core/providers/user_data_provider.dart';
 final classSearchQueryProvider = StateProvider<String>((ref) => '');
 final statsFilterProvider = StateProvider<String>((ref) => 'all'); // 'all', 'present', 'absent'
 
-final assignedClassProvider = FutureProvider<Map<String, dynamic>?>((ref) async {
-  final teacherData = await ref.watch(teacherDataProvider.future);
+final assignedClassProvider = StreamProvider<Map<String, dynamic>?>((ref) {
+  final teacherDataAsync = ref.watch(teacherDataProvider);
+  final teacherData = teacherDataAsync.value;
+
   if (teacherData == null || !teacherData.containsKey('schoolId') || !teacherData.containsKey('name')) {
-    return null;
+    return Stream.value(null);
   }
 
   final schoolId = teacherData['schoolId'] as String;
   final teacherName = teacherData['name'] as String;
 
-  try {
-    final classesQuery = await FirebaseFirestore.instance
-        .collection('schools')
-        .doc(schoolId)
-        .collection('classes')
-        .where('teacher', isEqualTo: teacherName)
-        .get();
-
+  return FirebaseFirestore.instance
+      .collection('schools')
+      .doc(schoolId)
+      .collection('classes')
+      .where('teacher', isEqualTo: teacherName)
+      .snapshots()
+      .map((classesQuery) {
     if (classesQuery.docs.isNotEmpty) {
       final data = classesQuery.docs.first.data();
       data['id'] = classesQuery.docs.first.id;
       return data;
     }
     return null;
-  } catch (e) {
-    print('Error fetching assigned class: $e');
-    return null;
-  }
+  });
 });
 
 // 2. Fetch students for the assigned class
-final classStudentsProvider = FutureProvider<List<Map<String, dynamic>>>((ref) async {
-  final teacherData = await ref.watch(teacherDataProvider.future);
-  final assignedClass = await ref.watch(assignedClassProvider.future);
+final classStudentsProvider = StreamProvider<List<Map<String, dynamic>>>((ref) {
+  final teacherDataAsync = ref.watch(teacherDataProvider);
+  final assignedClassAsync = ref.watch(assignedClassProvider);
 
-  if (teacherData == null || assignedClass == null) return [];
+  final teacherData = teacherDataAsync.value;
+  final assignedClass = assignedClassAsync.value;
+
+  if (teacherData == null || assignedClass == null) {
+      return Stream.value([]);
+  }
 
   final schoolId = teacherData['schoolId'] as String;
   final classId = assignedClass['id'] as String;
 
-  try {
-    final studentsQuery = await FirebaseFirestore.instance
-        .collection('schools')
-        .doc(schoolId)
-        .collection('classes')
-        .doc(classId)
-        .collection('students')
-        .orderBy('rollNo')
-        .get();
-
+  return FirebaseFirestore.instance
+      .collection('schools')
+      .doc(schoolId)
+      .collection('classes')
+      .doc(classId)
+      .collection('students')
+      .orderBy('rollNo')
+      .snapshots()
+      .map((studentsQuery) {
     return studentsQuery.docs.map((doc) {
       final data = doc.data();
       data['id'] = doc.id;
       return data;
     }).toList();
-  } catch (e) {
-    print('Error fetching students: $e');
-    return [];
-  }
+  });
 });
 
 // 3. Attendance State Manager (stores local 'present'/'absent' Map)
