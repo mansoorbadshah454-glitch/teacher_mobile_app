@@ -1,6 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:teacher_mobile_app/core/providers/user_data_provider.dart';
+import 'package:teacher_mobile_app/features/attendance/providers/attendance_provider.dart';
 
 class ContactParentsState {
   final Map<String, dynamic>? assignedClass;
