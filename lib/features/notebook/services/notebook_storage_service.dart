@@ -21,9 +21,8 @@ class NotebookStorageService {
 
     return await openDatabase(
       path,
-      version: 1,
+      version: 2,
       onCreate: (db, version) async {
-        await db.execute('''
           CREATE TABLE notes(
             id TEXT PRIMARY KEY,
             title TEXT,
@@ -31,9 +30,15 @@ class NotebookStorageService {
             color INTEGER,
             createdAt TEXT,
             updatedAt TEXT,
-            reminderDateTime TEXT
+            reminderDateTime TEXT,
+            teacherId TEXT
           )
         ''');
+      },
+      onUpgrade: (db, oldVersion, newVersion) async {
+        if (oldVersion < 2) {
+          await db.execute('ALTER TABLE notes ADD COLUMN teacherId TEXT');
+        }
       },
     );
   }
@@ -56,10 +61,12 @@ class NotebookStorageService {
     );
   }
 
-  Future<List<Note>> getNotes() async {
+  Future<List<Note>> getNotes(String teacherId) async {
     final db = await database;
     final List<Map<String, dynamic>> maps = await db.query(
       'notes',
+      where: 'teacherId = ?',
+      whereArgs: [teacherId],
       orderBy: 'updatedAt DESC',
     );
     return List.generate(maps.length, (i) {

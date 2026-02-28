@@ -3,6 +3,8 @@ import '../models/note_model.dart';
 import '../services/notebook_storage_service.dart';
 import '../services/notification_service.dart';
 
+import 'package:firebase_auth/firebase_auth.dart';
+
 final notebookStorageServiceProvider = Provider((ref) => NotebookStorageService());
 final notificationServiceProvider = Provider((ref) => NotificationService());
 
@@ -23,7 +25,12 @@ class NotesNotifier extends StateNotifier<AsyncValue<List<Note>>> {
 
   Future<void> _loadNotes() async {
     try {
-      final notes = await _storageService.getNotes();
+      final uid = FirebaseAuth.instance.currentUser?.uid;
+      if (uid == null) {
+        state = const AsyncValue.data([]);
+        return;
+      }
+      final notes = await _storageService.getNotes(uid);
       state = AsyncValue.data(notes);
     } catch (e, st) {
       state = AsyncValue.error(e, st);
@@ -34,20 +41,25 @@ class NotesNotifier extends StateNotifier<AsyncValue<List<Note>>> {
     try {
       if (state.value == null) return;
       
-      await _storageService.saveNote(note);
+      final uid = FirebaseAuth.instance.currentUser?.uid;
+      if (uid == null) return;
+
+      final updatedNote = note.teacherId == null ? note.copyWith(teacherId: uid) : note;
       
-      if (note.reminderDateTime != null && note.reminderDateTime!.isAfter(DateTime.now())) {
+      await _storageService.saveNote(updatedNote);
+      
+      if (updatedNote.reminderDateTime != null && updatedNote.reminderDateTime!.isAfter(DateTime.now())) {
         await _notificationService.scheduleNotification(
-          id: note.id.hashCode,
-          title: "Note Reminder: \${note.title}",
-          body: note.content.length > 50 ? "\${note.content.substring(0, 50)}..." : note.content,
-          scheduledDate: note.reminderDateTime!,
+          id: updatedNote.id.hashCode,
+          title: "Note Reminder: \${updatedNote.title}",
+          body: updatedNote.content.length > 50 ? "\${updatedNote.content.substring(0, 50)}..." : updatedNote.content,
+          scheduledDate: updatedNote.reminderDateTime!,
         );
       } else {
-        await _notificationService.cancelNotification(note.id.hashCode);
+        await _notificationService.cancelNotification(updatedNote.id.hashCode);
       }
 
-      final notes = await _storageService.getNotes();
+      final notes = await _storageService.getNotes(uid);
       state = AsyncValue.data(notes);
     } catch (e, st) {
       state = AsyncValue.error(e, st);
@@ -59,10 +71,13 @@ class NotesNotifier extends StateNotifier<AsyncValue<List<Note>>> {
     try {
        if (state.value == null) return;
        
+       final uid = FirebaseAuth.instance.currentUser?.uid;
+       if (uid == null) return;
+
        await _storageService.deleteNote(id);
        await _notificationService.cancelNotification(id.hashCode);
        
-       final notes = await _storageService.getNotes();
+       final notes = await _storageService.getNotes(uid);
        state = AsyncValue.data(notes);
     } catch (e, st) {
       state = AsyncValue.error(e, st);

@@ -8,6 +8,7 @@ class Note {
   final DateTime createdAt;
   final DateTime updatedAt;
   final DateTime? reminderDateTime;
+  final String? teacherId;
 
   Note({
     required this.id,
@@ -17,6 +18,7 @@ class Note {
     required this.createdAt,
     required this.updatedAt,
     this.reminderDateTime,
+    this.teacherId,
   });
 
   Map<String, dynamic> toMap() {
@@ -28,6 +30,7 @@ class Note {
       'createdAt': createdAt.toIso8601String(),
       'updatedAt': updatedAt.toIso8601String(),
       'reminderDateTime': reminderDateTime?.toIso8601String(),
+      'teacherId': teacherId,
     };
   }
 
@@ -40,6 +43,7 @@ class Note {
       createdAt: DateTime.parse(map['createdAt']),
       updatedAt: DateTime.parse(map['updatedAt']),
       reminderDateTime: map['reminderDateTime'] != null ? DateTime.parse(map['reminderDateTime']) : null,
+      teacherId: map['teacherId'] as String?,
     );
   }
 
@@ -51,6 +55,7 @@ class Note {
     DateTime? createdAt,
     DateTime? updatedAt,
     DateTime? reminderDateTime,
+    String? teacherId,
   }) {
     return Note(
       id: id ?? this.id,
@@ -60,6 +65,7 @@ class Note {
       createdAt: createdAt ?? this.createdAt,
       updatedAt: updatedAt ?? this.updatedAt,
       reminderDateTime: reminderDateTime ?? this.reminderDateTime,
+      teacherId: teacherId ?? this.teacherId,
     );
   }
 }
