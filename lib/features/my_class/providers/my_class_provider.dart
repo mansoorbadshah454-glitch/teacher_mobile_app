@@ -41,7 +41,6 @@ final classMetricsProvider = Provider<AsyncValue<ClassMetrics>>((ref) {
   }
 
   final currentSubjects = List<String>.from(assignedClass['subjects'] ?? []);
-  final studentCount = students.length;
 
   int totalSubjectScoresSum = 0;
   int totalSubjectScoresCount = 0;
