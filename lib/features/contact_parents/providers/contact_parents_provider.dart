@@ -51,7 +51,19 @@ class ContactParentsNotifier extends StateNotifier<ContactParentsState> {
   ContactParentsNotifier(this.ref, this.teacherDataAsync) : super(ContactParentsState()) {
     _init();
 
-    // Listen to the class students stream for real-time updates
+    // 1. Manually pull the current state right now to prevent race conditions
+    // If we've already cached the classroom in AttendanceProvider earlier, state won't be empty!
+    final initialStudents = ref.read(classStudentsProvider).valueOrNull;
+    final initialClass = ref.read(assignedClassProvider).valueOrNull;
+
+    if (initialClass != null) {
+      state = state.copyWith(assignedClass: initialClass);
+    }
+    if (initialStudents != null) {
+      state = state.copyWith(students: initialStudents, isLoading: false);
+    }
+
+    // 2. Listen to the class students stream for future real-time updates
     ref.listen<AsyncValue<List<Map<String, dynamic>>>>(classStudentsProvider, (previous, next) {
       next.whenData((studentsList) {
         if (mounted) {
