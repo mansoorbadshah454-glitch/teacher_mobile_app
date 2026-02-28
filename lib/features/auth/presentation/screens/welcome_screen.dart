@@ -32,18 +32,33 @@ class _WelcomeScreenState extends State<WelcomeScreen> with SingleTickerProvider
     
     // Let's make it auto-navigate after a delay with a specific transition.
 
-    Future.delayed(const Duration(seconds: 2), () {
-      if (mounted) {
-        final user = FirebaseAuth.instance.currentUser;
-        if (user != null) {
-          print("🚀 [WelcomeScreen] User logged in: ${user.uid}. Navigating to /dashboard");
-          context.go('/dashboard');
-        } else {
-           print("🔒 [WelcomeScreen] No user logged in. Navigating to /login");
-           context.go('/login');
+    Future.delayed(const Duration(seconds: 2), () async {
+      if (!mounted) return;
+      
+      final user = FirebaseAuth.instance.currentUser;
+      if (user != null) {
+        try {
+          // FORCE refresh the token to retrieve the latest Custom Claims
+          final tokenResult = await user.getIdTokenResult(true);
+          final claims = tokenResult.claims ?? {};
+          
+          if (!claims.containsKey('schoolId') || claims['schoolId'] == null) {
+             print("🚨 [WelcomeScreen] User lacks schoolId claim! Forcing sign-out to prevent data leaks.");
+             await FirebaseAuth.instance.signOut();
+             if (mounted) context.go('/login');
+             return;
+          }
+          
+          print("🚀 [WelcomeScreen] User verified with schoolId: ${claims['schoolId']}. Navigating to /dashboard");
+          if (mounted) context.go('/dashboard');
+        } catch (e) {
+          print("🚨 [WelcomeScreen] Token verification failed: $e");
+          await FirebaseAuth.instance.signOut();
+          if (mounted) context.go('/login');
         }
       } else {
-         print("⚠️ [WelcomeScreen] Widget unmounted before navigation");
+         print("🔒 [WelcomeScreen] No user logged in. Navigating to /login");
+         context.go('/login');
       }
     });
   }

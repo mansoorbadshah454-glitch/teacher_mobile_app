@@ -62,6 +62,11 @@ class NotebookStorageService {
     );
   }
 
+  Future<void> clearAll() async {
+    final db = await database;
+    await db.delete('notes'); // Erase all data across all teachers on this local device
+  }
+
   Future<List<Note>> getNotes(String teacherId) async {
     final db = await database;
     final List<Map<String, dynamic>> maps = await db.query(

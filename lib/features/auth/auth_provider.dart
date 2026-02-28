@@ -1,5 +1,7 @@
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:teacher_mobile_app/features/notebook/services/notebook_storage_service.dart';
 
 // Stream of user changes (auth state changes)
 final authStateChangesProvider = StreamProvider<User?>((ref) {
@@ -34,7 +36,23 @@ class AuthController extends StateNotifier<AsyncValue<void>> {
   }
 
   Future<void> signOut() async {
-    await FirebaseAuth.instance.signOut();
+    try {
+      print('AuthProvider: Starting full data purge on sign-out...');
+      
+      // 1. Nuke SharedPreferences (Duty status, cached strings, etc)
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.clear();
+
+      // 2. Nuke Local SQLite Notebook Database
+      await NotebookStorageService().clearAll();
+
+      print('AuthProvider: Local data purge complete.');
+    } catch (e) {
+      print('AuthProvider: Error during local purge: $e');
+    } finally {
+      // 3. Guarantee Firebase Auth signed out
+      await FirebaseAuth.instance.signOut();
+    }
   }
 }
 
