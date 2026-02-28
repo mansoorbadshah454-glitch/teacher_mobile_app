@@ -23,6 +23,7 @@ class NotebookStorageService {
       path,
       version: 2,
       onCreate: (db, version) async {
+        await db.execute('''
           CREATE TABLE notes(
             id TEXT PRIMARY KEY,
             title TEXT,
