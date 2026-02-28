@@ -1,6 +1,7 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:teacher_mobile_app/core/providers/user_data_provider.dart';
 
 final dashboardProvider = FutureProvider<Map<String, dynamic>?>((ref) async {
   final user = FirebaseAuth.instance.currentUser;
@@ -8,14 +9,11 @@ final dashboardProvider = FutureProvider<Map<String, dynamic>?>((ref) async {
 
   try {
     print('DashboardProvider: Fetching teacher data for ${user.uid}...');
-    final doc = await FirebaseFirestore.instance
-        .collection('teachers') // Assuming collection name is 'teachers'
-        .doc(user.uid)
-        .get();
+    final teacherData = await ref.read(teacherDataProvider.future);
     
-    if (doc.exists) {
-        print('DashboardProvider: Data found: ${doc.data()}');
-        return doc.data();
+    if (teacherData != null) {
+        print('DashboardProvider: Data found: $teacherData');
+        return teacherData;
     } else {
         print('DashboardProvider: No teacher document found!');
         return null;

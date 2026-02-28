@@ -16,13 +16,17 @@ final assignedClassProvider = StreamProvider<Map<String, dynamic>?>((ref) {
   }
 
   final schoolId = teacherData['schoolId'] as String;
-  final teacherName = teacherData['name'] as String;
+  final String teacherUid = teacherData['uid'] ?? FirebaseAuth.instance.currentUser?.uid ?? '';
+
+  if (teacherUid.isEmpty) {
+    return Stream.value(null);
+  }
 
   return FirebaseFirestore.instance
       .collection('schools')
       .doc(schoolId)
       .collection('classes')
-      .where('teacher', isEqualTo: teacherName)
+      .where('teacherId', isEqualTo: teacherUid)
       .snapshots()
       .map((classesQuery) {
     if (classesQuery.docs.isNotEmpty) {
