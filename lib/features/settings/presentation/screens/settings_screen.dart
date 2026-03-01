@@ -43,9 +43,9 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
           ),
           Divider(color: isDarkBackground ? Colors.white24 : Colors.black12),
           ListTile(
-            leading: const Icon(Icons.info_outline, color: Colors.white),
-            title: const Text("About App", style: TextStyle(color: Colors.white)),
-            subtitle: const Text("Version 1.0.0", style: TextStyle(color: Colors.white54)),
+            leading: Icon(Icons.info_outline, color: isDarkBackground ? Colors.white : Colors.black87),
+            title: Text("About App", style: TextStyle(color: isDarkBackground ? Colors.white : Colors.black87)),
+            subtitle: Text("Version 1.0.0", style: TextStyle(color: isDarkBackground ? Colors.white54 : Colors.black54)),
           ),
         ],
       ),
