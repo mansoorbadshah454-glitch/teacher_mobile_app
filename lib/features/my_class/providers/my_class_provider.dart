@@ -42,11 +42,12 @@ final classMetricsProvider = Provider<AsyncValue<ClassMetrics>>((ref) {
 
   final currentSubjects = List<String>.from(assignedClass['subjects'] ?? []);
 
-  int totalSubjectScoresSum = 0;
-  int totalSubjectScoresCount = 0;
+  if (currentSubjects.isEmpty) {
+    return AsyncValue.data(ClassMetrics());
+  }
 
+  int totalSubjectScoresSum = 0;
   int totalHomeworkScoresSum = 0;
-  int totalHomeworkScoresCount = 0;
 
   for (var s in students) {
     // Subject Scores
@@ -58,7 +59,6 @@ final classMetricsProvider = Provider<AsyncValue<ClassMetrics>>((ref) {
 
     for (var score in subScores) {
       totalSubjectScoresSum += score;
-      totalSubjectScoresCount++;
     }
 
     // Homework Scores
@@ -70,14 +70,18 @@ final classMetricsProvider = Provider<AsyncValue<ClassMetrics>>((ref) {
 
     for (var score in hwScores) {
       totalHomeworkScoresSum += score;
-      totalHomeworkScoresCount++;
     }
   }
 
-  final avgSubject = totalSubjectScoresCount > 0 ? (totalSubjectScoresSum / totalSubjectScoresCount) : 0;
-  final avgHomework = totalHomeworkScoresCount > 0 ? (totalHomeworkScoresSum / totalHomeworkScoresCount) : 0;
+  final totalExpectedScoresNumber = students.length * currentSubjects.length;
 
-  final classScore = (avgSubject + avgHomework) / 2;
+  final avgSubject = totalExpectedScoresNumber > 0 ? (totalSubjectScoresSum / totalExpectedScoresNumber) : 0.0;
+  final avgHomework = totalExpectedScoresNumber > 0 ? (totalHomeworkScoresSum / totalExpectedScoresNumber) : 0.0;
+
+  final totalCombinedScoresSum = totalSubjectScoresSum + totalHomeworkScoresSum;
+  final totalCombinedExpectedNumber = totalExpectedScoresNumber * 2;
+  
+  final classScore = totalCombinedExpectedNumber > 0 ? (totalCombinedScoresSum / totalCombinedExpectedNumber) : 0.0;
 
   return AsyncValue.data(ClassMetrics(
     classScore: classScore.round(),
