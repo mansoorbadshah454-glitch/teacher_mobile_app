@@ -42,9 +42,11 @@ final teacherDataProvider = StreamProvider<Map<String, dynamic>?>((ref) async* {
           };
         }
         return globalData;
+      }).handleError((e) {
+          print('teacherDataProvider stream error suppressed: $e');
       });
   } catch (e, st) {
-      print('Error in teacherDataProvider stream: $e');
+      print('Error in teacherDataProvider stream setup: $e');
       print(st);
   }
 });
@@ -66,7 +68,10 @@ final schoolDataProvider = StreamProvider<Map<String, dynamic>?>((ref) async* {
     final schoolDocStream = FirebaseFirestore.instance
         .collection('schools')
         .doc(schoolId)
-        .snapshots();
+        .snapshots()
+        .handleError((e) {
+             print('schoolDataProvider stream sync error suppressed: $e');
+        });
 
     // Iterate over the school snapshot stream
     await for (final schoolSnap in schoolDocStream) {

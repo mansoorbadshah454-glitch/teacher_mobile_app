@@ -29,15 +29,20 @@ final _teacherLastReadProvider = StreamProvider<Timestamp?>((ref) {
           .map((teacherSnapshot) {
         if (teacherSnapshot.exists && teacherSnapshot.data() != null) {
           final data = teacherSnapshot.data()!;
-          if (data.containsKey('lastReadNewsFeed')) {
-            return data['lastReadNewsFeed'] as Timestamp?;
+            if (data.containsKey('lastReadNewsFeed')) {
+              return data['lastReadNewsFeed'] as Timestamp?;
+            }
           }
-        }
-        return null;
-      });
-    },
-    loading: () => Stream.value(null),
-    error: (_, __) => Stream.value(null),
+          return null;
+        }).handleError((e) {
+          print('UnreadNewsFeedProvider (LastRead): Eager sync error suppressed: $e');
+        });
+      },
+      loading: () => Stream.value(null),
+      error: (e, __) {
+        print('UnreadNewsFeedProvider (LastRead Error state): $e');
+        return Stream.value(null);
+      },
   );
 });
 
@@ -80,14 +85,22 @@ final unreadNewsFeedProvider = StreamProvider<int>((ref) {
           }
 
           return postsQuery.snapshots().map((snapshot) {
-            return snapshot.docs.length;
+              return snapshot.docs.length;
+          }).handleError((e) {
+            print('UnreadNewsFeedProvider (Posts): Eager sync error suppressed: $e');
           });
         },
         loading: () => Stream.value(0),
-        error: (_, __) => Stream.value(0),
+        error: (e, __) {
+          print('UnreadNewsFeedProvider (Posts Error state): $e');
+          return Stream.value(0);
+        },
       );
     },
     loading: () => Stream.value(0),
-    error: (_, __) => Stream.value(0),
+    error: (e, __) {
+      print('UnreadNewsFeedProvider (Global Error state): $e');
+      return Stream.value(0);
+    },
   );
 });

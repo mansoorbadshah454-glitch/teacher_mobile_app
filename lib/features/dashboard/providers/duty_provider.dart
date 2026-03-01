@@ -67,6 +67,9 @@ class DutyStatusNotifier extends AutoDisposeStreamNotifier<bool> {
       }
 
       return true;
+    }).handleError((e) {
+      print('DutyStatusNotifier stream error suppressed: $e');
+      return false; // Return false or drop the event if it's transient
     });
   }
 

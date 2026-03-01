@@ -37,9 +37,14 @@ final inboxProvider = StreamProvider<List<Map<String, dynamic>>>((ref) {
                  data['id'] = doc.id; // Include auto-generated ID for deletion
                  return data;
              }).toList();
+          }).handleError((e) {
+             print('InboxProvider: Eager sync error suppressed: $e');
           });
     },
     loading: () => Stream.value(const <Map<String, dynamic>>[]),
-    error: (_, __) => Stream.value(const <Map<String, dynamic>>[]),
+    error: (e, __) {
+      print('InboxProvider Error State: $e');
+      return Stream.value(const <Map<String, dynamic>>[]);
+    },
   );
 });
