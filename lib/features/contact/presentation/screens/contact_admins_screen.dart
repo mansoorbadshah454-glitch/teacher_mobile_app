@@ -5,8 +5,8 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:teacher_mobile_app/core/theme/app_theme.dart';
 import 'package:teacher_mobile_app/core/providers/admin_data_provider.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:teacher_mobile_app/core/providers/user_data_provider.dart';
+import 'package:teacher_mobile_app/features/auth/auth_provider.dart';
 
 class ContactAdminsScreen extends ConsumerWidget {
   const ContactAdminsScreen({super.key});
@@ -141,7 +141,7 @@ class ContactAdminsScreen extends ConsumerWidget {
                 }
 
                 final schoolId = teacherData['schoolId'];
-                final currentUser = FirebaseAuth.instance.currentUser;
+                final currentUser = ref.read(currentUserProvider);
                 
                 await FirebaseFirestore.instance
                     .collection('schools')

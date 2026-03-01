@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:go_router/go_router.dart';
 import 'package:teacher_mobile_app/core/theme/app_theme.dart';
 import 'package:teacher_mobile_app/features/news_feed/presentation/widgets/news_post_card.dart';
 import 'package:teacher_mobile_app/features/news_feed/presentation/screens/create_post_screen.dart';
+import 'package:teacher_mobile_app/features/auth/auth_provider.dart';
 
 class NewsFeedScreen extends ConsumerStatefulWidget {
   const NewsFeedScreen({super.key});
@@ -31,7 +31,7 @@ class _NewsFeedScreenState extends ConsumerState<NewsFeedScreen> {
 
   Future<void> _fetchSchoolInfo() async {
     try {
-      final user = FirebaseAuth.instance.currentUser;
+      final user = ref.read(currentUserProvider);
       if (user == null) {
         setState(() {
           _errorMessage = "User not logged in";
@@ -81,7 +81,7 @@ class _NewsFeedScreenState extends ConsumerState<NewsFeedScreen> {
 
   Future<void> _markFeedAsRead() async {
     try {
-      final user = FirebaseAuth.instance.currentUser;
+      final user = ref.read(currentUserProvider);
       if (user == null || schoolId == null) return;
 
       await FirebaseFirestore.instance
@@ -228,6 +228,7 @@ class _NewsFeedScreenState extends ConsumerState<NewsFeedScreen> {
   }
 
   Widget _buildCreatePostTrigger(BuildContext context) {
+    final user = ref.watch(currentUserProvider);
     final isDark = Theme.of(context).brightness == Brightness.dark;
     
     return Container(
@@ -247,11 +248,11 @@ class _NewsFeedScreenState extends ConsumerState<NewsFeedScreen> {
       child: Row(
         children: [
           CircleAvatar(
-            backgroundImage: FirebaseAuth.instance.currentUser?.photoURL != null 
-                ? NetworkImage(FirebaseAuth.instance.currentUser!.photoURL!) 
+            backgroundImage: user?.photoURL != null 
+                ? NetworkImage(user!.photoURL!) 
                 : null,
             radius: 20,
-            child: FirebaseAuth.instance.currentUser?.photoURL == null 
+            child: user?.photoURL == null 
                 ? const Icon(Icons.person) 
                 : null,
           ),

@@ -1,10 +1,10 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:teacher_mobile_app/features/auth/auth_provider.dart';
 
 // Provides the current teacher's document data by merging global_users + schools/{id}/teachers/{uid} in real-time
 final teacherDataProvider = StreamProvider<Map<String, dynamic>?>((ref) async* {
-  final user = FirebaseAuth.instance.currentUser;
+  final user = ref.watch(currentUserProvider);
   if (user == null) {
       yield null;
       return;

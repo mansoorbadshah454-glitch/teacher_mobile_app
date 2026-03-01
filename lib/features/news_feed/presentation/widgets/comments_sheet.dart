@@ -1,9 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:timeago/timeago.dart' as timeago;
 
-class CommentsSheet extends StatefulWidget {
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:teacher_mobile_app/features/auth/auth_provider.dart';
+
+class CommentsSheet extends ConsumerStatefulWidget {
   final String schoolId;
   final String postId;
 
@@ -14,10 +16,10 @@ class CommentsSheet extends StatefulWidget {
   });
 
   @override
-  State<CommentsSheet> createState() => _CommentsSheetState();
+  ConsumerState<CommentsSheet> createState() => _CommentsSheetState();
 }
 
-class _CommentsSheetState extends State<CommentsSheet> {
+class _CommentsSheetState extends ConsumerState<CommentsSheet> {
   final TextEditingController _commentController = TextEditingController();
   bool _isSubmitting = false;
 
@@ -28,7 +30,7 @@ class _CommentsSheetState extends State<CommentsSheet> {
     setState(() => _isSubmitting = true);
 
     try {
-      final user = FirebaseAuth.instance.currentUser;
+      final user = ref.read(currentUserProvider);
       if (user == null) throw Exception("User not logged in");
 
       final commentData = {

@@ -1,10 +1,10 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:teacher_mobile_app/features/auth/auth_provider.dart';
 import 'package:teacher_mobile_app/core/providers/user_data_provider.dart';
 
 final _teacherLastReadProvider = StreamProvider<Timestamp?>((ref) {
-  final user = FirebaseAuth.instance.currentUser;
+  final user = ref.watch(currentUserProvider);
   if (user == null) {
     return Stream.value(null);
   }
@@ -48,7 +48,7 @@ final _teacherLastReadProvider = StreamProvider<Timestamp?>((ref) {
 
 /// Provider to calculate the number of unread news feed posts.
 final unreadNewsFeedProvider = StreamProvider<int>((ref) {
-  final user = FirebaseAuth.instance.currentUser;
+  final user = ref.watch(currentUserProvider);
   if (user == null) {
     return Stream.value(0);
   }

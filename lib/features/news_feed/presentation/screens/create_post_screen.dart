@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:go_router/go_router.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'dart:io';
 import 'package:teacher_mobile_app/core/theme/app_theme.dart';
+
+import 'package:teacher_mobile_app/features/auth/auth_provider.dart';
 
 class CreatePostScreen extends ConsumerStatefulWidget {
   final String schoolId;
@@ -146,7 +147,7 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
     setState(() => _isPosting = true);
 
     try {
-      final user = FirebaseAuth.instance.currentUser;
+      final user = ref.read(currentUserProvider);
       if (user == null) throw Exception("User not logged in");
 
       // 1. Upload Media (if any)

@@ -1,6 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:teacher_mobile_app/features/auth/auth_provider.dart';
 import 'package:teacher_mobile_app/core/providers/user_data_provider.dart';
 
 /// Helper to check if a timestamp is from yesterday or earlier
@@ -32,7 +32,7 @@ class DutyStatusNotifier extends AutoDisposeStreamNotifier<bool> {
   }
 
   Stream<bool> _dutyStream() async* {
-    final user = FirebaseAuth.instance.currentUser;
+    final user = ref.watch(currentUserProvider);
     if (user == null) {
       yield false;
       return;
@@ -74,7 +74,7 @@ class DutyStatusNotifier extends AutoDisposeStreamNotifier<bool> {
   }
 
   Future<void> toggleDuty(bool newValue) async {
-    final user = FirebaseAuth.instance.currentUser;
+    final user = ref.read(currentUserProvider);
     if (user == null) return;
 
     final teacherData = await ref.read(teacherDataProvider.future);

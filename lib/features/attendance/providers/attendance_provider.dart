@@ -1,6 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:teacher_mobile_app/features/auth/auth_provider.dart';
 import 'package:teacher_mobile_app/core/providers/user_data_provider.dart';
 
 // 1. Fetch assigned class for the logged-in teacher
@@ -16,7 +16,8 @@ final assignedClassProvider = StreamProvider<Map<String, dynamic>?>((ref) {
   }
 
   final schoolId = teacherData['schoolId'] as String;
-  final String teacherUid = teacherData['uid'] ?? FirebaseAuth.instance.currentUser?.uid ?? '';
+  final authUser = ref.watch(currentUserProvider);
+  final String teacherUid = teacherData['uid'] ?? authUser?.uid ?? '';
 
   if (teacherUid.isEmpty) {
     return Stream.value(null);
@@ -124,7 +125,7 @@ class AttendanceNotifier extends StateNotifier<AsyncValue<Map<String, String>>> 
     final teacherData = await ref.read(teacherDataProvider.future);
     final assignedClass = await ref.read(assignedClassProvider.future);
     final students = await ref.read(classStudentsProvider.future);
-    final user = FirebaseAuth.instance.currentUser;
+    final user = ref.read(currentUserProvider);
 
     if (teacherData == null || assignedClass == null || user == null || state is! AsyncData) return;
 

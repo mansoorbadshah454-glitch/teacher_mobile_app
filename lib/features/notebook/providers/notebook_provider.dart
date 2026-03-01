@@ -3,34 +3,36 @@ import '../models/note_model.dart';
 import '../services/notebook_storage_service.dart';
 import '../services/notification_service.dart';
 
-import 'package:firebase_auth/firebase_auth.dart';
+import 'package:teacher_mobile_app/features/auth/auth_provider.dart';
 
 final notebookStorageServiceProvider = Provider((ref) => NotebookStorageService());
 final notificationServiceProvider = Provider((ref) => NotificationService());
 
 final notesProvider = StateNotifierProvider<NotesNotifier, AsyncValue<List<Note>>>((ref) {
+  final user = ref.watch(currentUserProvider);
   return NotesNotifier(
     ref.read(notebookStorageServiceProvider),
     ref.read(notificationServiceProvider),
+    user?.uid,
   );
 });
 
 class NotesNotifier extends StateNotifier<AsyncValue<List<Note>>> {
   final NotebookStorageService _storageService;
   final NotificationService _notificationService;
+  final String? _uid;
 
-  NotesNotifier(this._storageService, this._notificationService) : super(const AsyncValue.loading()) {
+  NotesNotifier(this._storageService, this._notificationService, this._uid) : super(const AsyncValue.loading()) {
     _loadNotes();
   }
 
   Future<void> _loadNotes() async {
     try {
-      final uid = FirebaseAuth.instance.currentUser?.uid;
-      if (uid == null) {
+      if (_uid == null) {
         state = const AsyncValue.data([]);
         return;
       }
-      final notes = await _storageService.getNotes(uid);
+      final notes = await _storageService.getNotes(_uid);
       state = AsyncValue.data(notes);
     } catch (e, st) {
       state = AsyncValue.error(e, st);
@@ -40,11 +42,9 @@ class NotesNotifier extends StateNotifier<AsyncValue<List<Note>>> {
   Future<void> saveNote(Note note) async {
     try {
       if (state.value == null) return;
-      
-      final uid = FirebaseAuth.instance.currentUser?.uid;
-      if (uid == null) return;
+      if (_uid == null) return;
 
-      final updatedNote = note.teacherId == null ? note.copyWith(teacherId: uid) : note;
+      final updatedNote = note.teacherId == null ? note.copyWith(teacherId: _uid) : note;
       
       await _storageService.saveNote(updatedNote);
       
@@ -59,7 +59,7 @@ class NotesNotifier extends StateNotifier<AsyncValue<List<Note>>> {
         await _notificationService.cancelNotification(updatedNote.id.hashCode);
       }
 
-      final notes = await _storageService.getNotes(uid);
+      final notes = await _storageService.getNotes(_uid);
       state = AsyncValue.data(notes);
     } catch (e, st) {
       state = AsyncValue.error(e, st);
@@ -70,14 +70,12 @@ class NotesNotifier extends StateNotifier<AsyncValue<List<Note>>> {
   Future<void> deleteNote(String id) async {
     try {
        if (state.value == null) return;
-       
-       final uid = FirebaseAuth.instance.currentUser?.uid;
-       if (uid == null) return;
+       if (_uid == null) return;
 
        await _storageService.deleteNote(id);
        await _notificationService.cancelNotification(id.hashCode);
        
-       final notes = await _storageService.getNotes(uid);
+       final notes = await _storageService.getNotes(_uid);
        state = AsyncValue.data(notes);
     } catch (e, st) {
       state = AsyncValue.error(e, st);

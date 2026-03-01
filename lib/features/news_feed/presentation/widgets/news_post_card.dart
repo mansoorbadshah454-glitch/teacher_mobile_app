@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:timeago/timeago.dart' as timeago;
 import 'package:teacher_mobile_app/core/theme/app_theme.dart'; // Ensure correct path
@@ -9,7 +8,10 @@ import 'package:teacher_mobile_app/features/news_feed/presentation/screens/creat
 import 'package:teacher_mobile_app/features/news_feed/presentation/widgets/comments_sheet.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 
-class NewsPostCard extends StatefulWidget {
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:teacher_mobile_app/features/auth/auth_provider.dart';
+
+class NewsPostCard extends ConsumerStatefulWidget {
   final String id;
   final Map<String, dynamic> data;
   final String schoolId;
@@ -22,10 +24,10 @@ class NewsPostCard extends StatefulWidget {
   });
 
   @override
-  State<NewsPostCard> createState() => _NewsPostCardState();
+  ConsumerState<NewsPostCard> createState() => _NewsPostCardState();
 }
 
-class _NewsPostCardState extends State<NewsPostCard> {
+class _NewsPostCardState extends ConsumerState<NewsPostCard> {
   // VideoPlayerController? _videoController;
   bool isLiked = false;
   int likeCount = 0;
@@ -43,10 +45,10 @@ class _NewsPostCardState extends State<NewsPostCard> {
   @override
   void initState() {
     super.initState();
-    final uid = FirebaseAuth.instance.currentUser?.uid;
+    // Use the provider reading inside build for reactive updates instead.
     final likes = List<String>.from(widget.data['likes'] ?? []);
-    isLiked = uid != null && likes.contains(uid);
     likeCount = likes.length;
+    // isLiked will be computed in build using ref.watch
   }
 
   @override
@@ -56,7 +58,7 @@ class _NewsPostCardState extends State<NewsPostCard> {
   }
 
   Future<void> _toggleLike() async {
-    final user = FirebaseAuth.instance.currentUser;
+    final user = ref.read(currentUserProvider);
     if (user == null) return;
 
     final postRef = FirebaseFirestore.instance
@@ -92,6 +94,7 @@ class _NewsPostCardState extends State<NewsPostCard> {
 
   @override
   Widget build(BuildContext context) {
+    final user = ref.watch(currentUserProvider);
     final data = widget.data;
     final timestamp = data['timestamp'] as Timestamp?;
     final timeString = timestamp != null ? timeago.format(timestamp.toDate()) : 'Recently';
@@ -106,6 +109,9 @@ class _NewsPostCardState extends State<NewsPostCard> {
     final bgIndex = data['backgroundIndex'] ?? 0;
 
     final isDark = Theme.of(context).brightness == Brightness.dark;
+    
+    final likesList = List<String>.from(widget.data['likes'] ?? []);
+    isLiked = user != null && likesList.contains(user.uid);
 
     return Container(
       margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8), // Gap between posts
@@ -166,7 +172,7 @@ class _NewsPostCardState extends State<NewsPostCard> {
                 ),
                 const Spacer(),
                 // Edit and Delete Options
-                if (FirebaseAuth.instance.currentUser?.uid == data['authorId'] || true) // Assuming principals/teachers have rights based on rules
+                if (user?.uid == data['authorId'] || true) // Assuming principals/teachers have rights based on rules
                   PopupMenuButton<String>(
                     icon: Icon(Icons.more_horiz, color: Theme.of(context).iconTheme.color?.withOpacity(0.5)),
                     onSelected: (value) {
