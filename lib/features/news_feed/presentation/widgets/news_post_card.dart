@@ -340,17 +340,6 @@ class _NewsPostCardState extends ConsumerState<NewsPostCard> {
                   ),
                 ),
               ),
-              Expanded(
-                child: TextButton.icon(
-                  style: TextButton.styleFrom(padding: EdgeInsets.zero),
-                  onPressed: () {},
-                  icon: Icon(Icons.share_outlined, color: Theme.of(context).textTheme.bodyMedium?.color?.withOpacity(0.7), size: 18),
-                  label: FittedBox(
-                    fit: BoxFit.scaleDown,
-                    child: Text("Share", style: TextStyle(color: Theme.of(context).textTheme.bodyMedium?.color?.withOpacity(0.7)))
-                  ),
-                ),
-              ),
             ],
           ),
           const SizedBox(height: 4),
