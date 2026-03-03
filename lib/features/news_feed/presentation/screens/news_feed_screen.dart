@@ -6,6 +6,7 @@ import 'package:teacher_mobile_app/core/theme/app_theme.dart';
 import 'package:teacher_mobile_app/features/news_feed/presentation/widgets/news_post_card.dart';
 import 'package:teacher_mobile_app/features/news_feed/presentation/screens/create_post_screen.dart';
 import 'package:teacher_mobile_app/features/auth/auth_provider.dart';
+import 'package:teacher_mobile_app/core/providers/user_data_provider.dart';
 
 class NewsFeedScreen extends ConsumerStatefulWidget {
   const NewsFeedScreen({super.key});
@@ -42,28 +43,42 @@ class _NewsFeedScreenState extends ConsumerState<NewsFeedScreen> {
 
       print("🔍 [NewsFeed] Fetching school info for user: ${user.uid}");
 
-      // Naive search: Get first school
-      final schoolsSnapshot = await FirebaseFirestore.instance
+      // Get correct schoolId from teacher data
+      final teacherDataAsync = ref.read(teacherDataProvider);
+      final teacherData = teacherDataAsync.value;
+
+      if (teacherData == null || !teacherData.containsKey('schoolId')) {
+        setState(() {
+          _errorMessage = "School not assigned";
+          _isLoading = false;
+        });
+        print("⚠️ [NewsFeed] Teacher data has no schoolId");
+        return;
+      }
+
+      final teacherSchoolId = teacherData['schoolId'] as String;
+
+      // Fetch the specific school's details
+      final schoolDoc = await FirebaseFirestore.instance
           .collection('schools')
-          .limit(1)
+          .doc(teacherSchoolId)
           .get()
           .timeout(const Duration(seconds: 10));
 
-      if (schoolsSnapshot.docs.isNotEmpty) {
-        final doc = schoolsSnapshot.docs.first;
+      if (schoolDoc.exists) {
         setState(() {
-          schoolId = doc.id;
-          schoolName = doc.data()['name'];
-          schoolLogo = doc.data()['logo'] ?? doc.data()['profileImage'];
+          schoolId = schoolDoc.id;
+          schoolName = schoolDoc.data()?['name'] ?? "School Feed";
+          schoolLogo = schoolDoc.data()?['logo'] ?? schoolDoc.data()?['profileImage'];
           _errorMessage = null;
         });
-        print("✅ [NewsFeed] Found school: ${doc.id}");
+        print("✅ [NewsFeed] Found school: ${schoolDoc.id}");
         _markFeedAsRead(); // Mark feed as read right after getting school info
       } else {
         setState(() {
-          _errorMessage = "No schools found";
+          _errorMessage = "School not found";
         });
-        print("⚠️ [NewsFeed] No schools collection found");
+        print("⚠️ [NewsFeed] School document not found: $teacherSchoolId");
       }
     } catch (e) {
       print("💥 [NewsFeed] Error: $e");
@@ -188,20 +203,27 @@ class _NewsFeedScreenState extends ConsumerState<NewsFeedScreen> {
                   final docs = snapshot.data?.docs ?? [];
 
                   if (docs.isEmpty) {
-                    return Center(
-                      child: Column(
-                        mainAxisAlignment: MainAxisAlignment.center,
-                        children: [
-                          Icon(Icons.feed_outlined, size: 64, color: Theme.of(context).iconTheme.color?.withOpacity(0.5)),
-                          const SizedBox(height: 16),
-                          Text(
-                            "No posts yet",
-                            style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                  color: Theme.of(context).textTheme.bodyMedium?.color?.withOpacity(0.5),
+                    return Column(
+                      children: [
+                        _buildCreatePostTrigger(context),
+                        Expanded(
+                          child: Center(
+                            child: Column(
+                              mainAxisAlignment: MainAxisAlignment.center,
+                              children: [
+                                Icon(Icons.feed_outlined, size: 64, color: Theme.of(context).iconTheme.color?.withOpacity(0.5)),
+                                const SizedBox(height: 16),
+                                Text(
+                                  "No posts yet",
+                                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                        color: Theme.of(context).textTheme.bodyMedium?.color?.withOpacity(0.5),
+                                      ),
                                 ),
+                              ],
+                            ),
                           ),
-                        ],
-                      ),
+                        ),
+                      ],
                     );
                   }
 

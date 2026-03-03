@@ -7,6 +7,8 @@ import 'package:teacher_mobile_app/features/dashboard/presentation/widgets/app_d
 import 'package:teacher_mobile_app/features/dashboard/presentation/widgets/stat_card.dart';
 import 'package:teacher_mobile_app/features/dashboard/providers/unread_news_feed_provider.dart';
 import 'package:teacher_mobile_app/features/dashboard/providers/duty_provider.dart';
+import 'package:teacher_mobile_app/core/providers/user_data_provider.dart';
+import 'package:teacher_mobile_app/services/push_notification_service.dart';
 
 class DashboardScreen extends ConsumerStatefulWidget {
   const DashboardScreen({super.key});
@@ -27,6 +29,17 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       loading: () => 0,
       error: (_, __) => 0,
     );
+
+    // Initialize Push Notifications once teacher data defines the schoolId
+    ref.listen<AsyncValue<Map<String, dynamic>?>>(teacherDataProvider, (previous, next) {
+      if (next.hasValue && next.value != null && next.value!['schoolId'] != null) {
+        final schoolId = next.value!['schoolId'] as String;
+        final uid = FirebaseAuth.instance.currentUser?.uid;
+        if (uid != null) {
+          PushNotificationService().init(schoolId, uid);
+        }
+      }
+    });
 
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
