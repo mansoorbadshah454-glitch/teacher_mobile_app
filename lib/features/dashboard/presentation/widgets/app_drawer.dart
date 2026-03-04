@@ -94,14 +94,7 @@ class AppDrawer extends ConsumerWidget {
               context.push('/profile');
             },
           ),
-          _DrawerItem(
-            icon: Icons.contact_support_outlined,
-            title: 'Contact Principal & Admins',
-            onTap: () {
-              Navigator.pop(context);
-              context.push('/contact-admins');
-            },
-          ),
+
           _DrawerItem(
             icon: Icons.settings_outlined,
             title: 'Settings',

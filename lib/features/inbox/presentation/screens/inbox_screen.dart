@@ -2,18 +2,16 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:teacher_mobile_app/core/theme/app_theme.dart';
 import 'package:teacher_mobile_app/features/dashboard/presentation/widgets/app_drawer.dart';
-import 'package:teacher_mobile_app/features/inbox/providers/inbox_provider.dart';
-import 'package:intl/intl.dart';
-import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:teacher_mobile_app/core/providers/user_data_provider.dart';
+import 'package:teacher_mobile_app/core/providers/admin_data_provider.dart';
+import 'package:cached_network_image/cached_network_image.dart';
+import 'package:teacher_mobile_app/features/inbox/presentation/screens/chat_screen.dart';
 
 class InboxScreen extends ConsumerWidget {
   const InboxScreen({super.key});
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final isDark = Theme.of(context).brightness == Brightness.dark;
-    final messagesAsync = ref.watch(inboxProvider);
+    final adminsAsync = ref.watch(adminsProvider);
 
     return Scaffold(
       backgroundColor: Theme.of(context).colorScheme.background,
@@ -22,16 +20,8 @@ class InboxScreen extends ConsumerWidget {
         slivers: [
           SliverAppBar(
             pinned: true,
-            backgroundColor: Colors.transparent,
+            backgroundColor: AppTheme.secondary,
             elevation: 0,
-            flexibleSpace: Container(
-              decoration: BoxDecoration(
-                gradient: AppTheme.primaryGradient,
-                boxShadow: [
-                  BoxShadow(color: Colors.black.withOpacity(0.3), blurRadius: 4, offset: const Offset(0, 4))
-                ],
-              ),
-            ),
             title: const Text(
               'Inbox',
               style: TextStyle(
@@ -41,58 +31,29 @@ class InboxScreen extends ConsumerWidget {
             ),
             iconTheme: const IconThemeData(color: Colors.white),
           ),
-          messagesAsync.when(
+          adminsAsync.when(
             loading: () => const SliverFillRemaining(
               child: Center(child: CircularProgressIndicator(color: AppTheme.primary)),
             ),
             error: (err, stack) => SliverFillRemaining(
-              child: Center(
-                child: Padding(
-                  padding: const EdgeInsets.all(24.0),
-                  child: Text(
-                    'Error loading messages:\n$err',
-                    textAlign: TextAlign.center,
-                    style: TextStyle(color: isDark ? Colors.white : Colors.black87),
-                  ),
-                ),
-              ),
+              child: Center(child: Text('Error loading admins: $err')),
             ),
-            data: (messages) {
-              if (messages.isEmpty) {
-                return SliverFillRemaining(
-                  child: Center(
-                    child: Column(
-                      mainAxisAlignment: MainAxisAlignment.center,
-                      children: [
-                        Icon(
-                          Icons.inbox_outlined,
-                          size: 80,
-                          color: isDark ? Colors.grey[700] : Colors.grey[400],
-                        ),
-                        const SizedBox(height: 16),
-                        Text(
-                          "No messages yet.",
-                          style: TextStyle(
-                            fontSize: 18,
-                            color: isDark ? Colors.grey[500] : Colors.grey[600],
-                            fontWeight: FontWeight.w500,
-                          ),
-                        ),
-                      ],
-                    ),
-                  ),
+            data: (admins) {
+              if (admins.isEmpty) {
+                return const SliverFillRemaining(
+                  child: Center(child: Text("No admins found.")),
                 );
               }
 
               return SliverPadding(
-                padding: const EdgeInsets.all(16.0),
+                padding: const EdgeInsets.symmetric(vertical: 8.0),
                 sliver: SliverList(
                   delegate: SliverChildBuilderDelegate(
                     (context, index) {
-                      final msg = messages[index];
-                      return _MessageCard(msg: msg);
+                      final admin = admins[index];
+                      return _AdminProfileTile(admin: admin);
                     },
-                    childCount: messages.length,
+                    childCount: admins.length,
                   ),
                 ),
               );
@@ -104,206 +65,72 @@ class InboxScreen extends ConsumerWidget {
   }
 }
 
-class _MessageCard extends ConsumerStatefulWidget {
-  final Map<String, dynamic> msg;
+class _AdminProfileTile extends StatelessWidget {
+  final Map<String, dynamic> admin;
 
-  const _MessageCard({required this.msg});
-
-  @override
-  ConsumerState<_MessageCard> createState() => _MessageCardState();
-}
-
-class _MessageCardState extends ConsumerState<_MessageCard> {
-  @override
-  void initState() {
-    super.initState();
-    _markAsReadIfNeeded();
-  }
-
-  Future<void> _markAsReadIfNeeded() async {
-    if (widget.msg['read'] == false) {
-      try {
-          final rawData = await ref.read(teacherDataProvider.future);
-          final Map<String, dynamic>? userData = rawData;
-          final schoolId = userData?['schoolId'];
-          if (schoolId != null && widget.msg['id'] != null) {
-              await FirebaseFirestore.instance
-                  .collection('schools')
-                  .doc(schoolId)
-                  .collection('messages')
-                  .doc(widget.msg['id'])
-                  .update({'read': true});
-          }
-      } catch (e) {
-         print("Failed to mark message as read: \$e");
-      }
-    }
-  }
-
-  Future<void> _deleteMessage(BuildContext context, WidgetRef ref) async {
-    final confirmed = await showDialog<bool>(
-      context: context,
-      builder: (ctx) => AlertDialog(
-        title: const Text('Delete Message'),
-        content: const Text('Are you sure you want to delete this message?'),
-        actions: [
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, false),
-            child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
-          ),
-          TextButton(
-            onPressed: () => Navigator.pop(ctx, true),
-            child: const Text('Delete', style: TextStyle(color: Colors.red)),
-          ),
-        ],
-      ),
-    );
-
-    if (confirmed == true && context.mounted) {
-       try {
-          final rawData = await ref.read(teacherDataProvider.future);
-          final Map<String, dynamic>? userData = rawData;
-          final schoolId = userData?['schoolId'];
-          if (schoolId != null) {
-              await FirebaseFirestore.instance
-                 .collection('schools')
-                 .doc(schoolId)
-                 .collection('messages')
-                 .doc(widget.msg['id'])
-                 .delete();
-              
-              if (context.mounted) {
-                 ScaffoldMessenger.of(context).showSnackBar(
-                    const SnackBar(content: Text('Message deleted successfully')),
-                 );
-              }
-          }
-       } catch (e) {
-          if (context.mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                  SnackBar(content: Text('Failed to delete message: \$e')),
-              );
-          }
-       }
-    }
-  }
+  const _AdminProfileTile({required this.admin});
 
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final isUnread = widget.msg['read'] == false;
     
-    // Format timestamp securely
-    String formattedTime = '';
-    if (widget.msg['timestamp'] != null) {
-        if (widget.msg['timestamp'] is Timestamp) {
-            final DateTime dt = (widget.msg['timestamp'] as Timestamp).toDate();
-            formattedTime = DateFormat('MMM d, h:mm a').format(dt);
-        } else if (widget.msg['timestamp'] is String) {
-            formattedTime = widget.msg['timestamp']; // Fallback
-        }
-    }
-
-    return Card(
-      elevation: 0,
-      color: isDark ? Colors.grey[900] : Colors.white,
-      shape: RoundedRectangleBorder(
-        borderRadius: BorderRadius.circular(16),
-        side: BorderSide(
-          color: isUnread 
-              ? AppTheme.primary.withOpacity(0.5) 
-              : (isDark ? Colors.grey[800]! : Colors.grey[200]!),
-          width: isUnread ? 1.5 : 1.0,
+    return ListTile(
+      contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+      leading: Stack(
+        children: [
+          CircleAvatar(
+            radius: 28,
+            backgroundColor: AppTheme.primary.withOpacity(0.1),
+            backgroundImage: admin['photo'].isNotEmpty 
+                ? CachedNetworkImageProvider(admin['photo'])
+                : null,
+            child: admin['photo'].isEmpty 
+                ? const Icon(Icons.person, color: AppTheme.primary, size: 30)
+                : null,
+          ),
+          if (admin['type'] == 'principal')
+            Positioned(
+              right: 0,
+              bottom: 0,
+              child: Container(
+                padding: const EdgeInsets.all(2),
+                decoration: const BoxDecoration(
+                  color: Colors.white,
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.shield, color: AppTheme.accent, size: 14),
+              ),
+            ),
+        ],
+      ),
+      title: Text(
+        admin['name'],
+        style: TextStyle(
+          fontSize: 17,
+          fontWeight: FontWeight.w600,
+          color: isDark ? Colors.white : Colors.black87,
         ),
       ),
-      margin: const EdgeInsets.only(bottom: 12),
-      child: Padding(
-        padding: const EdgeInsets.all(16.0),
-        child: Column(
-          crossAxisAlignment: CrossAxisAlignment.start,
-          children: [
-            Row(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                 CircleAvatar(
-                    radius: 20,
-                    backgroundColor: AppTheme.primary.withOpacity(0.1),
-                    child: const Icon(Icons.shield, color: AppTheme.primary, size: 20),
-                 ),
-                 const SizedBox(width: 12),
-                 Expanded(
-                    child: Column(
-                       crossAxisAlignment: CrossAxisAlignment.start,
-                       children: [
-                         Row(
-                           mainAxisAlignment: MainAxisAlignment.spaceBetween,
-                           children: [
-                             Flexible(
-                               child: Text(
-                                 widget.msg['fromName'] ?? 'Principal',
-                                 style: TextStyle(
-                                   fontSize: 16,
-                                   fontWeight: isUnread ? FontWeight.bold : FontWeight.w600,
-                                   color: isDark ? Colors.white : Colors.black87,
-                                 ),
-                                 maxLines: 1,
-                                 overflow: TextOverflow.ellipsis,
-                               ),
-                             ),
-                             if (formattedTime.isNotEmpty)
-                               Text(
-                                 formattedTime,
-                                 style: TextStyle(
-                                   fontSize: 12,
-                                   color: isDark ? Colors.grey[500] : Colors.grey[500],
-                                 ),
-                               )
-                           ],
-                         ),
-                         const SizedBox(height: 2),
-                         Row(
-                            children: [
-                              Text(
-                                'Role: ',
-                                style: TextStyle(
-                                  fontSize: 12,
-                                  color: isDark ? Colors.grey[400] : Colors.grey[600],
-                                ),
-                              ),
-                              Text(
-                                widget.msg['from']?.toString().toUpperCase() ?? 'ADMIN',
-                                style: const TextStyle(
-                                  fontSize: 12,
-                                  color: AppTheme.primary,
-                                  fontWeight: FontWeight.bold,
-                                ),
-                              ),
-                            ],
-                         ),
-                       ],
-                    ),
-                 ),
-                 IconButton(
-                    onPressed: () => _deleteMessage(context, ref),
-                    icon: const Icon(Icons.delete_outline, color: Colors.red),
-                    tooltip: 'Delete Message',
-                    padding: EdgeInsets.zero,
-                    constraints: const BoxConstraints(),
-                 )
-              ],
-            ),
-            const SizedBox(height: 12),
-            Text(
-               widget.msg['text'] ?? '',
-               style: TextStyle(
-                  fontSize: 15,
-                  height: 1.4,
-                  color: isDark ? Colors.grey[300] : Colors.black87,
-               ),
-            ),
-          ],
+      subtitle: Text(
+        admin['role'],
+        style: TextStyle(
+          fontSize: 14,
+          color: isDark ? Colors.grey[400] : Colors.grey[600],
         ),
       ),
+      trailing: Column(
+        mainAxisAlignment: MainAxisAlignment.center,
+        children: [
+          Icon(Icons.chevron_right, color: isDark ? Colors.grey[700] : Colors.grey[400]),
+        ],
+      ),
+      onTap: () {
+        Navigator.of(context).push(
+          MaterialPageRoute(
+            builder: (context) => ChatScreen(admin: admin),
+          ),
+        );
+      },
     );
   }
 }

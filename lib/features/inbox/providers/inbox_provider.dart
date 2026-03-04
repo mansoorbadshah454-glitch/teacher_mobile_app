@@ -28,15 +28,19 @@ final inboxProvider = StreamProvider<List<Map<String, dynamic>>>((ref) {
           .collection('schools')
           .doc(schoolId)
           .collection('messages')
-          .where('toId', isEqualTo: teacherId) // Only messages for this teacher
-          .orderBy('timestamp', descending: true)
           .snapshots()
           .map((snapshot) {
-             return snapshot.docs.map((doc) {
-                 final data = doc.data();
-                 data['id'] = doc.id; // Include auto-generated ID for deletion
-                 return data;
-             }).toList();
+             return snapshot.docs
+                 .map((doc) {
+                     final data = doc.data();
+                     data['id'] = doc.id;
+                     return data;
+                 })
+                 .where((msg) {
+                     // Check both toId and to for compatibility
+                     return msg['toId'] == teacherId || msg['to'] == teacherId;
+                 })
+                 .toList();
           }).handleError((e) {
              print('InboxProvider: Eager sync error suppressed: $e');
           });
