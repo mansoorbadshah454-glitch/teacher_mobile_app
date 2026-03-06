@@ -142,17 +142,21 @@ class ContactAdminsScreen extends ConsumerWidget {
 
                 final schoolId = teacherData['schoolId'];
                 final currentUser = ref.read(currentUserProvider);
+                final teacherId = currentUser?.uid;
                 
                 await FirebaseFirestore.instance
                     .collection('schools')
                     .doc(schoolId)
                     .collection('messages')
                     .add({
-                  'to': 'principal',
+                  'to': adminId == 'principal' ? 'principal' : 'admin',
                   'toId': adminId,
+                  'toRole': adminId == 'principal' ? 'principal' : 'school Admin',
                   'from': 'teacher',
                   'fromName': teacherData['name'] ?? 'Teacher',
-                  'fromId': currentUser?.uid,
+                  'fromId': teacherId,
+                  'fromRole': 'teacher',
+                  'participants': [teacherId, adminId],
                   'text': text,
                   'type': 'teacher-reply',
                   'timestamp': FieldValue.serverTimestamp(),

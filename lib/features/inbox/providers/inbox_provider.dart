@@ -28,19 +28,29 @@ final inboxProvider = StreamProvider<List<Map<String, dynamic>>>((ref) {
           .collection('schools')
           .doc(schoolId)
           .collection('messages')
+          .where('participants', arrayContains: teacherId)
           .snapshots()
           .map((snapshot) {
-             return snapshot.docs
-                 .map((doc) {
-                     final data = doc.data();
-                     data['id'] = doc.id;
-                     return data;
-                 })
-                 .where((msg) {
-                     // Check both toId and to for compatibility
-                     return msg['toId'] == teacherId || msg['to'] == teacherId;
-                 })
-                 .toList();
+            final messages = snapshot.docs
+                .map((doc) {
+                  final data = doc.data();
+                  data['id'] = doc.id;
+                  return data;
+                })
+                .where((msg) {
+                  // Filter for messages actually intended to be received by me
+                  return msg['toId'] == teacherId || msg['to'] == teacherId || msg['to'] == 'all';
+                })
+                .toList();
+
+            // Sort in-memory to avoid composite index requirement
+            messages.sort((a, b) {
+              final aTime = (a['timestamp'] as Timestamp?)?.millisecondsSinceEpoch ?? 0;
+              final bTime = (b['timestamp'] as Timestamp?)?.millisecondsSinceEpoch ?? 0;
+              return bTime.compareTo(aTime); // Descending (Newest first)
+            });
+
+            return messages;
           }).handleError((e) {
              print('InboxProvider: Eager sync error suppressed: $e');
           });

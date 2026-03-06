@@ -41,10 +41,10 @@ final chatMessagesProvider = StreamProvider.family<List<Map<String, dynamic>>, S
           .collection('schools')
           .doc(schoolId)
           .collection('messages')
-          .orderBy('timestamp', descending: true)
+          .where('participants', arrayContains: teacherId)
           .snapshots()
           .map((snapshot) {
-        return snapshot.docs
+        final messages = snapshot.docs
             .map((doc) {
               final data = doc.data();
               data['id'] = doc.id;
@@ -53,13 +53,25 @@ final chatMessagesProvider = StreamProvider.family<List<Map<String, dynamic>>, S
             .where((msg) {
               final fromId = msg['fromId'] ?? msg['from'];
               final toId = msg['toId'] ?? msg['to'];
-              
-              final isFromMe = (fromId == teacherId && (toId == adminId || toId == 'principal' || toId == 'admin'));
-              final isToMe = ((fromId == adminId || fromId == 'principal' || fromId == 'admin') && toId == teacherId);
-              
-              return isFromMe || isToMe;
+
+              // Filter to specific conversation with adminId
+              // Compatibility: If participants is missing (old message), it won't show up here,
+              // but we only fix new messages for scalability.
+              final isFromSelected = (fromId == adminId || fromId == 'principal' || fromId == 'admin');
+              final isToSelected = (toId == adminId || toId == 'principal' || toId == 'admin');
+
+              return isFromSelected || isToSelected;
             })
             .toList();
+
+        // Sort in-memory to avoid composite index requirement
+        messages.sort((a, b) {
+          final aTime = (a['timestamp'] as Timestamp?)?.millisecondsSinceEpoch ?? 0;
+          final bTime = (b['timestamp'] as Timestamp?)?.millisecondsSinceEpoch ?? 0;
+          return bTime.compareTo(aTime); // Descending
+        });
+
+        return messages;
       });
     },
     loading: () => Stream.value(const []),

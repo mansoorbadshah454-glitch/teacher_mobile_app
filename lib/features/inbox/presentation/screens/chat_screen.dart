@@ -51,11 +51,14 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             .doc(teacherData['schoolId'])
             .collection('messages')
             .add({
-          'to': widget.admin['type'] ?? 'admin',
+          'to': widget.admin['type'] ?? (widget.admin['role'] == 'Principal' ? 'principal' : 'admin'),
           'toId': widget.admin['id'],
-          'from': currentUser.uid, // Fixed: Send UID instead of 'teacher'
+          'toRole': widget.admin['role'] == 'Principal' ? 'principal' : 'school Admin',
+          'from': 'teacher',
           'fromName': teacherData['name'] ?? 'Teacher',
           'fromId': currentUser.uid,
+          'fromRole': 'teacher',
+          'participants': [currentUser.uid, widget.admin['id']],
           'text': text,
           'type': 'teacher-reply',
           'timestamp': FieldValue.serverTimestamp(),
@@ -282,11 +285,14 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
           .doc(schoolId)
           .collection('messages')
           .add({
-        'to': widget.admin['type'] ?? 'admin',
+        'to': widget.admin['type'] ?? (widget.admin['role'] == 'Principal' ? 'principal' : 'admin'),
         'toId': widget.admin['id'],
-        'from': currentUser.uid,
+        'toRole': widget.admin['role'] == 'Principal' ? 'principal' : 'school Admin',
+        'from': 'teacher',
         'fromName': teacherData['name'] ?? 'Teacher',
         'fromId': currentUser.uid,
+        'fromRole': 'teacher',
+        'participants': [currentUser.uid, widget.admin['id']],
         'text': 'Sent an attachment: $fileName',
         'attachment': {
           'url': downloadUrl,
