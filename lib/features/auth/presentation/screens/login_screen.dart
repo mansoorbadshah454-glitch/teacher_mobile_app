@@ -13,42 +13,43 @@ class LoginScreen extends ConsumerStatefulWidget {
 class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
+  final _schoolIdController = TextEditingController(); // New School ID controller
   final _formKey = GlobalKey<FormState>();
 
   @override
   void dispose() {
     _emailController.dispose();
     _passwordController.dispose();
+    _schoolIdController.dispose();
     super.dispose();
   }
 
   void _submit() async {
     if (_formKey.currentState!.validate()) {
-      print('LoginScreen: Submit button pressed. Email: ${_emailController.text.trim()}'); 
+      print('LoginScreen: Submit button pressed. Email: ${_emailController.text.trim()}, SchoolID: ${_schoolIdController.text.trim()}'); 
       
       FocusScope.of(context).unfocus();
 
       try {
+        // Ensure clean state before signing in
+        await ref.read(authControllerProvider.notifier).signOut();
+
         await ref.read(authControllerProvider.notifier).signIn(
               _emailController.text.trim(),
               _passwordController.text.trim(),
             );
+        
         print('LoginScreen: SignIn call completed.'); 
         
-        // Navigation on success
+        // Navigation ONLY on success
         if (mounted) {
-           // Verify if user is actually logged in? The provider handles state.
-           // Assuming no exception means success for now.
            context.go('/dashboard');
         }
 
       } catch (e) {
-        print('LoginScreen: SignIn threw unexpected error: $e'); 
-        if (mounted) {
-             ScaffoldMessenger.of(context).showSnackBar(
-              SnackBar(content: Text("Login Failed: $e"), backgroundColor: Colors.red),
-            );
-        }
+        print('LoginScreen: SignIn threw error: $e'); 
+        // SnackBar is already handled by ref.listen in build, 
+        // but we catch here to prevent context.go('/dashboard') from running.
       }
     }
   }
@@ -61,9 +62,12 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
     ref.listen<AsyncValue>(authControllerProvider, (_, state) {
       if (state.hasError) {
         print('LoginScreen: Auth Error State Received: ${state.error}');
+        final errorMessage = state.error.toString();
         ScaffoldMessenger.of(context).showSnackBar(
           SnackBar(
-            content: Text(state.error.toString()),
+            content: Text(errorMessage.contains('invalid-credential') 
+              ? "Invalid email or password. Please try again." 
+              : errorMessage),
             backgroundColor: Colors.red,
           ),
         );
@@ -74,10 +78,8 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       backgroundColor: Colors.white,
       body: Container(
         decoration: const BoxDecoration(
-          // Using a simple gradient or solid color if AppTheme isn't fully accessible here (though it should be)
-          // Let's rely on standard colors for now to ensure visibility
           gradient: LinearGradient(
-            colors: [Color(0xFF1e1e24), Color(0xFF2d2d35)], // Dark theme standard
+            colors: [Color(0xFF1e1e24), Color(0xFF2d2d35)],
             begin: Alignment.topLeft,
             end: Alignment.bottomRight,
           ),
@@ -87,7 +89,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
             padding: const EdgeInsets.all(24.0),
             child: Card(
               elevation: 8,
-              color: const Color(0xFF2a2a32), // Dark surface
+              color: const Color(0xFF2a2a32),
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
               child: Padding(
                 padding: const EdgeInsets.all(24.0),
@@ -106,6 +108,26 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                             ),
                       ),
                       const SizedBox(height: 24),
+                      TextFormField(
+                        controller: _schoolIdController,
+                        enabled: !isLoading,
+                        style: const TextStyle(color: Colors.white),
+                        decoration: const InputDecoration(
+                          labelText: 'School ID',
+                          hintText: 'Enter your unique school code',
+                          labelStyle: TextStyle(color: Colors.white70),
+                          prefixIcon: Icon(Icons.location_city_outlined, color: Colors.white70),
+                          border: OutlineInputBorder(),
+                          enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: Colors.white24)),
+                        ),
+                        validator: (value) {
+                          if (value == null || value.isEmpty) {
+                            return 'Please enter your School ID';
+                          }
+                          return null;
+                        },
+                      ),
+                      const SizedBox(height: 16),
                       TextFormField(
                         controller: _emailController,
                         enabled: !isLoading,

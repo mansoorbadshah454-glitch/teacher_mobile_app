@@ -19,12 +19,15 @@ final teacherDataProvider = StreamProvider<Map<String, dynamic>?>((ref) async* {
       }
 
       final globalData = globalDoc.data()!;
-      final schoolId = globalData['schoolId'];
+      final schoolId = globalData['schoolId'] as String?;
 
       if (schoolId == null) {
+          print('teacherDataProvider: User ${user.uid} has no schoolId in global_users');
           yield globalData;
           return;
       }
+
+      print('teacherDataProvider: Fetching local profile from schools/$schoolId/teachers/${user.uid}');
 
       // Stream the local school teacher profile
       yield* FirebaseFirestore.instance
@@ -34,16 +37,22 @@ final teacherDataProvider = StreamProvider<Map<String, dynamic>?>((ref) async* {
           .doc(user.uid)
           .snapshots()
           .map((teacherSnapshot) {
-        if (teacherSnapshot.exists) {
+        if (teacherSnapshot.exists && teacherSnapshot.data() != null) {
           return {
             ...globalData,
             ...teacherSnapshot.data()!,
             'schoolId': schoolId,
           };
+        } else {
+          print('teacherDataProvider: No local document found at schools/$schoolId/teachers/${user.uid}');
+          return {
+            ...globalData,
+            'schoolId': schoolId,
+            'error': 'Local profile not found'
+          };
         }
-        return globalData;
       }).handleError((e) {
-          print('teacherDataProvider stream error suppressed: $e');
+          print('teacherDataProvider stream error: $e');
       });
   } catch (e, st) {
       print('Error in teacherDataProvider stream setup: $e');

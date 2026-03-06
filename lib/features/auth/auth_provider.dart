@@ -30,8 +30,8 @@ class AuthController extends StateNotifier<AsyncValue<void>> {
       state = const AsyncValue.data(null);
     } catch (e, st) {
       print('AuthProvider: FirebaseAuth.signInWithEmailAndPassword FAILED: $e'); // LOG
-      print('AuthProvider: StackTrace: $st'); // LOG
       state = AsyncValue.error(e, st);
+      rethrow; // Rethrow to allow the UI to catch the error
     }
   }
 

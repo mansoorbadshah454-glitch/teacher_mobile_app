@@ -38,27 +38,28 @@ class _WelcomeScreenState extends State<WelcomeScreen> with SingleTickerProvider
       final user = FirebaseAuth.instance.currentUser;
       if (user != null) {
         try {
+          print("🔍 [WelcomeScreen] User found: ${user.uid}. Refreshing token...");
           // FORCE refresh the token to retrieve the latest Custom Claims
           final tokenResult = await user.getIdTokenResult(true);
           final claims = tokenResult.claims ?? {};
           
           if (!claims.containsKey('schoolId') || claims['schoolId'] == null) {
-             print("🚨 [WelcomeScreen] User lacks schoolId claim! Forcing sign-out to prevent data leaks.");
+             print("🚨 [WelcomeScreen] User lacks schoolId claim! Sign-out required for security.");
              await FirebaseAuth.instance.signOut();
              if (mounted) context.go('/login');
              return;
           }
           
-          print("🚀 [WelcomeScreen] User verified with schoolId: ${claims['schoolId']}. Navigating to /dashboard");
+          print("🚀 [WelcomeScreen] Access authorized for School: ${claims['schoolId']}. Loading Dashboard...");
           if (mounted) context.go('/dashboard');
         } catch (e) {
-          print("🚨 [WelcomeScreen] Token verification failed: $e");
+          print("🚨 [WelcomeScreen] Token verification failed or session expired: $e");
           await FirebaseAuth.instance.signOut();
           if (mounted) context.go('/login');
         }
       } else {
-         print("🔒 [WelcomeScreen] No user logged in. Navigating to /login");
-         context.go('/login');
+         print("🔒 [WelcomeScreen] No active session found. Redirecting to Login.");
+         if (mounted) context.go('/login');
       }
     });
   }
