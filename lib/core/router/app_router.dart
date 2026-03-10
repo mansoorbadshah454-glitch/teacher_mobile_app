@@ -1,5 +1,6 @@
 import 'package:go_router/go_router.dart';
 import 'package:flutter/material.dart';
+import 'package:teacher_mobile_app/features/splash/presentation/screens/splash_screen.dart';
 import 'package:teacher_mobile_app/features/inbox/presentation/screens/inbox_screen.dart';
 import 'package:teacher_mobile_app/features/auth/presentation/screens/login_screen.dart';
 import 'package:teacher_mobile_app/features/auth/presentation/screens/welcome_screen.dart';
@@ -21,11 +22,15 @@ import 'package:teacher_mobile_app/features/notebook/screens/note_editor_screen.
 import 'package:teacher_mobile_app/features/notebook/models/note_model.dart';
 
 final appRouter = GoRouter(
-  initialLocation: '/welcome',
+  initialLocation: '/splash',
   routes: [
     GoRoute(
       path: '/',
-      redirect: (context, state) => '/welcome',
+      redirect: (context, state) => '/splash',
+    ),
+    GoRoute(
+      path: '/splash',
+      builder: (context, state) => const SplashScreen(),
     ),
     GoRoute(
       path: '/welcome',
