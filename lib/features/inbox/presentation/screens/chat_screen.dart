@@ -155,7 +155,9 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                     
                     // Mark as read if it's for me and unread
                     if (!isMe && msg['read'] == false) {
-                      _markAsRead(msg['id']);
+                      WidgetsBinding.instance.addPostFrameCallback((_) {
+                        _markAsRead(msg['id']);
+                      });
                     }
 
                     return _ChatBubble(msg: msg, isMe: isMe);

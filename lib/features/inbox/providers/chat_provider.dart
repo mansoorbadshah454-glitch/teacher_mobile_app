@@ -66,8 +66,8 @@ final chatMessagesProvider = StreamProvider.family<List<Map<String, dynamic>>, S
 
         // Sort in-memory to avoid composite index requirement
         messages.sort((a, b) {
-          final aTime = (a['timestamp'] as Timestamp?)?.millisecondsSinceEpoch ?? 0;
-          final bTime = (b['timestamp'] as Timestamp?)?.millisecondsSinceEpoch ?? 0;
+          final aTime = (a['timestamp'] as Timestamp?)?.millisecondsSinceEpoch ?? DateTime.now().millisecondsSinceEpoch;
+          final bTime = (b['timestamp'] as Timestamp?)?.millisecondsSinceEpoch ?? DateTime.now().millisecondsSinceEpoch;
           return bTime.compareTo(aTime); // Descending
         });
 
