@@ -11,6 +11,8 @@ import 'package:teacher_mobile_app/features/auth/auth_provider.dart';
 import 'package:file_picker/file_picker.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:path/path.dart' as p;
+import 'package:image_picker/image_picker.dart';
+import 'package:permission_handler/permission_handler.dart';
 import 'package:teacher_mobile_app/features/inbox/providers/chat_provider.dart';
 
 class ChatScreen extends ConsumerStatefulWidget {
@@ -318,6 +320,76 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     }
   }
 
+  Future<void> _takeAndUploadPicture() async {
+    try {
+      final status = await Permission.camera.request();
+      if (status.isDenied || status.isPermanentlyDenied) {
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text('Camera permission is required to take pictures.')),
+          );
+        }
+        return;
+      }
+
+      final ImagePicker picker = ImagePicker();
+      final XFile? image = await picker.pickImage(source: ImageSource.camera, imageQuality: 70);
+
+      if (image == null) return;
+
+      setState(() => _isSending = true);
+
+      final teacherData = await ref.read(teacherDataProvider.future);
+      final currentUser = ref.read(currentUserProvider);
+      
+      if (teacherData == null || !teacherData.containsKey('schoolId') || currentUser == null) return;
+
+      final schoolId = teacherData['schoolId'];
+      final fileName = p.basename(image.path);
+      final destination = 'schools/$schoolId/messages/attachments/${DateTime.now().millisecondsSinceEpoch}_$fileName';
+
+      // Upload to Storage
+      final refStorage = FirebaseStorage.instance.ref(destination);
+      await refStorage.putFile(File(image.path));
+      final downloadUrl = await refStorage.getDownloadURL();
+
+      // Add message to Firestore
+      await FirebaseFirestore.instance
+          .collection('schools')
+          .doc(schoolId)
+          .collection('messages')
+          .add({
+        'to': widget.admin['type'] ?? (widget.admin['role'] == 'Principal' ? 'principal' : 'admin'),
+        'toId': widget.admin['id'],
+        'toRole': widget.admin['role'] == 'Principal' ? 'principal' : 'school Admin',
+        'from': 'teacher',
+        'fromName': teacherData['name'] ?? 'Teacher',
+        'fromId': currentUser.uid,
+        'fromRole': 'teacher',
+        'participants': [currentUser.uid, widget.admin['id']],
+        'text': 'Sent a photo',
+        'attachment': {
+          'url': downloadUrl,
+          'fullPath': destination,
+          'name': fileName,
+          'type': 'jpg',
+        },
+        'type': 'teacher-reply',
+        'timestamp': FieldValue.serverTimestamp(),
+        'read': false,
+      });
+
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Ready picture upload failed: $e')),
+        );
+      }
+    } finally {
+      if (mounted) setState(() => _isSending = false);
+    }
+  }
+
   Widget _buildInputBar() {
     final isDark = Theme.of(context).brightness == Brightness.dark;
     return Container(
@@ -329,6 +401,10 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
             IconButton(
               icon: Icon(Icons.add, color: isDark ? Colors.white70 : Colors.black54),
               onPressed: _pickAndUploadFile,
+            ),
+            IconButton(
+              icon: Icon(Icons.camera_alt, color: isDark ? Colors.white70 : Colors.black54),
+              onPressed: _takeAndUploadPicture,
             ),
             Expanded(
               child: TextField(

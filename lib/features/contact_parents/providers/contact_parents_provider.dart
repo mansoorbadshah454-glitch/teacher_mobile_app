@@ -1,4 +1,6 @@
+import 'dart:io';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:teacher_mobile_app/core/providers/user_data_provider.dart';
 import 'package:teacher_mobile_app/features/attendance/providers/attendance_provider.dart';
@@ -209,6 +211,85 @@ class ContactParentsNotifier extends StateNotifier<ContactParentsState> {
       }
     } catch (e) {
       print("ContactParents: Error sending message $e");
+      if (mounted) {
+        state = state.copyWith(isSending: false);
+      }
+      rethrow;
+    }
+  }
+
+  Future<void> sendVoiceMessage({
+    required Map<String, dynamic> student,
+    required Map<String, dynamic> parent,
+    required File audioFile,
+  }) async {
+    final teacherData = teacherDataAsync.value;
+    if (teacherData == null) return;
+
+    final schoolId = teacherData['schoolId'] as String?;
+    final teacherId = teacherData['uid'] as String? ?? teacherData['id'] as String?; // Handle different auth models
+    final teacherName = teacherData['name'] as String? ?? 'Teacher';
+
+    if (schoolId == null || teacherId == null) return;
+
+    state = state.copyWith(isSending: true);
+
+    try {
+      final destination = 'schools/$schoolId/messages/attachments/${DateTime.now().millisecondsSinceEpoch}_voice.m4a';
+      final refStorage = FirebaseStorage.instance.ref(destination);
+      await refStorage.putFile(audioFile);
+      final audioUrl = await refStorage.getDownloadURL();
+
+      final batch = FirebaseFirestore.instance.batch();
+
+      // 1. Create Message Record
+      final messageRef = FirebaseFirestore.instance
+          .collection('schools')
+          .doc(schoolId)
+          .collection('messages')
+          .doc();
+
+      batch.set(messageRef, {
+        'teacherId': teacherId,
+        'teacherName': teacherName,
+        'parentId': parent['id'],
+        'parentName': parent['name'] ?? 'Parent',
+        'studentId': student['id'],
+        'studentName': student['name'] ?? 'Student',
+        'message': 'Sent a voice message',
+        'attachmentUrl': audioUrl,
+        'attachmentType': 'audio',
+        'timestamp': FieldValue.serverTimestamp(),
+        'read': false,
+        'schoolId': schoolId,
+        'type': 'direct'
+      });
+
+      // 2. Send Notification to Parent
+      final notificationRef = FirebaseFirestore.instance
+          .collection('schools')
+          .doc(schoolId)
+          .collection('notifications')
+          .doc();
+
+      batch.set(notificationRef, {
+        'parentId': parent['id'],
+        'studentId': student['id'],
+        'studentName': student['name'] ?? 'Student',
+        'title': "New Voice Message from Teacher",
+        'message': "Audio message received",
+        'type': "message",
+        'read': false,
+        'createdAt': FieldValue.serverTimestamp()
+      });
+
+      await batch.commit();
+
+      if (mounted) {
+        state = state.copyWith(isSending: false, clearExpanded: true);
+      }
+    } catch (e) {
+      print("ContactParents: Error sending voice message $e");
       if (mounted) {
         state = state.copyWith(isSending: false);
       }

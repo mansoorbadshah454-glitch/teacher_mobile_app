@@ -87,6 +87,14 @@ class AppDrawer extends ConsumerWidget {
             },
           ),
           _DrawerItem(
+            icon: Icons.co_present,
+            title: 'Attendance',
+            onTap: () {
+              Navigator.pop(context);
+              context.push('/teacher-attendance');
+            },
+          ),
+          _DrawerItem(
             icon: Icons.person_outline,
             title: 'Profile',
             onTap: () {
