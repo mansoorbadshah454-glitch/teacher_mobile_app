@@ -1,9 +1,11 @@
 import 'dart:io';
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:record/record.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
 import 'package:permission_handler/permission_handler.dart';
+import 'package:audioplayers/audioplayers.dart';
 import 'package:teacher_mobile_app/core/theme/app_theme.dart';
 import 'package:teacher_mobile_app/features/contact_parents/providers/contact_parents_provider.dart';
 
@@ -31,19 +33,67 @@ class StudentContactCard extends StatefulWidget {
 
 class _StudentContactCardState extends State<StudentContactCard> {
   bool _isPressed = false;
+  
+  // Recording states
   bool _isRecording = false;
   late final AudioRecorder _audioRecorder;
+  Timer? _recordingTimer;
+  int _recordingDurationSeconds = 0;
+  bool _isCanceled = false;
+
+  // Preview / Playback states
+  String? _recordedFilePath;
+  late final AudioPlayer _audioPlayer;
+  bool _isPlaying = false;
+  Duration _currentPosition = Duration.zero;
+  Duration _totalDuration = Duration.zero;
 
   @override
   void initState() {
     super.initState();
     _audioRecorder = AudioRecorder();
+    _audioPlayer = AudioPlayer();
+
+    _audioPlayer.onPlayerStateChanged.listen((state) {
+      if (mounted) setState(() => _isPlaying = state == PlayerState.playing);
+    });
+    _audioPlayer.onPositionChanged.listen((pos) {
+      if (mounted) setState(() => _currentPosition = pos);
+    });
+    _audioPlayer.onDurationChanged.listen((duration) {
+      if (mounted) setState(() => _totalDuration = duration);
+    });
+    _audioPlayer.onPlayerComplete.listen((_) {
+      if (mounted) {
+        setState(() {
+          _isPlaying = false;
+          _currentPosition = Duration.zero;
+        });
+      }
+    });
   }
 
   @override
   void dispose() {
+    _recordingTimer?.cancel();
     _audioRecorder.dispose();
+    _audioPlayer.dispose();
     super.dispose();
+  }
+
+  void _startTimer() {
+    _recordingDurationSeconds = 0;
+    _recordingTimer = Timer.periodic(const Duration(seconds: 1), (timer) {
+      if (mounted) {
+        setState(() => _recordingDurationSeconds++);
+      }
+    });
+  }
+
+  String _formatDuration(int seconds) {
+    int minutes = seconds ~/ 60;
+    int remainingSeconds = seconds % 60;
+    return '${minutes.toString().padLeft(2, '0')}:${remainingSeconds.toString().padLeft(2, '0')}';
   }
 
   Future<void> _startRecording() async {
@@ -52,7 +102,12 @@ class _StudentContactCardState extends State<StudentContactCard> {
         final directory = await getTemporaryDirectory();
         final path = p.join(directory.path, 'voice_msg_${DateTime.now().millisecondsSinceEpoch}.m4a');
         await _audioRecorder.start(const RecordConfig(encoder: AudioEncoder.aacLc), path: path);
-        setState(() => _isRecording = true);
+        
+        setState(() {
+          _isRecording = true;
+          _isCanceled = false;
+        });
+        _startTimer();
       } else {
         if (mounted) {
           ScaffoldMessenger.of(context).showSnackBar(
@@ -65,35 +120,102 @@ class _StudentContactCardState extends State<StudentContactCard> {
     }
   }
 
-  Future<void> _stopAndSendRecording() async {
+  Future<void> _stopRecordingSafely() async {
+    _recordingTimer?.cancel();
+    if (!_isRecording) return;
     try {
       final path = await _audioRecorder.stop();
-      setState(() => _isRecording = false);
-      if (path != null) {
-        if (mounted) {
-          try {
-            await widget.notifier.sendVoiceMessage(
-              student: widget.student, 
-              parent: widget.parentData!, 
-              audioFile: File(path),
-            );
-            if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                const SnackBar(content: Text("Voice message sent successfully!")),
-              );
-            }
-          } catch (e) {
-            if (mounted) {
-              ScaffoldMessenger.of(context).showSnackBar(
-                SnackBar(content: Text("Failed to send voice message: $e")),
-              );
-            }
+      if (_isCanceled) {
+        if (path != null) {
+          final file = File(path);
+          if (await file.exists()) await file.delete();
+        }
+        if (mounted) setState(() {
+          _isRecording = false;
+          _recordedFilePath = null;
+        });
+        return;
+      }
+      
+      if (mounted) {
+        setState(() {
+          _isRecording = false;
+          _recordedFilePath = path;
+        });
+        
+        if (path != null) {
+          await _audioPlayer.setSourceDeviceFile(path);
+          final duration = await _audioPlayer.getDuration();
+          if (duration != null && mounted) {
+            setState(() => _totalDuration = duration);
           }
         }
       }
     } catch (e) {
       debugPrint("Error stopping recording: $e");
-      setState(() => _isRecording = false);
+      if (mounted) setState(() => _isRecording = false);
+    }
+  }
+
+  Future<void> _cancelRecording() async {
+    if (!_isCanceled) {
+      _isCanceled = true;
+      await _stopRecordingSafely();
+    }
+  }
+
+  Future<void> _deletePreview() async {
+    if (_recordedFilePath != null) {
+      final file = File(_recordedFilePath!);
+      if (await file.exists()) {
+        await file.delete();
+      }
+    }
+    await _audioPlayer.stop();
+    setState(() {
+      _recordedFilePath = null;
+      _isPlaying = false;
+      _currentPosition = Duration.zero;
+      _totalDuration = Duration.zero;
+    });
+  }
+
+  Future<void> _playPauseAudio() async {
+    if (_recordedFilePath == null) return;
+    if (_isPlaying) {
+      await _audioPlayer.pause();
+    } else {
+      if (_currentPosition == _totalDuration && _totalDuration != Duration.zero) {
+        await _audioPlayer.seek(Duration.zero);
+      }
+      await _audioPlayer.play(DeviceFileSource(_recordedFilePath!));
+    }
+  }
+
+  Future<void> _sendRecordedNote() async {
+    if (_recordedFilePath == null) return;
+    try {
+      if (mounted) {
+        await widget.notifier.sendVoiceMessage(
+          student: widget.student,
+          parent: widget.parentData!,
+          audioFile: File(_recordedFilePath!),
+        );
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("Voice message sent successfully!")),
+          );
+          await _deletePreview();
+          widget.messageController.clear();
+          widget.notifier.collapseStudent();
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Failed to send voice message: $e")),
+        );
+      }
     }
   }
 
@@ -109,11 +231,12 @@ class _StudentContactCardState extends State<StudentContactCard> {
       onTap: () {
         if (!widget.isExpanded) {
           widget.messageController.clear();
+          _deletePreview();
         }
         widget.notifier.toggleStudentExpansion(widget.student['id']);
       },
       child: AnimatedScale(
-        scale: _isPressed ? 0.98 : 1.0,
+        scale: (_isPressed && !widget.isExpanded) ? 0.98 : 1.0,
         duration: const Duration(milliseconds: 100),
         child: AnimatedContainer(
           duration: const Duration(milliseconds: 300),
@@ -273,17 +396,73 @@ class _StudentContactCardState extends State<StudentContactCard> {
                   ),
                 ),
                 const SizedBox(width: 12),
-                const Text(
-                  "Recording voice message...",
-                  style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
+                Text(
+                  _formatDuration(_recordingDurationSeconds),
+                  style: const TextStyle(color: Colors.red, fontWeight: FontWeight.bold),
                 ),
                 const Spacer(),
+                const Text(
+                  "< Slide left to cancel",
+                  style: TextStyle(color: Colors.red, fontSize: 13, fontWeight: FontWeight.w500),
+                ),
+              ],
+            ),
+          )
+        else if (_recordedFilePath != null)
+          Container(
+            padding: const EdgeInsets.symmetric(vertical: 12, horizontal: 16),
+            decoration: BoxDecoration(
+              color: isDark ? const Color(0xFFec4899).withOpacity(0.1) : Colors.pink.shade50,
+              borderRadius: BorderRadius.circular(12),
+              border: Border.all(color: const Color(0xFFec4899).withOpacity(0.3)),
+            ),
+            child: Row(
+              children: [
                 GestureDetector(
-                  onTap: () async {
-                    await _audioRecorder.stop(); // Stop and discard
-                    setState(() => _isRecording = false);
-                  },
-                  child: const Icon(Icons.delete_outline, color: Colors.red),
+                  onTap: _deletePreview,
+                  child: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: Colors.white.withOpacity(isDark ? 0.1 : 0.8),
+                      shape: BoxShape.circle,
+                    ),
+                    child: const Icon(Icons.delete_outline, color: Colors.red, size: 20),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                GestureDetector(
+                  onTap: _playPauseAudio,
+                  child: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: const BoxDecoration(
+                      color: Color(0xFFec4899),
+                      shape: BoxShape.circle,
+                    ),
+                    child: Icon(_isPlaying ? Icons.pause : Icons.play_arrow, color: Colors.white, size: 20),
+                  ),
+                ),
+                const SizedBox(width: 12),
+                Expanded(
+                  child: SliderTheme(
+                    data: SliderThemeData(
+                      thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 6),
+                      overlayShape: const RoundSliderOverlayShape(overlayRadius: 14),
+                      trackHeight: 4,
+                    ),
+                    child: Slider(
+                      value: _currentPosition.inMilliseconds.toDouble(),
+                      max: _totalDuration.inMilliseconds.toDouble() > 0 ? _totalDuration.inMilliseconds.toDouble() : 1.0,
+                      activeColor: const Color(0xFFec4899),
+                      inactiveColor: const Color(0xFFec4899).withOpacity(0.3),
+                      onChanged: (val) {
+                        _audioPlayer.seek(Duration(milliseconds: val.toInt()));
+                      },
+                    ),
+                  ),
+                ),
+                Text(
+                  _formatDuration(_totalDuration.inSeconds),
+                  style: const TextStyle(fontSize: 12, color: Color(0xFFec4899)),
                 ),
               ],
             ),
@@ -316,6 +495,7 @@ class _StudentContactCardState extends State<StudentContactCard> {
               child: OutlinedButton(
                 onPressed: widget.state.isSending || _isRecording ? null : () {
                   widget.messageController.clear();
+                  _deletePreview();
                   widget.notifier.collapseStudent();
                 },
                 style: OutlinedButton.styleFrom(
@@ -327,12 +507,43 @@ class _StudentContactCardState extends State<StudentContactCard> {
               ),
             ),
             const SizedBox(width: 12),
-            if (widget.messageController.text.trim().isEmpty)
+            if (_recordedFilePath != null)
+              Expanded(
+                flex: 2,
+                child: ElevatedButton(
+                  onPressed: widget.state.isSending ? null : _sendRecordedNote,
+                  style: ElevatedButton.styleFrom(
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    backgroundColor: const Color(0xFFec4899),
+                    shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  ),
+                  child: widget.state.isSending
+                    ? const SizedBox(
+                        height: 20, 
+                        width: 20, 
+                        child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)
+                      )
+                    : Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: const [
+                          Icon(Icons.send, color: Colors.white, size: 18),
+                          SizedBox(width: 8),
+                          Text("Send Voice Note", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
+                        ],
+                      ),
+                ),
+              )
+            else if (widget.messageController.text.trim().isEmpty)
               Expanded(
                 flex: 2,
                 child: GestureDetector(
                   onLongPressStart: (_) => _startRecording(),
-                  onLongPressEnd: (_) => _stopAndSendRecording(),
+                  onLongPressMoveUpdate: (details) {
+                    if (_isRecording && details.localOffsetFromOrigin.dx < -50) {
+                      _cancelRecording();
+                    }
+                  },
+                  onLongPressEnd: (_) => _stopRecordingSafely(),
                   child: ElevatedButton(
                     onPressed: widget.state.isSending ? null : () {},
                     style: ElevatedButton.styleFrom(
@@ -352,7 +563,7 @@ class _StudentContactCardState extends State<StudentContactCard> {
                             Icon(_isRecording ? Icons.mic : Icons.mic_none, color: Colors.white, size: 18),
                             const SizedBox(width: 8),
                             Text(
-                              _isRecording ? "Release to Send" : "Hold to Record", 
+                              _isRecording ? "Release to Finish" : "Hold to Record", 
                               style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)
                             ),
                           ],
