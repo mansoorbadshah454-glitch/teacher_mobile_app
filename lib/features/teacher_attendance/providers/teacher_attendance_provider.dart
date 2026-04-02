@@ -98,11 +98,37 @@ class TeacherAttendanceNotifier extends StateNotifier<TeacherAttendanceState> {
           'checkIn': FieldValue.serverTimestamp(),
           'status': 'Present',
         });
+        
+        await FirebaseFirestore.instance
+            .collection('schools')
+            .doc(schoolId)
+            .collection('teachers')
+            .doc(uid)
+            .set({
+          'lastAttendanceDate': todayStr,
+        }, SetOptions(merge: true));
+
         state = state.copyWith(isLoading: false, successMessage: "Successfully Checked In for today!");
       } else {
         // Check-out (updates existing document)
+        final String teacherEndTime = settingsDoc.data()?['teacherEndTime'] as String? ?? '14:00';
+        final nowTime = DateTime.now();
+        
+        final parts = teacherEndTime.split(':');
+        final endHour = int.tryParse(parts[0]) ?? 14;
+        final endMinute = parts.length > 1 ? (int.tryParse(parts[1]) ?? 0) : 0;
+        
+        final endDateTime = DateTime(nowTime.year, nowTime.month, nowTime.day, endHour, endMinute);
+        
+        // Check if checkout time is strictly before the end time
+        String checkoutStatus = "Present";
+        if (nowTime.isBefore(endDateTime)) {
+          checkoutStatus = "Half Day";
+        }
+
         await attendanceRef.update({
           'checkOut': FieldValue.serverTimestamp(),
+          'status': checkoutStatus,
         });
         state = state.copyWith(isLoading: false, successMessage: "Successfully Checked Out for today!");
       }
@@ -115,6 +141,27 @@ class TeacherAttendanceNotifier extends StateNotifier<TeacherAttendanceState> {
 
 final teacherAttendanceProvider = StateNotifierProvider<TeacherAttendanceNotifier, TeacherAttendanceState>((ref) {
   return TeacherAttendanceNotifier(ref);
+});
+
+final schoolSettingsProvider = StreamProvider<Map<String, dynamic>>((ref) async* {
+  final user = ref.watch(currentUserProvider);
+  final teacherDataAsync = ref.watch(teacherDataProvider);
+  final teacherData = teacherDataAsync.value;
+
+  if (user == null || teacherData == null || !teacherData.containsKey('schoolId')) {
+    yield {};
+    return;
+  }
+
+  final String schoolId = teacherData['schoolId'];
+  yield* FirebaseFirestore.instance.collection('schools').doc(schoolId).collection('settings').doc('profile').snapshots().map((snapshot) {
+    if (snapshot.exists) {
+      if (snapshot.data() != null) {
+        return snapshot.data() as Map<String, dynamic>;
+      }
+    }
+    return {};
+  });
 });
 
 final attendanceMonthProvider = StateProvider<int>((ref) => DateTime.now().month);

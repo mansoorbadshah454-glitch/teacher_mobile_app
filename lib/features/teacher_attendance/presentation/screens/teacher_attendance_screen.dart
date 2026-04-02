@@ -125,6 +125,16 @@ class _ScanTabContent extends ConsumerWidget {
     final todayLogAsync = ref.watch(todayTeacherAttendanceProvider);
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
+    final settingsAsync = ref.watch(schoolSettingsProvider);
+    String startTime = "08:00";
+    String endTime = "14:00";
+    if (settingsAsync is AsyncData<Map<String, dynamic>>) {
+       final data = settingsAsync.value;
+       startTime = data['teacherStartTime'] ?? "08:00";
+       endTime = data['teacherEndTime'] ?? "14:00";
+    }
+    final dutyString = "Duty Time: $startTime - $endTime";
+
     // Listen to state changes to show SnackBar on Success/Error
     ref.listen<TeacherAttendanceState>(teacherAttendanceProvider, (previous, next) {
       if (next.error != null) {
@@ -165,19 +175,19 @@ class _ScanTabContent extends ConsumerWidget {
 
         if (hasCheckedOut) {
           // STATE C: Duty Completed
-          return _buildDutyCompletedUI(context, todayLog, isDark);
+          return _buildDutyCompletedUI(context, todayLog, isDark, dutyString);
         } else if (hasCheckedIn) {
           // STATE B: Duty Active
-          return _buildDutyActiveUI(context, ref, state, todayLog, isDark);
+          return _buildDutyActiveUI(context, ref, state, todayLog, isDark, dutyString);
         } else {
           // STATE A: Unscanned / Check-In phase
-          return _buildCheckInUI(context, ref, state, isDark);
+          return _buildCheckInUI(context, ref, state, isDark, dutyString);
         }
       },
     );
   }
 
-  Widget _buildCheckInUI(BuildContext context, WidgetRef ref, TeacherAttendanceState state, bool isDark) {
+  Widget _buildCheckInUI(BuildContext context, WidgetRef ref, TeacherAttendanceState state, bool isDark, String dutyString) {
     return Padding(
       padding: const EdgeInsets.all(24.0),
       child: Column(
@@ -202,7 +212,19 @@ class _ScanTabContent extends ConsumerWidget {
             textAlign: TextAlign.center,
             style: TextStyle(fontSize: 16, color: isDark ? Colors.grey[400] : Colors.grey[600], height: 1.5),
           ),
-          const SizedBox(height: 48),
+          const SizedBox(height: 16),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            decoration: BoxDecoration(
+              color: AppTheme.primary.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Text(
+              dutyString,
+              style: TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: AppTheme.primary),
+            ),
+          ),
+          const SizedBox(height: 32),
           
           if (state.isLoading)
             const CircularProgressIndicator(color: AppTheme.primary)
@@ -230,7 +252,7 @@ class _ScanTabContent extends ConsumerWidget {
     );
   }
 
-  Widget _buildDutyActiveUI(BuildContext context, WidgetRef ref, TeacherAttendanceState state, Map<String, dynamic> log, bool isDark) {
+  Widget _buildDutyActiveUI(BuildContext context, WidgetRef ref, TeacherAttendanceState state, Map<String, dynamic> log, bool isDark, String dutyString) {
     final checkInTime = log['checkIn'] != null ? DateFormat('hh:mm a').format((log['checkIn'] as Timestamp).toDate()) : '--:--';
     final dateStr = DateFormat('EEEE, MMMM d, yyyy').format(DateTime.now());
 
@@ -255,6 +277,18 @@ class _ScanTabContent extends ConsumerWidget {
           const Text("Duty Active", style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900, color: Colors.green)),
           const SizedBox(height: 8),
           Text(dateStr, style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: isDark ? Colors.grey[400] : Colors.grey[600])),
+          const SizedBox(height: 16),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            decoration: BoxDecoration(
+              color: Colors.green.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Text(
+              dutyString,
+              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.green),
+            ),
+          ),
           
           const SizedBox(height: 32),
           // Info Card
@@ -305,7 +339,7 @@ class _ScanTabContent extends ConsumerWidget {
     );
   }
 
-  Widget _buildDutyCompletedUI(BuildContext context, Map<String, dynamic> log, bool isDark) {
+  Widget _buildDutyCompletedUI(BuildContext context, Map<String, dynamic> log, bool isDark, String dutyString) {
     final checkInTime = log['checkIn'] != null ? DateFormat('hh:mm a').format((log['checkIn'] as Timestamp).toDate()) : '--:--';
     final checkOutTime = log['checkOut'] != null ? DateFormat('hh:mm a').format((log['checkOut'] as Timestamp).toDate()) : '--:--';
     final dateStr = DateFormat('EEEE, MMMM d, yyyy').format(DateTime.now());
@@ -327,6 +361,18 @@ class _ScanTabContent extends ConsumerWidget {
           const Text("Duty Completed", style: TextStyle(fontSize: 28, fontWeight: FontWeight.w900, color: Colors.blue)),
           const SizedBox(height: 8),
           Text(dateStr, style: TextStyle(fontSize: 15, fontWeight: FontWeight.w600, color: isDark ? Colors.grey[400] : Colors.grey[600])),
+          const SizedBox(height: 16),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+            decoration: BoxDecoration(
+              color: Colors.blue.withOpacity(0.1),
+              borderRadius: BorderRadius.circular(12),
+            ),
+            child: Text(
+              dutyString,
+              style: const TextStyle(fontSize: 14, fontWeight: FontWeight.bold, color: Colors.blue),
+            ),
+          ),
           
           const SizedBox(height: 32),
           // Info Cards Row
@@ -543,7 +589,8 @@ class _HistoryTabContent extends ConsumerWidget {
                   // If no log exists but date is in the past, consider it absent or holiday (mock logic fallback). 
                   // But usually, real systems generate "Absent" automatically. If missing, we assume "Absent" or "Holiday" for Sundays.
                   String status = "Upcoming";
-                  if (dateObj.isAfter(today)) {
+                  // Make today upcoming instead of absent if log is missing
+                  if (!dateObj.isBefore(today)) {
                     status = "Upcoming";
                   } else if (dateObj.weekday == 7) {
                     status = "Holiday"; // Sunday

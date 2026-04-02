@@ -70,7 +70,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 child: Row(
                   children: [
                     Text(
-                      isOnDuty ? "On Duty" : "Off Duty",
+                      isOnDuty ? "On Class" : "Off Class",
                       style: TextStyle(
                         color: isOnDuty ? Colors.green : Colors.white,
                         fontSize: 12,
@@ -133,7 +133,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                 ),
                 const SizedBox(height: 2),
                 Text(
-                  "Please start your day by toggling the Duty On button.",
+                  "Please update your status to 'On Class' when teaching.",
                   style: Theme.of(context).textTheme.bodySmall?.copyWith(fontSize: 12) ?? const TextStyle(fontSize: 12, color: Colors.grey),
                 ),
               ],
