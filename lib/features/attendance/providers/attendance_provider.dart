@@ -4,8 +4,8 @@ import 'package:teacher_mobile_app/features/auth/auth_provider.dart';
 import 'package:teacher_mobile_app/core/providers/user_data_provider.dart';
 
 // 1. Fetch assigned class for the logged-in teacher
-final classSearchQueryProvider = StateProvider<String>((ref) => '');
-final statsFilterProvider = StateProvider<String>((ref) => 'all'); // 'all', 'present', 'absent'
+final classSearchQueryProvider = StateProvider.autoDispose<String>((ref) => '');
+final statsFilterProvider = StateProvider.autoDispose<String>((ref) => 'all'); // 'all', 'present', 'absent'
 
 final assignedClassProvider = StreamProvider<Map<String, dynamic>?>((ref) {
   final teacherDataAsync = ref.watch(teacherDataProvider);

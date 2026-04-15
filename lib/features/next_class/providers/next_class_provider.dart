@@ -322,7 +322,7 @@ class NextClassNotifier extends StateNotifier<NextClassState> {
   }
 }
 
-final nextClassProvider = StateNotifierProvider<NextClassNotifier, NextClassState>((ref) {
+final nextClassProvider = StateNotifierProvider.autoDispose<NextClassNotifier, NextClassState>((ref) {
   final teacherDataAsync = ref.watch(teacherDataProvider);
   final String? schoolId = teacherDataAsync.value?['schoolId'];
   return NextClassNotifier(ref, schoolId);

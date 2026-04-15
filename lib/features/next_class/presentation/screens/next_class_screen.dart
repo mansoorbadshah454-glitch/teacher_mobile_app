@@ -20,9 +20,16 @@ class NextClassScreen extends ConsumerWidget {
 
     final isLight = Theme.of(context).brightness == Brightness.light;
 
-    return Scaffold(
-      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      body: Stack(
+    return PopScope(
+      canPop: state.viewMode == NextClassViewMode.classes,
+      onPopInvoked: (didPop) {
+        if (!didPop) {
+          notifier.goBack();
+        }
+      },
+      child: Scaffold(
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+        body: Stack(
         children: [
           Column(
             children: [
@@ -87,6 +94,7 @@ class NextClassScreen extends ConsumerWidget {
               ),
             ),
         ],
+      ),
       ),
     );
   }

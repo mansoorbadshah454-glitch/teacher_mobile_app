@@ -133,4 +133,4 @@ final todaysAbsentCountProvider = StreamProvider<int>((ref) {
 });
 
 // State provider for searching students in My Class View
-final myClassSearchQueryProvider = StateProvider<String>((ref) => '');
+final myClassSearchQueryProvider = StateProvider.autoDispose<String>((ref) => '');
