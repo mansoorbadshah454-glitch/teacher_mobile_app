@@ -82,7 +82,7 @@ class _AdminProfileTile extends ConsumerWidget {
       unreadCount = messagesAsync.value!.where((msg) {
         if (msg['read'] == true) return false;
         final fromId = msg['fromId'] ?? msg['from'];
-        return fromId == admin['id'] || fromId == 'principal' && admin['type'] == 'principal' || fromId == 'admin' && admin['type'] == 'admin';
+        return fromId == admin['id'];
       }).length;
     }
 

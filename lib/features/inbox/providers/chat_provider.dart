@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:teacher_mobile_app/core/providers/user_data_provider.dart';
 import 'package:teacher_mobile_app/features/auth/auth_provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 // Provides real-time chat messages between the current teacher and a specific admin
 final chatMessagesProvider = StreamProvider.family<List<Map<String, dynamic>>, String>((ref, adminId) {
@@ -43,7 +44,12 @@ final chatMessagesProvider = StreamProvider.family<List<Map<String, dynamic>>, S
           .collection('messages')
           .where('participants', arrayContains: teacherId)
           .snapshots()
-          .map((snapshot) {
+          .asyncMap((snapshot) async {
+            
+        final prefs = await SharedPreferences.getInstance();
+        final deletedIds = prefs.getStringList('deleted_msgs_$teacherId') ?? <String>[];
+        final deletedSet = deletedIds.toSet();
+
         final messages = snapshot.docs
             .map((doc) {
               final data = doc.data();
@@ -51,14 +57,15 @@ final chatMessagesProvider = StreamProvider.family<List<Map<String, dynamic>>, S
               return data;
             })
             .where((msg) {
+              // Hide locally deleted messages
+              if (deletedSet.contains(msg['id'])) return false;
+
               final fromId = msg['fromId'] ?? msg['from'];
               final toId = msg['toId'] ?? msg['to'];
 
-              // Filter to specific conversation with adminId
-              // Compatibility: If participants is missing (old message), it won't show up here,
-              // but we only fix new messages for scalability.
-              final isFromSelected = (fromId == adminId || fromId == 'principal' || fromId == 'admin');
-              final isToSelected = (toId == adminId || toId == 'principal' || toId == 'admin');
+              // Strict filtering specifically for this conversation
+              final isFromSelected = fromId == adminId;
+              final isToSelected = toId == adminId;
 
               return isFromSelected || isToSelected;
             })

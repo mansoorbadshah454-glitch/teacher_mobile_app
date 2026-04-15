@@ -64,7 +64,6 @@ class AppTheme {
         primary: primary,
         secondary: secondary,
         surface: surfaceDark,
-        background: backgroundDark,
       ),
       fontFamily: GoogleFonts.inter().fontFamily,
       // cardTheme: CardTheme(
@@ -96,7 +95,6 @@ class AppTheme {
         primary: primary,
         secondary: secondary,
         surface: Colors.white,
-        background: Color(0xFFF0F2F5),
       ),
       fontFamily: GoogleFonts.inter().fontFamily,
       appBarTheme: AppBarTheme(

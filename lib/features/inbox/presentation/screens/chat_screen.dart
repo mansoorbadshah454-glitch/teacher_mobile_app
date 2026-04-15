@@ -14,6 +14,7 @@ import 'package:path/path.dart' as p;
 import 'package:image_picker/image_picker.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:teacher_mobile_app/features/inbox/providers/chat_provider.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 
 class ChatScreen extends ConsumerStatefulWidget {
   final Map<String, dynamic> admin;
@@ -28,12 +29,67 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
   final TextEditingController _messageController = TextEditingController();
   final ScrollController _scrollController = ScrollController();
   bool _isSending = false;
+  bool _isSelectionMode = false;
+  final Set<String> _selectedIds = {};
 
   @override
   void dispose() {
     _messageController.dispose();
     _scrollController.dispose();
     super.dispose();
+  }
+
+  void _toggleSelection(String id) {
+    if (id == 'CLEAR_ALL_MODE') {
+      setState(() {
+        _selectedIds.clear();
+        _isSelectionMode = false;
+      });
+      return;
+    }
+
+    setState(() {
+      if (_selectedIds.contains(id)) {
+        _selectedIds.remove(id);
+        if (_selectedIds.isEmpty) _isSelectionMode = false;
+      } else {
+        _isSelectionMode = true;
+        _selectedIds.add(id);
+      }
+    });
+  }
+
+  Future<void> _deleteSelectedLocally() async {
+    if (_selectedIds.isEmpty) return;
+
+    try {
+      final currentUser = ref.read(currentUserProvider);
+      if (currentUser == null) return;
+
+      final prefs = await SharedPreferences.getInstance();
+      final key = 'deleted_msgs_${currentUser.uid}';
+      
+      List<String> deletedMsgs = prefs.getStringList(key) ?? <String>[];
+      deletedMsgs.addAll(_selectedIds);
+      
+      await prefs.setStringList(key, deletedMsgs);
+
+      // Invalidate the provider so it re-filters with the new deleted IDs list
+      ref.invalidate(chatMessagesProvider(widget.admin['id']));
+
+      setState(() {
+        _selectedIds.clear();
+        _isSelectionMode = false;
+      });
+
+      if (mounted) {
+         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Selected messages deleted for you.')));
+      }
+    } catch (e) {
+      if (mounted) {
+         ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Failed to delete locally: $e')));
+      }
+    }
   }
 
   Future<void> _sendMessage() async {
@@ -137,8 +193,52 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       ),
       body: Column(
         children: [
+          if (_isSelectionMode)
+             Container(
+               height: 70,
+               color: AppTheme.primary.withOpacity(0.1),
+               padding: const EdgeInsets.symmetric(horizontal: 16),
+               child: Row(
+                 mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                 children: [
+                    Text("${_selectedIds.length} Selected", style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: Color(0xFFdb2777))),
+                    Row(
+                      children: [
+                        ElevatedButton.icon(
+                          icon: const Icon(Icons.delete, color: Colors.white, size: 18), 
+                          label: const Text("Delete Selected", style: TextStyle(fontWeight: FontWeight.bold)),
+                          style: ElevatedButton.styleFrom(
+                             backgroundColor: Colors.redAccent,
+                             foregroundColor: Colors.white,
+                             elevation: 0,
+                             shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                             padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8)
+                          ),
+                          onPressed: () => _deleteSelectedLocally(),
+                        ),
+                        const SizedBox(width: 8),
+                        IconButton(
+                          icon: const Icon(Icons.close, color: Colors.grey), 
+                          onPressed: () => _toggleSelection('CLEAR_ALL_MODE')
+                        ),
+                      ],
+                    )
+                 ],
+               )
+             ),
           Expanded(
-            child: messagesAsync.when(
+            child: Container(
+              decoration: BoxDecoration(
+                color: isDark ? AppTheme.backgroundDark : const Color(0xFFF0F2F5),
+                image: DecorationImage(
+                  image: const AssetImage('assets/images/chat_bg.png'),
+                  fit: BoxFit.cover,
+                  colorFilter: isDark 
+                      ? ColorFilter.mode(Colors.black.withOpacity(0.85), BlendMode.darken)
+                      : ColorFilter.mode(Colors.white.withOpacity(0.2), BlendMode.lighten),
+                ),
+              ),
+              child: messagesAsync.when(
               loading: () => const Center(child: CircularProgressIndicator(color: AppTheme.primary)),
               error: (err, _) => Center(child: Text('Error: $err')),
               data: (messages) {
@@ -162,15 +262,47 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
                       });
                     }
 
-                    return _ChatBubble(msg: msg, isMe: isMe);
+                    return _buildSelectableChatBubble(msg, isMe);
                   },
                 );
               },
             ),
           ),
+          ),
           _buildInputBar(),
         ],
       ),
+    );
+  }
+
+  Widget _buildSelectableChatBubble(Map<String, dynamic> msg, bool isMe) {
+    bool isSelected = _selectedIds.contains(msg['id']);
+    Widget bubble = _ChatBubble(msg: msg, isMe: isMe);
+
+    if (_isSelectionMode) {
+      return GestureDetector(
+        onTap: () => _toggleSelection(msg['id']),
+        child: Container(
+          color: isSelected ? AppTheme.primary.withOpacity(0.1) : Colors.transparent,
+          padding: const EdgeInsets.symmetric(vertical: 2, horizontal: 4),
+          child: Row(
+            children: [
+              Checkbox(
+                value: isSelected, 
+                onChanged: (_) => _toggleSelection(msg['id']),
+                activeColor: const Color(0xFFdb2777),
+                shape: const CircleBorder(),
+              ),
+              Expanded(child: bubble),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return GestureDetector(
+      onLongPress: () => _toggleSelection(msg['id']),
+      child: bubble,
     );
   }
 
@@ -179,7 +311,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       context: context,
       builder: (context) => AlertDialog(
         title: const Text('Clear Chat?'),
-        content: const Text('This will delete all messages and files in this chat for you and the other person.'),
+        content: const Text('This will delete all messages in this chat locally for you. They will still be visible to the other person.'),
         actions: [
           TextButton(onPressed: () => Navigator.pop(context, false), child: const Text('Cancel')),
           TextButton(
@@ -193,44 +325,32 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     if (confirmed != true) return;
 
     try {
-      final teacherData = await ref.read(teacherDataProvider.future);
-      if (teacherData == null || teacherData['schoolId'] == null) return;
+      final messages = ref.read(chatMessagesProvider(widget.admin['id'])).valueOrNull ?? [];
+      if (messages.isEmpty) return;
 
-      final schoolId = teacherData['schoolId'];
-      final messages = await FirebaseFirestore.instance
-          .collection('schools')
-          .doc(schoolId)
-          .collection('messages')
-          .get();
+      final currentUser = ref.read(currentUserProvider);
+      if (currentUser == null) return;
 
-      final adminId = widget.admin['id'];
-      final teacherId = ref.read(currentUserProvider)?.uid;
-
-      for (var doc in messages.docs) {
-        final data = doc.data();
-        final fromId = data['fromId'] ?? data['from'];
-        final toId = data['toId'] ?? data['to'];
-
-        // Check if message belongs to this conversation
-        final isChatMsg = (fromId == teacherId && (toId == adminId || toId == 'principal')) ||
-                         ((fromId == adminId || fromId == 'principal') && toId == teacherId);
-
-        if (isChatMsg) {
-          // 1. Delete associated storage file if exists
-          if (data['attachment'] != null && data['attachment']['fullPath'] != null) {
-            try {
-              await FirebaseStorage.instance.ref(data['attachment']['fullPath']).delete();
-            } catch (e) {
-              debugPrint('Storage delete error: $e');
-            }
-          }
-          // 2. Delete Firestore doc
-          await doc.reference.delete();
-        }
+      final prefs = await SharedPreferences.getInstance();
+      final key = 'deleted_msgs_${currentUser.uid}';
+      
+      List<String> deletedMsgs = prefs.getStringList(key) ?? <String>[];
+      
+      for (var msg in messages) {
+         if (msg['id'] != null) {
+            deletedMsgs.add(msg['id']);
+         }
       }
+      
+      await prefs.setStringList(key, deletedMsgs);
+      ref.invalidate(chatMessagesProvider(widget.admin['id']));
 
       if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Chat history cleared.')));
+        setState(() {
+           _selectedIds.clear();
+           _isSelectionMode = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Chat history cleared locally.')));
       }
     } catch (e) {
       if (mounted) {

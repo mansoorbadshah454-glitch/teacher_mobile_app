@@ -221,136 +221,6 @@ class _StudentContactCardState extends State<StudentContactCard> {
     }
   }
 
-  @override
-  Widget build(BuildContext context) {
-    final isLight = Theme.of(context).brightness == Brightness.light;
-    final isDark = !isLight;
-
-    return GestureDetector(
-      onTapDown: (_) => setState(() => _isPressed = true),
-      onTapUp: (_) => setState(() => _isPressed = false),
-      onTapCancel: () => setState(() => _isPressed = false),
-      onTap: () {
-        if (!widget.isExpanded) {
-          widget.messageController.clear();
-          _deletePreview();
-        }
-        widget.notifier.toggleStudentExpansion(widget.student['id']);
-      },
-      child: AnimatedScale(
-        scale: (_isPressed && !widget.isExpanded) ? 0.98 : 1.0,
-        duration: const Duration(milliseconds: 100),
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 300),
-          margin: const EdgeInsets.only(bottom: 16),
-          decoration: BoxDecoration(
-            color: widget.isExpanded 
-              ? const Color(0xFFec4899).withOpacity(0.05) 
-              : (isDark ? AppTheme.surfaceDark : Colors.white),
-            borderRadius: BorderRadius.circular(20),
-            border: Border.all(
-              color: widget.isExpanded ? const Color(0xFFec4899) : (isDark ? Colors.white.withOpacity(0.05) : Colors.black.withOpacity(0.05)),
-            ),
-            boxShadow: isLight && !widget.isExpanded
-              ? [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 10, offset: const Offset(0, 4))]
-              : [],
-          ),
-          child: Column(
-            children: [
-              // Header / Summary Card
-              Padding(
-                padding: const EdgeInsets.all(16),
-                child: Row(
-                  children: [
-                    Container(
-                      width: 50,
-                      height: 50,
-                      decoration: BoxDecoration(
-                        color: isDark ? Colors.white.withOpacity(0.05) : Colors.grey[100],
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                      clipBehavior: Clip.antiAlias,
-                      child: (widget.student['profilePic'] != null && widget.student['profilePic'].toString().isNotEmpty)
-                          ? Image.network(widget.student['profilePic'], fit: BoxFit.cover)
-                          : Image.network("https://api.dicebear.com/7.x/avataaars/svg?seed=${widget.student['id']}", fit: BoxFit.cover),
-                    ),
-                    const SizedBox(width: 16),
-                    Expanded(
-                      child: Column(
-                        crossAxisAlignment: CrossAxisAlignment.start,
-                        children: [
-                          Text(
-                            widget.student['name'] ?? "Unknown",
-                            style: TextStyle(
-                              color: isDark ? Colors.white : Colors.indigo[900],
-                              fontWeight: FontWeight.bold,
-                              fontSize: 16,
-                            ),
-                          ),
-                          const SizedBox(height: 4),
-                          Row(
-                            children: [
-                              Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
-                                decoration: BoxDecoration(
-                                  color: isDark ? Colors.white.withOpacity(0.1) : Colors.grey[200],
-                                  borderRadius: BorderRadius.circular(6),
-                                ),
-                                child: Text(
-                                  "#${widget.student['rollNo'] ?? '-'}",
-                                  style: TextStyle(color: isDark ? Colors.white70 : Colors.grey[700], fontSize: 12),
-                                ),
-                              ),
-                              const SizedBox(width: 8),
-                              const Text(
-                                "• Tap to Message",
-                                style: TextStyle(color: Colors.grey, fontSize: 12),
-                              ),
-                            ],
-                          ),
-                        ],
-                      ),
-                    ),
-                    Container(
-                      width: 36,
-                      height: 36,
-                      decoration: BoxDecoration(
-                        color: widget.isExpanded ? const Color(0xFFec4899) : const Color(0xFFec4899).withOpacity(0.1),
-                        shape: BoxShape.circle,
-                      ),
-                      child: Icon(
-                        Icons.message, 
-                        color: widget.isExpanded ? Colors.white : const Color(0xFFec4899), 
-                        size: 18,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-
-              // Expanded Message Area
-              if (widget.isExpanded)
-                Container(
-                  decoration: BoxDecoration(
-                    border: Border(top: BorderSide(color: isDark ? Colors.white.withOpacity(0.05) : Colors.black.withOpacity(0.05))),
-                    color: isDark ? Colors.black.withOpacity(0.2) : Colors.grey[50],
-                    borderRadius: const BorderRadius.only(
-                      bottomLeft: Radius.circular(20),
-                      bottomRight: Radius.circular(20),
-                    ),
-                  ),
-                  padding: const EdgeInsets.all(20),
-                  child: widget.parentData != null 
-                    ? _buildMessageComposer(context)
-                    : _buildNoParentMessage(context),
-                ),
-            ],
-          ),
-        ),
-      ),
-    );
-  }
-
   Future<void> _pickAndSendFile() async {
     final result = await FilePicker.platform.pickFiles(type: FileType.any, allowMultiple: false);
     if (result == null || result.files.isEmpty || result.files.first.path == null) return;
@@ -497,6 +367,138 @@ class _StudentContactCardState extends State<StudentContactCard> {
       }
     }
   }
+
+  @override
+  Widget build(BuildContext context) {
+    final isLight = Theme.of(context).brightness == Brightness.light;
+    final isDark = !isLight;
+
+    return GestureDetector(
+      onTapDown: (_) => setState(() => _isPressed = true),
+      onTapUp: (_) => setState(() => _isPressed = false),
+      onTapCancel: () => setState(() => _isPressed = false),
+      onTap: () {
+        if (!widget.isExpanded) {
+          widget.messageController.clear();
+          _deletePreview();
+        }
+        widget.notifier.toggleStudentExpansion(widget.student['id']);
+      },
+      child: AnimatedScale(
+        scale: (_isPressed && !widget.isExpanded) ? 0.98 : 1.0,
+        duration: const Duration(milliseconds: 100),
+        child: AnimatedContainer(
+          duration: const Duration(milliseconds: 300),
+          margin: const EdgeInsets.only(bottom: 16),
+          decoration: BoxDecoration(
+            color: widget.isExpanded 
+              ? const Color(0xFFec4899).withOpacity(0.05) 
+              : (isDark ? AppTheme.surfaceDark : Colors.white),
+            borderRadius: BorderRadius.circular(20),
+            border: Border.all(
+              color: widget.isExpanded ? const Color(0xFFec4899) : (isDark ? Colors.white.withOpacity(0.05) : Colors.black.withOpacity(0.05)),
+            ),
+            boxShadow: isLight && !widget.isExpanded
+              ? [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 10, offset: const Offset(0, 4))]
+              : [],
+          ),
+          child: Column(
+            children: [
+              // Header / Summary Card
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: Row(
+                  children: [
+                    Container(
+                      width: 50,
+                      height: 50,
+                      decoration: BoxDecoration(
+                        color: isDark ? Colors.white.withOpacity(0.05) : Colors.grey[100],
+                        borderRadius: BorderRadius.circular(14),
+                      ),
+                      clipBehavior: Clip.antiAlias,
+                      child: (widget.student['profilePic'] != null && widget.student['profilePic'].toString().isNotEmpty)
+                          ? Image.network(widget.student['profilePic'], fit: BoxFit.cover)
+                          : Image.network("https://api.dicebear.com/7.x/avataaars/svg?seed=${widget.student['id']}", fit: BoxFit.cover),
+                    ),
+                    const SizedBox(width: 16),
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            widget.student['name'] ?? "Unknown",
+                            style: TextStyle(
+                              color: isDark ? Colors.white : Colors.indigo[900],
+                              fontWeight: FontWeight.bold,
+                              fontSize: 16,
+                            ),
+                          ),
+                          const SizedBox(height: 4),
+                          Row(
+                            children: [
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: isDark ? Colors.white.withOpacity(0.1) : Colors.grey[200],
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Text(
+                                  "#${widget.student['rollNo'] ?? '-'}",
+                                  style: TextStyle(color: isDark ? Colors.white70 : Colors.grey[700], fontSize: 12),
+                                ),
+                              ),
+                              const SizedBox(width: 8),
+                              const Text(
+                                "• Tap to Message",
+                                style: TextStyle(color: Colors.grey, fontSize: 12),
+                              ),
+                            ],
+                          ),
+                        ],
+                      ),
+                    ),
+                    Container(
+                      width: 36,
+                      height: 36,
+                      decoration: BoxDecoration(
+                        color: widget.isExpanded ? const Color(0xFFec4899) : const Color(0xFFec4899).withOpacity(0.1),
+                        shape: BoxShape.circle,
+                      ),
+                      child: Icon(
+                        Icons.message, 
+                        color: widget.isExpanded ? Colors.white : const Color(0xFFec4899), 
+                        size: 18,
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+
+              // Expanded Message Area
+              if (widget.isExpanded)
+                Container(
+                  decoration: BoxDecoration(
+                    border: Border(top: BorderSide(color: isDark ? Colors.white.withOpacity(0.05) : Colors.black.withOpacity(0.05))),
+                    color: isDark ? Colors.black.withOpacity(0.2) : Colors.grey[50],
+                    borderRadius: const BorderRadius.only(
+                      bottomLeft: Radius.circular(20),
+                      bottomRight: Radius.circular(20),
+                    ),
+                  ),
+                  padding: const EdgeInsets.all(20),
+                  child: widget.parentData != null 
+                    ? _buildMessageComposer(context)
+                    : _buildNoParentMessage(context),
+                ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+
+
 
   Widget _buildMessageComposer(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
