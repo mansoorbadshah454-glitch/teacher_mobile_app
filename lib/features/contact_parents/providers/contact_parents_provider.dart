@@ -13,6 +13,7 @@ class ContactParentsState {
   final bool isSending;
   final String searchTerm;
   final String? expandedStudentId;
+  final bool isGroupMode;
 
   ContactParentsState({
     this.assignedClass,
@@ -22,6 +23,7 @@ class ContactParentsState {
     this.isSending = false,
     this.searchTerm = '',
     this.expandedStudentId,
+    this.isGroupMode = false,
   });
 
   ContactParentsState copyWith({
@@ -33,6 +35,7 @@ class ContactParentsState {
     String? searchTerm,
     String? expandedStudentId,
     bool clearExpanded = false,
+    bool? isGroupMode,
   }) {
     return ContactParentsState(
       assignedClass: assignedClass ?? this.assignedClass,
@@ -42,6 +45,7 @@ class ContactParentsState {
       isSending: isSending ?? this.isSending,
       searchTerm: searchTerm ?? this.searchTerm,
       expandedStudentId: clearExpanded ? null : (expandedStudentId ?? this.expandedStudentId),
+      isGroupMode: isGroupMode ?? this.isGroupMode,
     );
   }
 }
@@ -144,12 +148,16 @@ class ContactParentsNotifier extends StateNotifier<ContactParentsState> {
      state = state.copyWith(clearExpanded: true);
   }
 
+  void toggleGroupMode(bool isGroup) {
+     state = state.copyWith(isGroupMode: isGroup);
+  }
   Future<void> sendMessage({
     required Map<String, dynamic> student,
     required Map<String, dynamic> parent,
-    required String messageText,
+    String? messageText,
+    File? attachedFile,
   }) async {
-    if (messageText.trim().isEmpty) return;
+    if ((messageText == null || messageText.trim().isEmpty) && attachedFile == null) return;
     
     final teacherData = teacherDataAsync.value;
     if (teacherData == null) return;
@@ -163,6 +171,25 @@ class ContactParentsNotifier extends StateNotifier<ContactParentsState> {
     state = state.copyWith(isSending: true);
 
     try {
+      String? attachmentUrl;
+      String? attachmentName;
+      String? attachmentType;
+
+      if (attachedFile != null) {
+        final pathStr = attachedFile.path;
+        attachmentName = pathStr.split('/').last;
+        attachmentType = pathStr.split('.').last.toLowerCase();
+        
+        final destination = 'schools/$schoolId/messages/attachments/${DateTime.now().millisecondsSinceEpoch}_$attachmentName';
+        final refStorage = FirebaseStorage.instance.ref(destination);
+        await refStorage.putFile(attachedFile);
+        attachmentUrl = await refStorage.getDownloadURL();
+      }
+
+      final textToSave = (messageText != null && messageText.isNotEmpty)
+          ? messageText.trim()
+          : 'Sent an attachment';
+
       final batch = FirebaseFirestore.instance.batch();
 
       // 1. Create Message Record
@@ -179,7 +206,10 @@ class ContactParentsNotifier extends StateNotifier<ContactParentsState> {
         'parentName': parent['name'] ?? 'Parent',
         'studentId': student['id'],
         'studentName': student['name'] ?? 'Student',
-        'message': messageText.trim(),
+        'message': textToSave,
+        if (attachmentUrl != null) 'attachmentUrl': attachmentUrl,
+        if (attachmentType != null) 'attachmentType': attachmentType,
+        if (attachmentName != null) 'attachmentName': attachmentName,
         'timestamp': FieldValue.serverTimestamp(),
         'read': false,
         'schoolId': schoolId,
@@ -198,7 +228,7 @@ class ContactParentsNotifier extends StateNotifier<ContactParentsState> {
         'studentId': student['id'],
         'studentName': student['name'] ?? 'Student',
         'title': "New Message from Teacher",
-        'message': messageText.trim(),
+        'message': textToSave,
         'type': "message",
         'read': false,
         'createdAt': FieldValue.serverTimestamp()
@@ -296,9 +326,199 @@ class ContactParentsNotifier extends StateNotifier<ContactParentsState> {
       rethrow;
     }
   }
+
+  Future<void> sendBroadcast({
+    String? messageText,
+    File? attachedFile,
+    bool isVoice = false, 
+  }) async {
+    final teacherData = teacherDataAsync.value;
+    final assignedClass = state.assignedClass;
+    if (teacherData == null || assignedClass == null) return;
+
+    final schoolId = teacherData['schoolId'] as String?;
+    final teacherId = teacherData['uid'] as String? ?? teacherData['id'] as String?;
+    final teacherName = teacherData['name'] as String? ?? 'Teacher';
+    final classId = assignedClass['id'] as String?;
+
+    if (schoolId == null || classId == null || teacherId == null) return;
+    if (state.parentMap.isEmpty) return; // No parents to email
+
+    state = state.copyWith(isSending: true);
+
+    try {
+      String? attachmentUrl;
+      String? attachmentName;
+      String? attachmentType;
+
+      if (attachedFile != null) {
+        final pathStr = attachedFile.path;
+        attachmentName = pathStr.split('/').last;
+        attachmentType = isVoice ? 'audio' : pathStr.split('.').last.toLowerCase();
+        
+        final destination = 'schools/$schoolId/messages/attachments/${DateTime.now().millisecondsSinceEpoch}_$attachmentName';
+        final refStorage = FirebaseStorage.instance.ref(destination);
+        await refStorage.putFile(attachedFile);
+        attachmentUrl = await refStorage.getDownloadURL();
+      }
+
+      final textToSave = (messageText != null && messageText.isNotEmpty)
+          ? messageText.trim()
+          : (isVoice ? 'Sent a voice message' : 'Sent an attachment');
+
+      // 1. Create Master Broadcast Document
+      final broadcastRef = FirebaseFirestore.instance
+          .collection('schools')
+          .doc(schoolId)
+          .collection('classes')
+          .doc(classId)
+          .collection('broadcasts')
+          .doc();
+          
+      final broadcastId = broadcastRef.id;
+      final timestamp = FieldValue.serverTimestamp();
+
+      final broadcastData = {
+        'id': broadcastId,
+        'teacherId': teacherId,
+        'teacherName': teacherName,
+        'text': textToSave,
+        'attachment': attachmentUrl != null ? {
+          'url': attachmentUrl,
+          'name': attachmentName,
+          'type': attachmentType,
+          'fullPath': FirebaseStorage.instance.refFromURL(attachmentUrl).fullPath,
+        } : null,
+        'timestamp': timestamp,
+      };
+
+      // Ensure batches don't exceed 500 limits by doing multiple batches if necessary
+      // For a typical classroom (< 50 students), 1 batch is fine.
+      final uniqueParents = state.parentMap.values.map((p) => p['id']).toSet(); // Ensure unique
+      var batch = FirebaseFirestore.instance.batch();
+      
+      batch.set(broadcastRef, broadcastData);
+
+      for (var parentId in uniqueParents) {
+        // Find one student doc to associate (for notification consistency)
+        final studentDoc = state.parentMap.entries.firstWhere((e) => e.value['id'] == parentId).key;
+        final studentInfo = state.students.firstWhere((s) => s['id'] == studentDoc, orElse: () => {'name': 'Student', 'id': studentDoc});
+
+        // Add Direct Message to Parent
+        final msgRef = FirebaseFirestore.instance
+            .collection('schools')
+            .doc(schoolId)
+            .collection('messages')
+            .doc();
+
+        batch.set(msgRef, {
+          'teacherId': teacherId,
+          'teacherName': teacherName,
+          'parentId': parentId,
+          'parentName': state.parentMap[studentDoc]?['name'] ?? 'Parent',
+          'studentId': studentInfo['id'],
+          'studentName': studentInfo['name'] ?? 'Student',
+          'message': textToSave,
+          'attachmentUrl': attachmentUrl,
+          'attachmentType': attachmentType,
+          'timestamp': timestamp,
+          'read': false,
+          'schoolId': schoolId,
+          'type': 'class-broadcast', // Tag it
+          'broadcastId': broadcastId,
+        });
+
+        // Add Notification
+        final notifRef = FirebaseFirestore.instance
+            .collection('schools')
+            .doc(schoolId)
+            .collection('notifications')
+            .doc();
+
+        batch.set(notifRef, {
+          'parentId': parentId,
+          'studentId': studentInfo['id'],
+          'studentName': studentInfo['name'] ?? 'Student',
+          'title': isVoice ? "New Voice Message from Teacher" : "New Broadcast Message",
+          'message': textToSave,
+          'type': "message",
+          'read': false,
+          'createdAt': timestamp,
+        });
+      }
+
+      await batch.commit();
+
+      if (mounted) {
+        state = state.copyWith(isSending: false);
+      }
+    } catch (e) {
+      print("ContactParents: Error broadcasting $e");
+      if (mounted) state = state.copyWith(isSending: false);
+      rethrow;
+    }
+  }
+
+  Future<void> deleteBroadcast(Map<String, dynamic> broadcast) async {
+    final teacherData = teacherDataAsync.value;
+    final assignedClass = state.assignedClass;
+    if (teacherData == null || assignedClass == null) return;
+    
+    final schoolId = teacherData['schoolId'] as String?;
+    final classId = assignedClass['id'] as String?;
+    if (schoolId == null || classId == null) return;
+
+    try {
+      // Delete Master Broadcast Doc (Teacher UI view)
+      await FirebaseFirestore.instance
+          .collection('schools')
+          .doc(schoolId)
+          .collection('classes')
+          .doc(classId)
+          .collection('broadcasts')
+          .doc(broadcast['id'])
+          .delete();
+          
+    } catch (e) {
+      print("Error deleting broadcast $e");
+      rethrow;
+    }
+  }
+
+  Future<void> clearHistory(List<Map<String, dynamic>> allBroadcasts) async {
+    for (var broadcast in allBroadcasts) {
+      await deleteBroadcast(broadcast);
+    }
+  }
 }
 
-final contactParentsProvider = StateNotifierProvider<ContactParentsNotifier, ContactParentsState>((ref) {
+final contactParentsProvider = StateNotifierProvider.autoDispose<ContactParentsNotifier, ContactParentsState>((ref) {
   final teacherDataAsync = ref.watch(teacherDataProvider);
   return ContactParentsNotifier(ref, teacherDataAsync);
+});
+
+final classBroadcastsProvider = StreamProvider.autoDispose<List<Map<String, dynamic>>>((ref) {
+  final teacherDataAsync = ref.watch(teacherDataProvider);
+  final assignedClassAsync = ref.watch(assignedClassProvider);
+
+  if (teacherDataAsync.value == null || assignedClassAsync.value == null) {
+     return Stream.value([]);
+  }
+
+  final schoolId = teacherDataAsync.value!['schoolId'];
+  final classId = assignedClassAsync.value!['id'];
+
+  return FirebaseFirestore.instance
+      .collection('schools')
+      .doc(schoolId)
+      .collection('classes')
+      .doc(classId)
+      .collection('broadcasts')
+      .orderBy('timestamp', descending: true)
+      .snapshots()
+      .map((snapshot) => snapshot.docs.map((doc) {
+        final data = doc.data();
+        data['id'] = doc.id;
+        return data;
+      }).toList());
 });

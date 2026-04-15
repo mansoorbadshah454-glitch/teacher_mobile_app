@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:teacher_mobile_app/features/auth/auth_provider.dart';
+import 'package:flutter/foundation.dart';
 
 // Provides the current teacher's document data by merging global_users + schools/{id}/teachers/{uid} in real-time
 final teacherDataProvider = StreamProvider<Map<String, dynamic>?>((ref) async* {
@@ -23,12 +24,12 @@ final teacherDataProvider = StreamProvider<Map<String, dynamic>?>((ref) async* {
       final schoolId = globalData['schoolId'] as String?;
 
       if (schoolId == null) {
-          print('teacherDataProvider: User ${user.uid} has no schoolId in global_users');
+          debugPrint('teacherDataProvider: User ${user.uid} has no schoolId in global_users');
           yield globalData;
           return;
       }
 
-      print('teacherDataProvider: Fetching local profile from schools/$schoolId/teachers/${user.uid}');
+      debugPrint('teacherDataProvider: Fetching local profile from schools/$schoolId/teachers/${user.uid}');
 
       // Stream the local school teacher profile
       yield* FirebaseFirestore.instance
@@ -45,7 +46,7 @@ final teacherDataProvider = StreamProvider<Map<String, dynamic>?>((ref) async* {
             'schoolId': schoolId,
           };
         } else {
-          print('teacherDataProvider: No local document found at schools/$schoolId/teachers/${user.uid}');
+          debugPrint('teacherDataProvider: No local document found at schools/$schoolId/teachers/${user.uid}');
           return {
             ...globalData,
             'schoolId': schoolId,
@@ -53,11 +54,11 @@ final teacherDataProvider = StreamProvider<Map<String, dynamic>?>((ref) async* {
           };
         }
       }).handleError((e) {
-          print('teacherDataProvider stream error: $e');
+          debugPrint('teacherDataProvider stream error: $e');
       });
   } catch (e, st) {
-      print('Error in teacherDataProvider stream setup: $e');
-      print(st);
+      debugPrint('Error in teacherDataProvider stream setup: $e');
+      debugPrint(st.toString());
   }
 });
 
@@ -83,7 +84,7 @@ final schoolDataProvider = StreamProvider<Map<String, dynamic>?>((ref) async* {
         .doc(schoolId)
         .snapshots()
         .handleError((e) {
-             print('schoolDataProvider stream sync error suppressed: $e');
+             debugPrint('schoolDataProvider stream sync error suppressed: $e');
         });
 
     // Iterate over the school snapshot stream
@@ -147,7 +148,7 @@ final schoolDataProvider = StreamProvider<Map<String, dynamic>?>((ref) async* {
         } catch (_) {} // Ignore settings errors
     }
   } catch (e, st) {
-    print('Error fetching school data stream: $e');
-    print(st);
+    debugPrint('Error fetching school data stream: $e');
+    debugPrint(st.toString());
   }
 });

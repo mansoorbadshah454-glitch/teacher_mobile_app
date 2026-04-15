@@ -279,7 +279,6 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       if (teacherData == null || !teacherData.containsKey('schoolId') || currentUser == null) return;
 
       final schoolId = teacherData['schoolId'];
-      final fileName = p.basename(file.path!);
       final destination = 'schools/$schoolId/messages/attachments/${DateTime.now().millisecondsSinceEpoch}_$fileName';
 
       // Upload to Storage
@@ -353,7 +352,6 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       if (teacherData == null || !teacherData.containsKey('schoolId') || currentUser == null) return;
 
       final schoolId = teacherData['schoolId'];
-      final fileName = p.basename(image.path);
       final destination = 'schools/$schoolId/messages/attachments/${DateTime.now().millisecondsSinceEpoch}_$fileName';
 
       // Upload to Storage

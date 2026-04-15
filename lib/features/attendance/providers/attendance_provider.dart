@@ -180,9 +180,20 @@ class AttendanceNotifier extends StateNotifier<AsyncValue<Map<String, String>>> 
             .collection('students')
             .doc(studentId);
             
+        // Fetch existing history to append to it safely (avoids Dart's shallow merge overwrites)
+        final existingHistoryRaw = student['attendanceHistory'];
+        Map<String, dynamic> mergedHistory = {};
+        if (existingHistoryRaw != null && existingHistoryRaw is Map) {
+            existingHistoryRaw.forEach((key, value) {
+                mergedHistory[key.toString()] = value;
+            });
+        }
+        mergedHistory[today] = status;
+
         batch.update(studentRef, {
           'status': status,
           'lastAttendanceDate': today,
+          'attendanceHistory': mergedHistory,
           'updatedAt': FieldValue.serverTimestamp(),
         });
       }
@@ -200,27 +211,26 @@ class AttendanceNotifier extends StateNotifier<AsyncValue<Map<String, String>>> 
         final status = attendanceMap[studentId] ?? 'absent';
 
         try {
-          final parentsQuery = await FirebaseFirestore.instance
-              .collection('schools')
-              .doc(schoolId)
-              .collection('parents')
-              .where('children', arrayContains: studentId)
-              .get();
+          String? parentId;
+          if (student['parentDetails'] != null && student['parentDetails']['parentId'] != null) {
+              parentId = student['parentDetails']['parentId'];
+          }
 
-          for (var parentDoc in parentsQuery.docs) {
+          if (parentId != null) {
              await FirebaseFirestore.instance
                 .collection('schools')
                 .doc(schoolId)
                 .collection('notifications')
                 .add({
-                  'parentId': parentDoc.id,
+                  'parentId': parentId,
                   'studentId': studentId,
                   'studentName': studentName,
+                  'title': 'Attendance Update',
                   'type': 'attendance',
                   'status': status,
                   'className': className,
                   'date': today,
-                  'message': '$studentName was marked $status in $className today.',
+                  'message': '$studentName is marked $status in School today, $today.',
                   'read': false,
                   'createdAt': FieldValue.serverTimestamp(),
                 });

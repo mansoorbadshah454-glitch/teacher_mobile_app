@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:teacher_mobile_app/core/theme/app_theme.dart';
 import 'package:teacher_mobile_app/features/contact_parents/providers/contact_parents_provider.dart';
 import 'package:teacher_mobile_app/features/contact_parents/presentation/widgets/student_contact_card.dart';
+import 'package:teacher_mobile_app/features/contact_parents/presentation/screens/group_broadcast_view.dart';
 
 class ContactParentsScreen extends ConsumerStatefulWidget {
   const ContactParentsScreen({Key? key}) : super(key: key);
@@ -14,6 +15,10 @@ class ContactParentsScreen extends ConsumerStatefulWidget {
 
 class _ContactParentsScreenState extends ConsumerState<ContactParentsScreen> {
   final TextEditingController _messageController = TextEditingController();
+  
+  // Selection State for Group View Deletion
+  bool _isSelectionMode = false;
+  final Set<String> _selectedBroadcastIds = {};
 
   @override
   void dispose() {
@@ -30,24 +35,49 @@ class _ContactParentsScreenState extends ConsumerState<ContactParentsScreen> {
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       body: Column(
         children: [
-          _buildHeader(context, state),
+          _buildHeader(context, state, notifier),
           
-          Padding(
-            padding: const EdgeInsets.all(16.0),
-            child: _buildSearchBar(context, state, notifier),
-          ),
+          if (!state.isGroupMode)
+            Padding(
+              padding: const EdgeInsets.all(16.0),
+              child: _buildSearchBar(context, state, notifier),
+            ),
           
           Expanded(
-            child: _buildStudentList(context, state, notifier),
+            child: state.isGroupMode
+              ? GroupBroadcastView(
+                  state: state,
+                  notifier: notifier,
+                  broadcastsAsync: ref.watch(classBroadcastsProvider),
+                  isSelectionMode: _isSelectionMode,
+                  selectedIds: _selectedBroadcastIds,
+                  onSelectToggle: (id) {
+                    setState(() {
+                       if (id == 'CLEAR_ALL_MODE') {
+                          _isSelectionMode = false;
+                          _selectedBroadcastIds.clear();
+                       } else {
+                          if (!_isSelectionMode) _isSelectionMode = true;
+                          if (_selectedBroadcastIds.contains(id)) {
+                             _selectedBroadcastIds.remove(id);
+                             if (_selectedBroadcastIds.isEmpty) _isSelectionMode = false;
+                          } else {
+                             _selectedBroadcastIds.add(id);
+                          }
+                       }
+                    });
+                  },
+                )
+              : _buildStudentList(context, state, notifier),
           ),
         ],
       ),
     );
   }
 
-  Widget _buildHeader(BuildContext context, ContactParentsState state) {
+  Widget _buildHeader(BuildContext context, ContactParentsState state, ContactParentsNotifier notifier) {
     return Container(
-      padding: EdgeInsets.fromLTRB(16, MediaQuery.of(context).padding.top + 16, 16, 24),
+      padding: EdgeInsets.fromLTRB(16, MediaQuery.of(context).padding.top + 16, 16, 16),
       decoration: BoxDecoration(
         gradient: const LinearGradient(
           colors: [Color(0xFFec4899), Color(0xFFdb2777)],
@@ -66,46 +96,125 @@ class _ContactParentsScreenState extends ConsumerState<ContactParentsScreen> {
           ),
         ],
       ),
-      child: Row(
+      child: Column(
         children: [
-          GestureDetector(
-            onTap: () => context.pop(),
-            child: Container(
-              width: 40,
-              height: 40,
-              decoration: BoxDecoration(
-                color: Colors.white.withOpacity(0.2),
-                borderRadius: BorderRadius.circular(12),
+          Row(
+            children: [
+              GestureDetector(
+                onTap: () => context.pop(),
+                child: Container(
+                  width: 40,
+                  height: 40,
+                  decoration: BoxDecoration(
+                    color: Colors.white.withOpacity(0.2),
+                    borderRadius: BorderRadius.circular(12),
+                  ),
+                  child: const Icon(Icons.chevron_left, color: Colors.white),
+                ),
               ),
-              child: const Icon(Icons.chevron_left, color: Colors.white),
-            ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      "Contact Parents",
+                      style: TextStyle(
+                        fontSize: 22,
+                        fontWeight: FontWeight.w800,
+                        color: Colors.white,
+                      ),
+                    ),
+                    Text(
+                      state.assignedClass != null 
+                        ? (state.isGroupMode ? "${state.parentMap.length} Total Parents" : "${state.assignedClass!['name']} • ${state.students.length} Students")
+                        : "Fetching class...",
+                      style: TextStyle(
+                        fontSize: 14,
+                        fontWeight: FontWeight.w500,
+                        color: Colors.white.withOpacity(0.9),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              if (state.isGroupMode)
+                PopupMenuButton<String>(
+                  icon: const Icon(Icons.more_vert, color: Colors.white),
+                  onSelected: (value) async {
+                    if (value == 'select') {
+                      setState(() => _isSelectionMode = true);
+                    } else if (value == 'clear') {
+                       final broadcasts = ref.read(classBroadcastsProvider).valueOrNull;
+                       if (broadcasts != null) {
+                          await notifier.clearHistory(broadcasts);
+                       }
+                    }
+                  },
+                  itemBuilder: (BuildContext context) => [
+                    const PopupMenuItem(
+                      value: 'select',
+                      child: Text('Select to delete'),
+                    ),
+                    const PopupMenuItem(
+                      value: 'clear',
+                      child: Text('Clear history'),
+                    ),
+                  ],
+                ),
+            ],
           ),
-          const SizedBox(width: 16),
-          Expanded(
-            child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
+          const SizedBox(height: 16),
+          // Toggle Segmented Control
+          Container(
+            height: 40,
+            decoration: BoxDecoration(
+              color: Colors.white.withOpacity(0.2),
+              borderRadius: BorderRadius.circular(20),
+            ),
+            child: Row(
               children: [
-                const Text(
-                  "Contact Parents",
-                  style: TextStyle(
-                    fontSize: 22,
-                    fontWeight: FontWeight.w800,
-                    color: Colors.white,
+                Expanded(
+                  child: GestureDetector(
+                    onTap: () => notifier.toggleGroupMode(false),
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: !state.isGroupMode ? Colors.white : Colors.transparent,
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      alignment: Alignment.center,
+                      child: Text(
+                        "List",
+                        style: TextStyle(
+                          color: !state.isGroupMode ? const Color(0xFFdb2777) : Colors.white,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
                   ),
                 ),
-                Text(
-                  state.assignedClass != null 
-                    ? "${state.assignedClass!['name']} • ${state.students.length} Students" 
-                    : "Fetching class...",
-                  style: TextStyle(
-                    fontSize: 14,
-                    fontWeight: FontWeight.w500,
-                    color: Colors.white.withOpacity(0.9),
+                Expanded(
+                  child: GestureDetector(
+                    onTap: () => notifier.toggleGroupMode(true),
+                    child: Container(
+                      decoration: BoxDecoration(
+                        color: state.isGroupMode ? Colors.white : Colors.transparent,
+                        borderRadius: BorderRadius.circular(20),
+                      ),
+                      alignment: Alignment.center,
+                      child: Text(
+                        "Group",
+                        style: TextStyle(
+                          color: state.isGroupMode ? const Color(0xFFdb2777) : Colors.white,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
                   ),
                 ),
               ],
             ),
-          ),
+          )
         ],
       ),
     );

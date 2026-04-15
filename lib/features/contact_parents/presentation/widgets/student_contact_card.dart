@@ -4,6 +4,8 @@ import 'package:flutter/material.dart';
 import 'package:record/record.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:path/path.dart' as p;
+import 'package:file_picker/file_picker.dart';
+import 'package:image_picker/image_picker.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:teacher_mobile_app/core/theme/app_theme.dart';
@@ -349,6 +351,153 @@ class _StudentContactCardState extends State<StudentContactCard> {
     );
   }
 
+  Future<void> _pickAndSendFile() async {
+    final result = await FilePicker.platform.pickFiles(type: FileType.any, allowMultiple: false);
+    if (result == null || result.files.isEmpty || result.files.first.path == null) return;
+    
+    final file = File(result.files.first.path!);
+    final fileName = p.basename(file.path);
+    final caption = await _showAttachmentConfirmation(file, fileName);
+    if (caption != null) {
+      await _sendWithAttachment(caption, file);
+    }
+  }
+
+  Future<void> _takeAndSendPicture() async {
+    final status = await Permission.camera.request();
+    if (status.isDenied || status.isPermanentlyDenied) return;
+
+    final picker = ImagePicker();
+    final image = await picker.pickImage(source: ImageSource.camera, imageQuality: 70);
+    if (image == null) return;
+
+    final file = File(image.path);
+    final fileName = p.basename(image.path);
+    final caption = await _showAttachmentConfirmation(file, fileName);
+    if (caption != null) {
+      await _sendWithAttachment(caption, file);
+    }
+  }
+
+  Future<void> _pickAndSendGallery() async {
+    final picker = ImagePicker();
+    final image = await picker.pickImage(source: ImageSource.gallery, imageQuality: 70);
+    if (image == null) return;
+
+    final file = File(image.path);
+    final fileName = p.basename(image.path);
+    final caption = await _showAttachmentConfirmation(file, fileName);
+    if (caption != null) {
+      await _sendWithAttachment(caption, file);
+    }
+  }
+
+  Future<String?> _showAttachmentConfirmation(File file, String fileName) async {
+    final captionController = TextEditingController();
+    final isImage = ['jpg', 'jpeg', 'png', 'webp', 'gif'].contains(fileName.split('.').last.toLowerCase());
+
+    return showDialog<String>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Send Attachment'),
+          content: SingleChildScrollView(
+            child: Column(
+               mainAxisSize: MainAxisSize.min,
+               children: [
+                 if (isImage)
+                   ConstrainedBox(constraints: const BoxConstraints(maxHeight: 200), child: Image.file(file, fit: BoxFit.contain))
+                 else
+                   Container(
+                     padding: const EdgeInsets.all(16),
+                     color: Colors.grey.withOpacity(0.1),
+                     child: Text(fileName, maxLines: 2),
+                   ),
+                 const SizedBox(height: 16),
+                 TextField(
+                   controller: captionController,
+                   decoration: const InputDecoration(hintText: 'Add a caption...', border: OutlineInputBorder()),
+                   maxLines: 3, minLines: 1,
+                 ),
+               ],
+            ),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(context, null), child: const Text('Cancel')),
+            ElevatedButton(onPressed: () => Navigator.pop(context, captionController.text), style: ElevatedButton.styleFrom(backgroundColor: const Color(0xFFec4899), foregroundColor: Colors.white), child: const Text('Send')),
+          ],
+        );
+      },
+    );
+  }
+
+  void _showAttachmentMenu() {
+    showModalBottomSheet(
+       context: context,
+       backgroundColor: Colors.transparent,
+       builder: (context) {
+          final isDark = Theme.of(context).brightness == Brightness.dark;
+          return Container(
+             margin: const EdgeInsets.only(left: 16, right: 16, bottom: 80),
+             padding: const EdgeInsets.symmetric(vertical: 24, horizontal: 16),
+             decoration: BoxDecoration(
+               color: isDark ? AppTheme.surfaceDark : Colors.white, 
+               borderRadius: BorderRadius.circular(16)
+             ),
+             child: Row(
+               mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+               children: [
+                 _buildAttachmentOption(icon: Icons.insert_drive_file, color: Colors.indigoAccent, label: "Document", onTap: _pickAndSendFile),
+                 _buildAttachmentOption(icon: Icons.camera_alt, color: Colors.pinkAccent, label: "Camera", onTap: _takeAndSendPicture),
+                 _buildAttachmentOption(icon: Icons.image, color: Colors.purpleAccent, label: "Gallery", onTap: _pickAndSendGallery),
+               ]
+             )
+          );
+       }
+    );
+  }
+
+  Widget _buildAttachmentOption({required IconData icon, required Color color, required String label, required VoidCallback onTap}) {
+     final isDark = Theme.of(context).brightness == Brightness.dark;
+     return GestureDetector(
+       onTap: () { Navigator.pop(context); onTap(); },
+       child: Column(
+         mainAxisSize: MainAxisSize.min,
+         children: [
+            CircleAvatar(radius: 28, backgroundColor: color, child: Icon(icon, color: Colors.white, size: 28)),
+            const SizedBox(height: 8),
+            Text(label, style: TextStyle(fontSize: 12, color: isDark ? Colors.white70 : Colors.black87))
+         ]
+       )
+     );
+  }
+
+  Future<void> _sendWithAttachment(String caption, File file) async {
+    try {
+      if (mounted) {
+        await widget.notifier.sendMessage(
+          student: widget.student,
+          parent: widget.parentData!,
+          messageText: caption,
+          attachedFile: file,
+        );
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            const SnackBar(content: Text("Attachment sent successfully!")),
+          );
+          widget.messageController.clear();
+          widget.notifier.collapseStudent();
+        }
+      }
+    } catch (e) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text("Failed to send attachment: $e")),
+        );
+      }
+    }
+  }
+
   Widget _buildMessageComposer(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
@@ -474,17 +623,29 @@ class _StudentContactCardState extends State<StudentContactCard> {
               borderRadius: BorderRadius.circular(12),
               border: Border.all(color: isDark ? Colors.white.withOpacity(0.05) : Colors.black.withOpacity(0.05)),
             ),
-            child: TextField(
-              controller: widget.messageController,
-              maxLines: 4,
-              style: TextStyle(color: isDark ? Colors.white : Colors.black),
-              decoration: InputDecoration(
-                hintText: "Write a specific message about ${(widget.student['name'] ?? '').split(' ').first}...",
-                hintStyle: const TextStyle(color: Colors.grey),
-                contentPadding: const EdgeInsets.all(16),
-                border: InputBorder.none,
-              ),
-              onChanged: (text) => setState(() {}),
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.end,
+              children: [
+                IconButton(
+                  icon: Icon(Icons.add, color: isDark ? Colors.white70 : Colors.black54),
+                  onPressed: widget.state.isSending ? null : _showAttachmentMenu,
+                ),
+                Expanded(
+                  child: TextField(
+                    controller: widget.messageController,
+                    maxLines: 4,
+                    minLines: 1,
+                    style: TextStyle(color: isDark ? Colors.white : Colors.black),
+                    decoration: InputDecoration(
+                      hintText: "Write a specific message about ${(widget.student['name'] ?? '').split(' ').first}...",
+                      hintStyle: const TextStyle(color: Colors.grey),
+                      contentPadding: const EdgeInsets.only(top: 16, bottom: 16, right: 16),
+                      border: InputBorder.none,
+                    ),
+                    onChanged: (text) => setState(() {}),
+                  ),
+                ),
+              ],
             ),
           ),
         const SizedBox(height: 16),

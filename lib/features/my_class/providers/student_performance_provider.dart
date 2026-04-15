@@ -191,16 +191,12 @@ class StudentPerformanceNotifier extends StateNotifier<AsyncValue<StudentPerform
             message = "A new performance report is available for ${student['name']}. Please check the app for the latest details.";
         }
 
-        final parentsQuery = await FirebaseFirestore.instance
-            .collection('schools')
-            .doc(schoolId)
-            .collection('parents')
-            .where('children', arrayContains: studentId)
-            .limit(1)
-            .get();
+        String? parentId;
+        if (student['parentDetails'] != null && student['parentDetails']['parentId'] != null) {
+            parentId = student['parentDetails']['parentId'];
+        }
 
-        if (parentsQuery.docs.isNotEmpty) {
-            final parentId = parentsQuery.docs.first.id;
+        if (parentId != null) {
             await FirebaseFirestore.instance
                  .collection('schools')
                  .doc(schoolId)
