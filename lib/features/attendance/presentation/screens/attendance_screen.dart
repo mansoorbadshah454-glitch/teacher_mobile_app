@@ -38,23 +38,40 @@ class _StudentAvatarState extends State<StudentAvatar> {
   }
 
   Future<void> _fetchImage() async {
+    // Phase 1: Try reading directly from the pre-supplied Document profilePic mapping!
+    if (widget.profilePic != null && widget.profilePic!.isNotEmpty) {
+      String resolvedPic = widget.profilePic!;
+
+      // Convert expensive mathematical SVGs to pure light PNGs before handing off to the memory cache.
+      if (resolvedPic.contains('api.dicebear.com') && resolvedPic.contains('/svg')) {
+          resolvedPic = resolvedPic.replaceAll('/svg', '/png');
+      }
+
+      if (resolvedPic.startsWith('http') || resolvedPic.startsWith('data:image')) {
+          if (mounted) {
+              setState(() {
+                  _imageUrl = resolvedPic;
+                  _loading = false;
+              });
+          }
+          return; // BREAK execution! Absolutely no need to ping Firebase Storage server.
+      }
+    }
+
+    // Phase 2: Firebase Storage physical query (slow, heavy operations fallback)
     try {
       final storagePath = 'schools/${widget.schoolId}/students/${widget.studentId}/profile.jpg';
       final ref = FirebaseStorage.instance.ref(storagePath);
       final url = await ref.getDownloadURL();
-      setState(() {
-        _imageUrl = url;
-        _loading = false;
-      });
+      if (mounted) {
+         setState(() {
+            _imageUrl = url;
+            _loading = false;
+         });
+      }
     } catch (e) {
-      if (widget.profilePic != null && widget.profilePic!.startsWith('data:image')) {
+      if (mounted) {
         setState(() {
-          _imageUrl = widget.profilePic;
-          _loading = false;
-        });
-      } else {
-        setState(() {
-          _imageUrl = widget.profilePic; // Might be a standard http url
           _loading = false;
         });
       }

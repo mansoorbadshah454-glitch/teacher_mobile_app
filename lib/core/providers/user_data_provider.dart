@@ -1,5 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:teacher_mobile_app/features/auth/auth_provider.dart';
 
 // Provides the current teacher's document data by merging global_users + schools/{id}/teachers/{uid} in real-time
@@ -73,6 +74,9 @@ final schoolDataProvider = StreamProvider<Map<String, dynamic>?>((ref) async* {
   final schoolId = teacherData['schoolId'];
 
   try {
+    // Determine local prefs instantly for fast visual caching
+    final prefs = await SharedPreferences.getInstance();
+
     // School base data stream
     final schoolDocStream = FirebaseFirestore.instance
         .collection('schools')
@@ -91,8 +95,21 @@ final schoolDataProvider = StreamProvider<Map<String, dynamic>?>((ref) async* {
 
         final schoolData = schoolSnap.data()!;
 
-        // Attempt a concurrent fetch for settings snapshot (or just an await if settings rarely change)
-        // Usually, school settings don't change frequently during a session, but to keep it safe:
+        // 1. Instantly inject the cached logo and name into the model before hitting the backend
+        final cachedLogo = prefs.getString('cached_school_logo_$schoolId');
+        final cachedName = prefs.getString('cached_school_name_$schoolId');
+        
+        if (cachedLogo != null && cachedLogo.isNotEmpty) {
+           schoolData['logo'] = cachedLogo;
+        }
+        if (cachedName != null && cachedName.isNotEmpty) {
+           schoolData['name'] = cachedName;
+        }
+
+        // 2. Yield immediately into the riverpod stream. This draws the Drawer and UI instantly!
+        yield Map<String, dynamic>.from(schoolData);
+
+        // 3. Perform the network call asynchronously and if it's different, update cache and yield again seamlessly.
         try {
             final settingsSnap = await FirebaseFirestore.instance
                 .collection('schools')
@@ -103,16 +120,31 @@ final schoolDataProvider = StreamProvider<Map<String, dynamic>?>((ref) async* {
 
             if (settingsSnap.exists) {
                 final settingsData = settingsSnap.data()!;
+                bool changed = false;
+
                 if (settingsData.containsKey('profileImage')) {
-                  schoolData['logo'] = settingsData['profileImage'];
+                  final freshLogo = settingsData['profileImage'];
+                  if (freshLogo != null && freshLogo != schoolData['logo']) {
+                      schoolData['logo'] = freshLogo;
+                      await prefs.setString('cached_school_logo_$schoolId', freshLogo);
+                      changed = true;
+                  }
                 }
+                
                 if (settingsData.containsKey('schoolName')) {
-                  schoolData['name'] = settingsData['schoolName'];
+                  final freshName = settingsData['schoolName'];
+                  if (freshName != null && freshName != schoolData['name']) {
+                      schoolData['name'] = freshName;
+                      await prefs.setString('cached_school_name_$schoolId', freshName);
+                      changed = true;
+                  }
+                }
+
+                if (changed) {
+                    yield Map<String, dynamic>.from(schoolData);
                 }
             }
         } catch (_) {} // Ignore settings errors
-
-        yield schoolData;
     }
   } catch (e, st) {
     print('Error fetching school data stream: $e');

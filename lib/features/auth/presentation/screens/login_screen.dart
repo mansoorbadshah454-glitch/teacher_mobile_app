@@ -15,6 +15,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _passwordController = TextEditingController();
   final _schoolIdController = TextEditingController(); // New School ID controller
   final _formKey = GlobalKey<FormState>();
+  bool _isPasswordObscured = true;
 
   @override
   void dispose() {
@@ -63,14 +64,39 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
       if (state.hasError) {
         print('LoginScreen: Auth Error State Received: ${state.error}');
         final errorMessage = state.error.toString();
-        ScaffoldMessenger.of(context).showSnackBar(
-          SnackBar(
-            content: Text(errorMessage.contains('invalid-credential') 
-              ? "Invalid email or password. Please try again." 
-              : errorMessage),
-            backgroundColor: Colors.red,
-          ),
-        );
+
+        if (errorMessage.contains('network-request-failed') || errorMessage.toLowerCase().contains('network')) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Row(
+                children: const [
+                  Icon(Icons.wifi_off, color: Colors.white),
+                  SizedBox(width: 12),
+                  Expanded(
+                    child: Text(
+                      "No internet connection detected. Please check your network and try again.",
+                      style: TextStyle(fontWeight: FontWeight.bold),
+                    ),
+                  ),
+                ],
+              ),
+              backgroundColor: const Color(0xFFE53935),
+              behavior: SnackBarBehavior.floating,
+              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+              margin: const EdgeInsets.all(20),
+              duration: const Duration(seconds: 4),
+            ),
+          );
+        } else {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text(errorMessage.contains('invalid-credential') 
+                ? "Invalid email or password. Please try again." 
+                : errorMessage.replaceAll('Exception: ', '').replaceAll(RegExp(r'\[.*?\] '), '')), // strip messy firebase codes
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
       }
     });
 
@@ -150,14 +176,25 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       TextFormField(
                         controller: _passwordController,
                         enabled: !isLoading,
-                        obscureText: true,
+                        obscureText: _isPasswordObscured,
                         style: const TextStyle(color: Colors.white),
-                        decoration: const InputDecoration(
+                        decoration: InputDecoration(
                           labelText: 'Password',
-                          labelStyle: TextStyle(color: Colors.white70),
-                          prefixIcon: Icon(Icons.lock_outlined, color: Colors.white70),
-                          border: OutlineInputBorder(),
-                          enabledBorder: OutlineInputBorder(borderSide: BorderSide(color: Colors.white24)),
+                          labelStyle: const TextStyle(color: Colors.white70),
+                          prefixIcon: const Icon(Icons.lock_outlined, color: Colors.white70),
+                          border: const OutlineInputBorder(),
+                          enabledBorder: const OutlineInputBorder(borderSide: BorderSide(color: Colors.white24)),
+                          suffixIcon: IconButton(
+                            icon: Icon(
+                              _isPasswordObscured ? Icons.visibility_off : Icons.visibility,
+                              color: Colors.white70,
+                            ),
+                            onPressed: () {
+                              setState(() {
+                                _isPasswordObscured = !_isPasswordObscured;
+                              });
+                            },
+                          ),
                         ),
                         validator: (value) {
                           if (value == null || value.isEmpty) {

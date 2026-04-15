@@ -146,12 +146,17 @@ class StudentPerformanceNotifier extends StateNotifier<AsyncValue<StudentPerform
         .collection('students')
         .doc(studentId);
 
-    await studentRef.update({
+    final updateData = {
       'academicScores': academicScoresList,
       'homeworkScores': homeworkScoresList,
       'wellness': data.wellness,
       'attendance': data.attendance,
-    });
+      'classId': classId,
+      'className': assignedClass['name'] ?? 'Unknown',
+      'updatedAt': FieldValue.serverTimestamp(),
+    };
+
+    await studentRef.update(updateData);
 
     // Handle Notifications
     try {
@@ -245,12 +250,17 @@ class StudentPerformanceNotifier extends StateNotifier<AsyncValue<StudentPerform
         .doc(studentId);
 
     try {
-      await studentRef.update({
+      final updateData = {
         'academicScores': academicScoresList,
         'homeworkScores': homeworkScoresList,
         'wellness': data.wellness,
         'attendance': data.attendance,
-      });
+        'classId': classId,
+        'className': assignedClass['name'] ?? 'Unknown',
+        'updatedAt': FieldValue.serverTimestamp(),
+      };
+      
+      await studentRef.update(updateData);
     } catch (e) {
       print("Failed to silently save student performance data: $e");
     }

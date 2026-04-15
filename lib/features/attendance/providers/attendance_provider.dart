@@ -166,12 +166,12 @@ class AttendanceNotifier extends StateNotifier<AsyncValue<Map<String, String>>> 
         }).toList(),
       });
 
-      // 2. Loop through students to update sub-collection and prepare parent notifications
+      // 2. Loop through students to update both sub-collection and master record
       for (var student in students) {
         final studentId = student['id'] as String;
         final status = attendanceMap[studentId] ?? 'absent';
 
-        // Update Student
+        // 2a. Update Class-specific student record
         final studentRef = FirebaseFirestore.instance
             .collection('schools')
             .doc(schoolId)

@@ -267,6 +267,10 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
       final file = result.files.first;
       if (file.path == null) return;
 
+      final fileName = p.basename(file.path!);
+      final String? caption = await _showAttachmentConfirmation(File(file.path!), fileName);
+      if (caption == null) return;
+
       setState(() => _isSending = true);
 
       final teacherData = await ref.read(teacherDataProvider.future);
@@ -297,7 +301,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         'fromId': currentUser.uid,
         'fromRole': 'teacher',
         'participants': [currentUser.uid, widget.admin['id']],
-        'text': 'Sent an attachment: $fileName',
+        'text': caption.trim(),
         'attachment': {
           'url': downloadUrl,
           'fullPath': destination, // Added for easy deletion
@@ -337,6 +341,10 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
 
       if (image == null) return;
 
+      final fileName = p.basename(image.path);
+      final String? caption = await _showAttachmentConfirmation(File(image.path), fileName);
+      if (caption == null) return;
+
       setState(() => _isSending = true);
 
       final teacherData = await ref.read(teacherDataProvider.future);
@@ -367,7 +375,7 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
         'fromId': currentUser.uid,
         'fromRole': 'teacher',
         'participants': [currentUser.uid, widget.admin['id']],
-        'text': 'Sent a photo',
+        'text': caption.trim(),
         'attachment': {
           'url': downloadUrl,
           'fullPath': destination,
@@ -388,6 +396,76 @@ class _ChatScreenState extends ConsumerState<ChatScreen> {
     } finally {
       if (mounted) setState(() => _isSending = false);
     }
+  }
+
+  Future<String?> _showAttachmentConfirmation(File file, String fileName) async {
+    final TextEditingController captionController = TextEditingController();
+    final bool isImage = ['jpg', 'jpeg', 'png', 'webp', 'gif'].contains(fileName.split('.').last.toLowerCase());
+
+    return showDialog<String>(
+      context: context,
+      builder: (context) {
+        return AlertDialog(
+          title: const Text('Send Attachment'),
+          content: SingleChildScrollView(
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                if (isImage)
+                  ClipRRect(
+                    borderRadius: BorderRadius.circular(8),
+                    child: ConstrainedBox(
+                      constraints: const BoxConstraints(maxHeight: 200),
+                      child: Image.file(file, fit: BoxFit.contain),
+                    ),
+                  )
+                else
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: Colors.grey.withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(8),
+                    ),
+                    child: Row(
+                      children: [
+                        const Icon(Icons.insert_drive_file, size: 36),
+                        const SizedBox(width: 12),
+                        Flexible(child: Text(fileName, maxLines: 2, overflow: TextOverflow.ellipsis)),
+                      ],
+                    ),
+                  ),
+                const SizedBox(height: 16),
+                TextField(
+                  controller: captionController,
+                  decoration: const InputDecoration(
+                    hintText: 'Add a caption...',
+                    border: OutlineInputBorder(),
+                  ),
+                  maxLines: 3,
+                  minLines: 1,
+                  autofocus: true,
+                ),
+              ],
+            ),
+          ),
+          actions: [
+            TextButton(
+              onPressed: () => Navigator.pop(context, null),
+              child: const Text('Cancel', style: TextStyle(color: Colors.grey)),
+            ),
+            ElevatedButton.icon(
+              onPressed: () => Navigator.pop(context, captionController.text),
+              icon: const Icon(Icons.send, size: 16),
+              label: const Text('Send'),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: AppTheme.primary,
+                foregroundColor: Colors.white,
+              ),
+            ),
+          ],
+        );
+      },
+    );
   }
 
   Widget _buildInputBar() {
@@ -488,15 +566,17 @@ class _ChatBubble extends StatelessWidget {
           children: [
             if (msg['attachment'] != null) ...[
                _buildAttachment(msg['attachment']),
-               const SizedBox(height: 6), // Changed height
+               if (msg['text'] != null && msg['text'].toString().trim().isNotEmpty)
+                 const SizedBox(height: 6),
             ],
-            Text(
-              msg['text'] ?? '',
-              style: TextStyle(
-                color: isMe ? Colors.white : (isDark ? Colors.white : Colors.black87), // Changed text color
-                fontSize: 16, // Changed font size
+            if (msg['text'] != null && msg['text'].toString().trim().isNotEmpty)
+              Text(
+                msg['text'] ?? '',
+                style: TextStyle(
+                  color: isMe ? Colors.white : (isDark ? Colors.white : Colors.black87), // Changed text color
+                  fontSize: 16, // Changed font size
+                ),
               ),
-            ),
             const SizedBox(height: 4),
             Row(
               mainAxisSize: MainAxisSize.min,
