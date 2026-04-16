@@ -82,6 +82,9 @@ class DutyStatusNotifier extends AutoDisposeStreamNotifier<bool> {
 
     final schoolId = teacherData['schoolId'] as String;
 
+    // Optimistic UI update to prevent the switch from blinking/snapping back
+    state = AsyncValue.data(newValue);
+
     try {
       await FirebaseFirestore.instance
           .collection('schools')
@@ -93,6 +96,8 @@ class DutyStatusNotifier extends AutoDisposeStreamNotifier<bool> {
         'lastDutyUpdate': FieldValue.serverTimestamp(),
       }, SetOptions(merge: true));
     } catch (e) {
+      // Revert optimistic update on error
+      state = AsyncValue.data(!newValue);
       print('DutyStatusNotifier Error toggling duty: $e');
     }
   }

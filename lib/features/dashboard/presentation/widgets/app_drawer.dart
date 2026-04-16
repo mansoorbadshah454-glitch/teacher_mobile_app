@@ -28,7 +28,14 @@ class AppDrawer extends ConsumerWidget {
       child: ListView(
         padding: EdgeInsets.zero,
         children: [
-          DrawerHeader(
+          Container(
+            padding: EdgeInsets.only(
+              top: MediaQuery.of(context).padding.top + 24.0,
+              bottom: 24.0,
+              left: 16.0,
+              right: 16.0,
+            ),
+            margin: const EdgeInsets.only(bottom: 8.0),
             decoration: BoxDecoration(
               gradient: AppTheme.primaryGradient,
               boxShadow: [
@@ -36,34 +43,37 @@ class AppDrawer extends ConsumerWidget {
               ],
             ),
             child: Column(
-              crossAxisAlignment: CrossAxisAlignment.start,
-              mainAxisAlignment: MainAxisAlignment.end,
+              mainAxisSize: MainAxisSize.min,
               children: [
-                Center(
-                  child: Column(
-                    mainAxisSize: MainAxisSize.min,
-                    children: [
-                      CircleAvatar(
-                        radius: 42,
-                        backgroundColor: Colors.white,
-                        backgroundImage: schoolLogo.isNotEmpty 
-                            ? CachedNetworkImageProvider(schoolLogo)
-                            : null,
-                        child: schoolLogo.isEmpty 
-                            ? const Icon(Icons.school, size: 45, color: AppTheme.primary)
-                            : null,
-                      ),
-                      const SizedBox(height: 8),
-                      Text(
-                        schoolName,
-                        textAlign: TextAlign.center,
-                        style: AppTheme.titleLarge.copyWith(
-                          color: Colors.white,
-                          fontWeight: FontWeight.w700,
-                          fontSize: 20,
-                        ),
-                      ),
-                    ],
+                CircleAvatar(
+                  radius: 42,
+                  backgroundColor: Colors.white,
+                  backgroundImage: schoolLogo.isNotEmpty 
+                      ? CachedNetworkImageProvider(schoolLogo)
+                      : null,
+                  child: schoolLogo.isEmpty 
+                      ? const Icon(Icons.school, size: 45, color: AppTheme.primary)
+                      : null,
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  schoolName,
+                  textAlign: TextAlign.center,
+                  style: AppTheme.titleLarge.copyWith(
+                    color: Colors.white,
+                    fontWeight: FontWeight.w800,
+                    fontSize: 18,
+                  ),
+                ),
+                const SizedBox(height: 4),
+                Text(
+                  "Teacher's Smart Portal",
+                  textAlign: TextAlign.center,
+                  style: TextStyle(
+                    color: Colors.white.withOpacity(0.85),
+                    fontSize: 13,
+                    letterSpacing: 0.5,
+                    fontWeight: FontWeight.w500,
                   ),
                 ),
               ],

@@ -91,7 +91,7 @@ final classMetricsProvider = Provider<AsyncValue<ClassMetrics>>((ref) {
 });
 
 // 2. Fetch Today's Attendance for Absent Count
-final todaysAbsentCountProvider = StreamProvider<int>((ref) {
+final todaysAbsentCountProvider = StreamProvider.autoDispose<int>((ref) {
   final teacherDataAsync = ref.watch(teacherDataProvider);
   final assignedClassAsync = ref.watch(assignedClassProvider);
 
