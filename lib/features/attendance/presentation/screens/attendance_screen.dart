@@ -37,6 +37,18 @@ class _StudentAvatarState extends State<StudentAvatar> {
     _fetchImage();
   }
 
+  @override
+  void didUpdateWidget(covariant StudentAvatar oldWidget) {
+    super.didUpdateWidget(oldWidget);
+    if (oldWidget.studentId != widget.studentId || oldWidget.profilePic != widget.profilePic) {
+      setState(() {
+        _loading = true;
+        _imageUrl = null;
+      });
+      _fetchImage();
+    }
+  }
+
   Future<void> _fetchImage() async {
     // Phase 1: Try reading directly from the pre-supplied Document profilePic mapping!
     if (widget.profilePic != null && widget.profilePic!.isNotEmpty) {

@@ -10,6 +10,7 @@ import 'package:permission_handler/permission_handler.dart';
 import 'package:audioplayers/audioplayers.dart';
 import 'package:teacher_mobile_app/core/theme/app_theme.dart';
 import 'package:teacher_mobile_app/features/contact_parents/providers/contact_parents_provider.dart';
+import 'package:teacher_mobile_app/features/attendance/presentation/screens/attendance_screen.dart';
 
 class StudentContactCard extends StatefulWidget {
   final Map<String, dynamic> student;
@@ -18,16 +19,18 @@ class StudentContactCard extends StatefulWidget {
   final ContactParentsState state;
   final ContactParentsNotifier notifier;
   final TextEditingController messageController;
+  final String schoolId;
 
   const StudentContactCard({
-    Key? key,
+    super.key,
     required this.student,
     required this.isExpanded,
-    this.parentData,
     required this.state,
     required this.notifier,
     required this.messageController,
-  }) : super(key: key);
+    required this.schoolId,
+    this.parentData,
+  });
 
   @override
   State<StudentContactCard> createState() => _StudentContactCardState();
@@ -409,17 +412,11 @@ class _StudentContactCardState extends State<StudentContactCard> {
                 padding: const EdgeInsets.all(16),
                 child: Row(
                   children: [
-                    Container(
-                      width: 50,
-                      height: 50,
-                      decoration: BoxDecoration(
-                        color: isDark ? Colors.white.withOpacity(0.05) : Colors.grey[100],
-                        borderRadius: BorderRadius.circular(14),
-                      ),
-                      clipBehavior: Clip.antiAlias,
-                      child: (widget.student['profilePic'] != null && widget.student['profilePic'].toString().isNotEmpty)
-                          ? Image.network(widget.student['profilePic'], fit: BoxFit.cover)
-                          : Image.network("https://api.dicebear.com/7.x/avataaars/svg?seed=${widget.student['id']}", fit: BoxFit.cover),
+                    StudentAvatar(
+                      studentId: widget.student['id'],
+                      schoolId: widget.schoolId,
+                      profilePic: widget.student['profilePic'] ?? "https://api.dicebear.com/7.x/avataaars/svg?seed=${widget.student['id']}",
+                      size: 50,
                     ),
                     const SizedBox(width: 16),
                     Expanded(

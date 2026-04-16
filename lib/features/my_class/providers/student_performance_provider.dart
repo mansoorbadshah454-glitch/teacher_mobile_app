@@ -34,6 +34,8 @@ class StudentPerformanceData {
 class StudentPerformanceNotifier extends StateNotifier<AsyncValue<StudentPerformanceData?>> {
   final Ref ref;
   final String studentId;
+  bool _academicModified = false;
+  bool _wellnessModified = false;
 
   StudentPerformanceNotifier(this.ref, this.studentId) : super(const AsyncValue.loading()) {
     _init();
@@ -87,16 +89,18 @@ class StudentPerformanceNotifier extends StateNotifier<AsyncValue<StudentPerform
         }
     }
 
-    state = AsyncValue.data(StudentPerformanceData(
+    final data = StudentPerformanceData(
       academicScores: acScores,
       homeworkScores: hwScores,
       wellness: wlScores,
       attendance: att,
-    ));
+    );
+    state = AsyncValue.data(data);
   }
 
   void updateAcademicScore(String subject, int score) {
     if (state.value == null) return;
+    _academicModified = true;
     final newScores = Map<String, int>.from(state.value!.academicScores);
     newScores[subject] = score;
     state = AsyncValue.data(state.value!.copyWith(academicScores: newScores));
@@ -104,6 +108,7 @@ class StudentPerformanceNotifier extends StateNotifier<AsyncValue<StudentPerform
 
   void updateHomeworkScore(String subject, int score) {
     if (state.value == null) return;
+    _academicModified = true;
     final newScores = Map<String, int>.from(state.value!.homeworkScores);
     newScores[subject] = score;
     state = AsyncValue.data(state.value!.copyWith(homeworkScores: newScores));
@@ -111,6 +116,7 @@ class StudentPerformanceNotifier extends StateNotifier<AsyncValue<StudentPerform
 
   void updateWellness(String key, int score) {
     if (state.value == null) return;
+    _wellnessModified = true;
     final newScores = Map<String, int>.from(state.value!.wellness);
     newScores[key] = score;
     state = AsyncValue.data(state.value!.copyWith(wellness: newScores));
@@ -160,36 +166,8 @@ class StudentPerformanceNotifier extends StateNotifier<AsyncValue<StudentPerform
 
     // Handle Notifications
     try {
-        final highScores = [
-            ...data.academicScores.entries.where((e) => e.value >= 80).map((e) => e.key),
-            ...data.homeworkScores.entries.where((e) => e.value >= 80).map((e) => e.key),
-        ].toSet().toList(); // Make unique
-
-         final lowScores = [
-            ...data.academicScores.entries.where((e) => e.value < 50).map((e) => e.key),
-            ...data.homeworkScores.entries.where((e) => e.value < 50).map((e) => e.key),
-        ].toSet().toList(); // Make unique
-
-        String title = "Performance Update";
-        String message = "";
-        String type = "info";
-
-        if (highScores.isNotEmpty && lowScores.isEmpty) {
-            title = "🌟 Excellent Progress!";
-            message = "Great news! ${student['name']} is excelling in ${highScores.join(', ')}. Keep up the fantastic work!";
-            type = "celebration";
-        } else if (lowScores.isNotEmpty && highScores.isEmpty) {
-            title = "🌱 Growth Opportunity";
-            message = "We noticed ${student['name']} is finding ${lowScores.join(', ')} a bit challenging. Let's work together to support their improvement.";
-            type = "alert";
-        } else if (highScores.isNotEmpty && lowScores.isNotEmpty) {
-            title = "📊 Performance Update";
-            message = "${student['name']} is doing great in ${highScores.join(', ')}, but could use some extra support in ${lowScores.join(', ')}.";
-            type = "info";
-        } else {
-            title = "📝 Just Updated";
-            message = "A new performance report is available for ${student['name']}. Please check the app for the latest details.";
-        }
+        final bool academicChanged = _academicModified;
+        final bool wellnessChanged = _wellnessModified;
 
         String? parentId;
         if (student['parentDetails'] != null && student['parentDetails']['parentId'] != null) {
@@ -197,24 +175,104 @@ class StudentPerformanceNotifier extends StateNotifier<AsyncValue<StudentPerform
         }
 
         if (parentId != null) {
-            await FirebaseFirestore.instance
-                 .collection('schools')
-                 .doc(schoolId)
-                 .collection('notifications')
-                 .add({
-                     'parentId': parentId,
-                     'studentId': studentId,
-                     'studentName': student['name'],
-                     'title': title,
-                     'message': message,
-                     'type': type,
-                     'read': false,
-                     'createdAt': FieldValue.serverTimestamp(),
-                 });
-            print("Notification sent to parent: $parentId");
-        } else {
-             print("No parent account found for this student. $studentId");
+            if (academicChanged) {
+                final highScores = [
+                    ...data.academicScores.entries.where((e) => e.value >= 80).map((e) => e.key),
+                    ...data.homeworkScores.entries.where((e) => e.value >= 80).map((e) => e.key),
+                ].toSet().toList(); // Make unique
+
+                 final lowScores = [
+                    ...data.academicScores.entries.where((e) => e.value < 50).map((e) => e.key),
+                    ...data.homeworkScores.entries.where((e) => e.value < 50).map((e) => e.key),
+                ].toSet().toList(); // Make unique
+
+                String title = "Performance Update";
+                String message = "";
+                String type = "info";
+
+                if (highScores.isNotEmpty && lowScores.isEmpty) {
+                    title = "🌟 Excellent Progress!";
+                    message = "Great news! ${student['name']} is excelling in ${highScores.join(', ')}. Keep up the fantastic work!";
+                    type = "celebration";
+                } else if (lowScores.isNotEmpty && highScores.isEmpty) {
+                    title = "🌱 Growth Opportunity";
+                    message = "We noticed ${student['name']} is finding ${lowScores.join(', ')} a bit challenging. Let's work together to support their improvement.";
+                    type = "alert";
+                } else if (highScores.isNotEmpty && lowScores.isNotEmpty) {
+                    title = "📊 Performance Update";
+                    message = "${student['name']} is doing great in ${highScores.join(', ')}, but could use some extra support in ${lowScores.join(', ')}.";
+                    type = "info";
+                } else {
+                    title = "📝 Just Updated";
+                    message = "A new performance report is available for ${student['name']}. Please check the app for the latest details.";
+                }
+
+                await FirebaseFirestore.instance
+                     .collection('schools')
+                     .doc(schoolId)
+                     .collection('notifications')
+                     .add({
+                         'parentId': parentId,
+                         'studentId': studentId,
+                         'studentName': student['name'],
+                         'title': title,
+                         'message': message,
+                         'type': type,
+                         'read': false,
+                         'createdAt': FieldValue.serverTimestamp(),
+                     });
+                print("Academic Notification sent to parent: $parentId");
+            }
+
+            if (wellnessChanged) {
+                // Wellness Notification
+                final healthScore = data.wellness['health'] ?? 80;
+                final behaviorScore = data.wellness['behavior'] ?? 80;
+                final hygieneScore = data.wellness['hygiene'] ?? 80;
+                final wellnessAvg = (healthScore + behaviorScore + hygieneScore) / 3.0;
+
+                String wTitle = "";
+                String wMessage = "";
+                String wType = "personality"; 
+                
+                if (wellnessAvg >= 90) {
+                    wTitle = "🌟 Exceptional Behavior & Health!";
+                    wMessage = "We are incredibly proud to report that ${student['name']} is setting a wonderful example in class with outstanding behavior and personal care. Thank you for your continued support at home!";
+                } else if (wellnessAvg >= 80) {
+                    wTitle = "😊 Great Habits & Well-being!";
+                    wMessage = "${student['name']} is showing wonderful habits, maintaining good hygiene, and demonstrating great behavior in class. Keep up the good work!";
+                } else if (wellnessAvg >= 60) {
+                    wTitle = "🌱 Steady Personal Growth";
+                    wMessage = "${student['name']} is doing well overall. Gentle reminders about daily routines and classroom focus will help them continue to grow positively.";
+                } else if (wellnessAvg >= 40) {
+                    wTitle = "🤝 Let's Support ${student['name']}";
+                    wMessage = "We've noticed a few areas where ${student['name']} might need more guidance regarding behavior or personal care. Let's work together to provide the right support.";
+                } else {
+                    wTitle = "🚨 Action Required: Well-being";
+                    wMessage = "There are significant concerns regarding ${student['name']}'s behavior or well-being in class. We kindly request you to connect with the teacher to discuss how we can best support them.";
+                }
+
+                await FirebaseFirestore.instance
+                     .collection('schools')
+                     .doc(schoolId)
+                     .collection('notifications')
+                     .add({
+                         'parentId': parentId,
+                         'studentId': studentId,
+                         'studentName': student['name'],
+                         'title': wTitle,
+                         'message': wMessage,
+                         'type': wType,
+                         'read': false,
+                         'createdAt': FieldValue.serverTimestamp(),
+                     });
+                print("Wellness Notification sent to parent: $parentId");
+            }
         }
+            
+        // Reset flags so we don't spam if they hit save multiple times
+        _academicModified = false;
+        _wellnessModified = false;
 
     } catch(e) {
         print("Failed to send notification: $e");

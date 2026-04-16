@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:teacher_mobile_app/core/theme/app_theme.dart';
+import 'package:teacher_mobile_app/core/providers/user_data_provider.dart';
 import 'package:teacher_mobile_app/features/contact_parents/providers/contact_parents_provider.dart';
 import 'package:teacher_mobile_app/features/contact_parents/presentation/widgets/student_contact_card.dart';
 import 'package:teacher_mobile_app/features/contact_parents/presentation/screens/group_broadcast_view.dart';
@@ -30,6 +31,7 @@ class _ContactParentsScreenState extends ConsumerState<ContactParentsScreen> {
   Widget build(BuildContext context) {
     final state = ref.watch(contactParentsProvider);
     final notifier = ref.read(contactParentsProvider.notifier);
+    final schoolId = ref.watch(teacherDataProvider).value?['schoolId'] ?? '';
 
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
@@ -64,11 +66,11 @@ class _ContactParentsScreenState extends ConsumerState<ContactParentsScreen> {
                           } else {
                              _selectedBroadcastIds.add(id);
                           }
-                       }
+               }
                     });
                   },
                 )
-              : _buildStudentList(context, state, notifier),
+              : _buildStudentList(context, state, notifier, schoolId),
           ),
         ],
       ),
@@ -253,7 +255,7 @@ class _ContactParentsScreenState extends ConsumerState<ContactParentsScreen> {
     );
   }
 
-  Widget _buildStudentList(BuildContext context, ContactParentsState state, ContactParentsNotifier notifier) {
+  Widget _buildStudentList(BuildContext context, ContactParentsState state, ContactParentsNotifier notifier, String schoolId) {
     if (state.isLoading) {
       return const Center(child: CircularProgressIndicator(color: Color(0xFFec4899)));
     }
@@ -326,6 +328,7 @@ class _ContactParentsScreenState extends ConsumerState<ContactParentsScreen> {
           state: state,
           notifier: notifier,
           messageController: _messageController,
+          schoolId: schoolId,
         );
       },
     );
