@@ -16,6 +16,28 @@ class StudentPerformanceScreen extends ConsumerStatefulWidget {
 
 class _StudentPerformanceScreenState extends ConsumerState<StudentPerformanceScreen> {
   bool _saving = false;
+  bool _hasUnsavedChanges = false;
+
+  Future<bool> _showDiscardDialog(BuildContext context) async {
+    final result = await showDialog<bool>(
+      context: context,
+      builder: (context) => AlertDialog(
+        title: const Text("Unsaved Changes"),
+        content: const Text("You have unsaved changes. Do you want to discard them?"),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(false),
+            child: const Text("Cancel"),
+          ),
+          TextButton(
+            onPressed: () => Navigator.of(context).pop(true),
+            child: const Text("Discard", style: TextStyle(color: Colors.red)),
+          ),
+        ],
+      ),
+    );
+    return result ?? false;
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -29,9 +51,18 @@ class _StudentPerformanceScreenState extends ConsumerState<StudentPerformanceScr
     final isLight = Theme.of(context).brightness == Brightness.light;
     final isDark = !isLight;
 
-    return Scaffold(
-      backgroundColor: Theme.of(context).scaffoldBackgroundColor,
-      body: SafeArea(
+    return PopScope(
+      canPop: !_hasUnsavedChanges,
+      onPopInvoked: (didPop) async {
+        if (didPop) return;
+        final shouldPop = await _showDiscardDialog(context);
+        if (shouldPop && context.mounted) {
+          context.pop();
+        }
+      },
+      child: Scaffold(
+        backgroundColor: Theme.of(context).scaffoldBackgroundColor,
+        body: SafeArea(
         child: performanceAsync.when(
           loading: () => const Center(child: CircularProgressIndicator(color: Colors.indigoAccent)),
           error: (e, st) => Center(child: Text('Error: $e', style: const TextStyle(color: Colors.red))),
@@ -53,7 +84,16 @@ class _StudentPerformanceScreenState extends ConsumerState<StudentPerformanceScr
                         child: Row(
                           children: [
                             GestureDetector(
-                              onTap: () => context.pop(),
+                              onTap: () async {
+                                if (_hasUnsavedChanges) {
+                                  final discard = await _showDiscardDialog(context);
+                                  if (discard && context.mounted) {
+                                    context.pop();
+                                  }
+                                } else {
+                                  context.pop();
+                                }
+                              },
                               child: Container(
                                 width: 44,
                                 height: 44,
@@ -127,9 +167,7 @@ class _StudentPerformanceScreenState extends ConsumerState<StudentPerformanceScr
                                           max: 100,
                                           onChanged: isEditable ? (val) {
                                             ref.read(studentPerformanceProvider(widget.studentId).notifier).updateAcademicScore(entry.key, val.toInt());
-                                          } : null,
-                                          onChangeEnd: isEditable ? (val) {
-                                            ref.read(studentPerformanceProvider(widget.studentId).notifier).silentSave();
+                                            if (!_hasUnsavedChanges) setState(() => _hasUnsavedChanges = true);
                                           } : null,
                                         ),
                                       ),
@@ -192,9 +230,7 @@ class _StudentPerformanceScreenState extends ConsumerState<StudentPerformanceScr
                                           max: 100,
                                           onChanged: isEditable ? (val) {
                                             ref.read(studentPerformanceProvider(widget.studentId).notifier).updateHomeworkScore(entry.key, val.toInt());
-                                          } : null,
-                                          onChangeEnd: isEditable ? (val) {
-                                            ref.read(studentPerformanceProvider(widget.studentId).notifier).silentSave();
+                                            if (!_hasUnsavedChanges) setState(() => _hasUnsavedChanges = true);
                                           } : null,
                                         ),
                                       ),
@@ -255,9 +291,7 @@ class _StudentPerformanceScreenState extends ConsumerState<StudentPerformanceScr
                                         max: 100,
                                         onChanged: (val) {
                                           ref.read(studentPerformanceProvider(widget.studentId).notifier).updateWellness(metric, val.toInt());
-                                        },
-                                        onChangeEnd: (val) {
-                                          ref.read(studentPerformanceProvider(widget.studentId).notifier).silentSave();
+                                          if (!_hasUnsavedChanges) setState(() => _hasUnsavedChanges = true);
                                         },
                                       ),
                                     ),
@@ -313,9 +347,7 @@ class _StudentPerformanceScreenState extends ConsumerState<StudentPerformanceScr
                                   max: 100,
                                   onChanged: (val) {
                                     ref.read(studentPerformanceProvider(widget.studentId).notifier).updateAttendance(val.toInt());
-                                  },
-                                  onChangeEnd: (val) {
-                                    ref.read(studentPerformanceProvider(widget.studentId).notifier).silentSave();
+                                    if (!_hasUnsavedChanges) setState(() => _hasUnsavedChanges = true);
                                   },
                                 ),
                               ),
@@ -375,6 +407,7 @@ class _StudentPerformanceScreenState extends ConsumerState<StudentPerformanceScr
             );
           },
         ),
+       ),
       ),
     );
   }

@@ -279,46 +279,6 @@ class StudentPerformanceNotifier extends StateNotifier<AsyncValue<StudentPerform
     }
   }
 
-  Future<void> silentSave() async {
-    final data = state.value;
-    final teacherData = ref.read(teacherDataProvider).value;
-    final assignedClass = ref.read(assignedClassProvider).value;
-    final studentsData = ref.read(classStudentsProvider).value;
-    
-    if (data == null || teacherData == null || assignedClass == null || studentsData == null) {
-      return; // Fail silently
-    }
-
-    final String schoolId = teacherData['schoolId'];
-    final String classId = assignedClass['id'];
-
-    final academicScoresList = data.academicScores.entries.map((e) => {'subject': e.key, 'score': e.value}).toList();
-    final homeworkScoresList = data.homeworkScores.entries.map((e) => {'subject': e.key, 'score': e.value}).toList();
-
-    final studentRef = FirebaseFirestore.instance
-        .collection('schools')
-        .doc(schoolId)
-        .collection('classes')
-        .doc(classId)
-        .collection('students')
-        .doc(studentId);
-
-    try {
-      final updateData = {
-        'academicScores': academicScoresList,
-        'homeworkScores': homeworkScoresList,
-        'wellness': data.wellness,
-        'attendance': data.attendance,
-        'classId': classId,
-        'className': assignedClass['name'] ?? 'Unknown',
-        'updatedAt': FieldValue.serverTimestamp(),
-      };
-      
-      await studentRef.update(updateData);
-    } catch (e) {
-      print("Failed to silently save student performance data: $e");
-    }
-  }
 }
 
 final studentPerformanceProvider = StateNotifierProvider.family<StudentPerformanceNotifier, AsyncValue<StudentPerformanceData?>, String>((ref, studentId) {
