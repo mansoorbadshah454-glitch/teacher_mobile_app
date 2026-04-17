@@ -229,27 +229,40 @@ class StudentPerformanceNotifier extends StateNotifier<AsyncValue<StudentPerform
                 final healthScore = data.wellness['health'] ?? 80;
                 final behaviorScore = data.wellness['behavior'] ?? 80;
                 final hygieneScore = data.wellness['hygiene'] ?? 80;
-                final wellnessAvg = (healthScore + behaviorScore + hygieneScore) / 3.0;
+                final Map<String, int> wScores = {
+                   'behavior': behaviorScore,
+                   'health': healthScore,
+                   'hygiene': hygieneScore,
+                };
+
+                final highW = wScores.entries.where((e) => e.value >= 80).map((e) => e.key).toList();
+                final lowW = wScores.entries.where((e) => e.value < 60).map((e) => e.key).toList();
+                final avgW = wScores.entries.where((e) => e.value >= 60 && e.value < 80).map((e) => e.key).toList();
 
                 String wTitle = "";
                 String wMessage = "";
                 String wType = "personality"; 
                 
-                if (wellnessAvg >= 90) {
-                    wTitle = "🌟 Exceptional Behavior & Health!";
-                    wMessage = "We are incredibly proud to report that ${student['name']} is setting a wonderful example in class with outstanding behavior and personal care. Thank you for your continued support at home!";
-                } else if (wellnessAvg >= 80) {
-                    wTitle = "😊 Great Habits & Well-being!";
-                    wMessage = "${student['name']} is showing wonderful habits, maintaining good hygiene, and demonstrating great behavior in class. Keep up the good work!";
-                } else if (wellnessAvg >= 60) {
-                    wTitle = "🌱 Steady Personal Growth";
-                    wMessage = "${student['name']} is doing well overall. Gentle reminders about daily routines and classroom focus will help them continue to grow positively.";
-                } else if (wellnessAvg >= 40) {
-                    wTitle = "🤝 Let's Support ${student['name']}";
-                    wMessage = "We've noticed a few areas where ${student['name']} might need more guidance regarding behavior or personal care. Let's work together to provide the right support.";
-                } else {
+                if (highW.length == 3) {
+                    wTitle = "🌟 Exceptional Habits!";
+                    wMessage = "${student['name']} is setting a wonderful example in class with outstanding behavior, health, and personal hygiene. Keep up the excellent work!";
+                    wType = "personality";
+                } else if (lowW.length > 1 && highW.isEmpty) {
                     wTitle = "🚨 Action Required: Well-being";
-                    wMessage = "There are significant concerns regarding ${student['name']}'s behavior or well-being in class. We kindly request you to connect with the teacher to discuss how we can best support them.";
+                    wMessage = "We've noticed a few concerns regarding ${student['name']}'s ${lowW.join(' and ')}. Let's work together to provide the right support for their well-being.";
+                    wType = lowW.first;
+                } else if (highW.isNotEmpty && (lowW.isNotEmpty || avgW.isNotEmpty)) {
+                    wTitle = "🌱 Steady Personal Growth";
+                    wMessage = "${student['name']} is doing wonderfully in ${highW.join(' and ')}! To help them shine even more, guided daily routines at home can really boost their ${[...lowW, ...avgW].join(' and ')}.";
+                    wType = lowW.isNotEmpty ? lowW.first : avgW.first;
+                } else if (lowW.length == 1) {
+                    wTitle = "🤝 Let's Support ${student['name']}";
+                    wMessage = "${student['name']} is doing well overall, but we've noticed they might need a bit more guidance regarding their ${lowW.first}. Let's work together to help them improve here.";
+                    wType = lowW.first;
+                } else {
+                    wTitle = "😊 Great Habits & Well-being!";
+                    wMessage = "${student['name']} is maintaining steady habits. Continuing to encourage good daily routines will help them excel further in behavior and personal care.";
+                    wType = avgW.isNotEmpty ? avgW.first : "personality";
                 }
 
                 await FirebaseFirestore.instance
