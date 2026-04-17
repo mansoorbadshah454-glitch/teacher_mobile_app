@@ -9,6 +9,7 @@ import 'package:teacher_mobile_app/features/dashboard/providers/unread_news_feed
 import 'package:teacher_mobile_app/features/dashboard/providers/duty_provider.dart';
 import 'package:teacher_mobile_app/core/providers/user_data_provider.dart';
 import 'package:teacher_mobile_app/services/push_notification_service.dart';
+import 'package:teacher_mobile_app/features/timetable/providers/timetable_provider.dart';
 
 class DashboardScreen extends ConsumerStatefulWidget {
   const DashboardScreen({super.key});
@@ -30,14 +31,38 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
       error: (_, __) => 0,
     );
 
-    // Initialize Push Notifications once teacher data defines the schoolId
-    ref.listen<AsyncValue<Map<String, dynamic>?>>(teacherDataProvider, (previous, next) {
-      if (next.hasValue && next.value != null && next.value!['schoolId'] != null) {
-        final schoolId = next.value!['schoolId'] as String;
+    // Watch teacher data to initialize Push Notifications exactly once
+    final teacherDataAsync = ref.watch(teacherDataProvider);
+    
+    void initPushSafely(Map<String, dynamic>? teacherMap) {
+      if (teacherMap != null && teacherMap['schoolId'] != null) {
+        final schoolId = teacherMap['schoolId'] as String;
         final uid = FirebaseAuth.instance.currentUser?.uid;
         if (uid != null) {
-          PushNotificationService().init(schoolId, uid);
+          PushNotificationService().init(schoolId, uid, onMessageAlert: (type, title, body) async {
+             // Handle Riverpod State Updates dynamically
+             if (type == 'timetable_update' && title.contains('Urgent')) {
+                 await ref.read(emergencyBadgeProvider.notifier).setEmergency(body.isEmpty ? 'Emergency Timetable update received.' : body);
+             }
+             
+             // Construct UI Banner
+             final route = PushNotificationService.getRouteFromType(type);
+             bool isEmergency = type == 'timetable_update' && title.contains('Urgent');
+             PushNotificationService.showGlobalAlert(title, body, route, isEmergency: isEmergency);
+          });
         }
+      }
+    }
+
+    if (teacherDataAsync.hasValue && teacherDataAsync.value != null) {
+       // Intentionally call it smoothly if we already have the payload locally
+       initPushSafely(teacherDataAsync.value);
+    }
+
+    // Also listen in case it wasn't ready on frame 1
+    ref.listen<AsyncValue<Map<String, dynamic>?>>(teacherDataProvider, (previous, next) {
+      if (next.hasValue && next.value != null) {
+         initPushSafely(next.value);
       }
     });
 

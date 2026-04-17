@@ -6,6 +6,7 @@ import 'package:teacher_mobile_app/core/theme/app_theme.dart';
 import 'package:teacher_mobile_app/core/providers/user_data_provider.dart';
 import 'package:teacher_mobile_app/features/auth/auth_provider.dart';
 import 'package:teacher_mobile_app/features/inbox/providers/inbox_provider.dart';
+import 'package:teacher_mobile_app/features/timetable/providers/timetable_provider.dart';
 
 class AppDrawer extends ConsumerWidget {
   const AppDrawer({super.key});
@@ -14,6 +15,7 @@ class AppDrawer extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final schoolAsync = ref.watch(schoolDataProvider);
     final messagesAsync = ref.watch(inboxProvider);
+    final hasTimetableStar = ref.watch(hasUnreadEmergencyProvider);
 
     final schoolName = schoolAsync.value?['name'] ?? 'School Name';
     final schoolLogo = schoolAsync.value?['logo'] ?? '';
@@ -105,14 +107,15 @@ class AppDrawer extends ConsumerWidget {
             },
           ),
           _DrawerItem(
-            icon: Icons.person_outline,
-            title: 'Profile',
-            onTap: () {
+            icon: Icons.calendar_month_outlined,
+            title: 'Time table',
+            showStarBadge: hasTimetableStar,
+            onTap: () async {
               Navigator.pop(context);
-              context.push('/profile');
+              await ref.read(emergencyBadgeProvider.notifier).reload();
+              if (context.mounted) context.push('/timetable');
             },
           ),
-
           _DrawerItem(
             icon: Icons.settings_outlined,
             title: 'Settings',
@@ -144,12 +147,14 @@ class _DrawerItem extends StatelessWidget {
   final String title;
   final VoidCallback onTap;
   final int badgeCount;
+  final bool showStarBadge;
 
   const _DrawerItem({
     required this.icon,
     required this.title,
     required this.onTap,
     this.badgeCount = 0,
+    this.showStarBadge = false,
   });
 
   @override
@@ -161,7 +166,17 @@ class _DrawerItem extends StatelessWidget {
       title: Row(
         mainAxisAlignment: MainAxisAlignment.spaceBetween,
         children: [
-          Text(title, style: TextStyle(color: color, fontWeight: FontWeight.w500)),
+          Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Text(title, style: TextStyle(color: color, fontWeight: FontWeight.w500)),
+              if (showStarBadge)
+                const Padding(
+                  padding: EdgeInsets.only(left: 6.0),
+                  child: Icon(Icons.star, color: Colors.amber, size: 16),
+                ),
+            ],
+          ),
           if (badgeCount > 0)
             Container(
               padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),

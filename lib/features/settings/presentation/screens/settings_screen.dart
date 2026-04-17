@@ -21,14 +21,34 @@ class _SettingsScreenState extends ConsumerState<SettingsScreen> {
     return Scaffold(
       backgroundColor: Theme.of(context).colorScheme.background,
       appBar: AppBar(
-        title: const Text("Settings"),
+        backgroundColor: Colors.transparent,
+        elevation: 0,
+        iconTheme: const IconThemeData(color: Colors.white),
+        title: const Text(
+          "Settings",
+          style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold),
+        ),
         leading: IconButton(
-          icon: const Icon(Icons.arrow_back),
+          icon: const Icon(Icons.arrow_back, color: Colors.white),
           onPressed: () => context.pop(),
+        ),
+        flexibleSpace: Container(
+          decoration: BoxDecoration(
+            gradient: AppTheme.primaryGradient,
+            boxShadow: [
+              BoxShadow(color: Colors.black.withOpacity(0.3), blurRadius: 4, offset: const Offset(0, 4))
+            ],
+          ),
         ),
       ),
       body: ListView(
         children: [
+          ListTile(
+            leading: Icon(Icons.person_outline, color: isDarkBackground ? Colors.white : Colors.black87),
+            title: Text("Profile", style: TextStyle(color: isDarkBackground ? Colors.white : Colors.black87)),
+            onTap: () => context.push('/profile'),
+          ),
+          Divider(color: isDarkBackground ? Colors.white24 : Colors.black12),
           SwitchListTile(
             title: Text("Dark Mode", style: TextStyle(color: isDarkBackground ? Colors.white : Colors.black87)),
             secondary: Icon(Icons.dark_mode, color: isDarkBackground ? Colors.white : Colors.black87),
