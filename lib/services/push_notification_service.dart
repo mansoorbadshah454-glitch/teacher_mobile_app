@@ -44,6 +44,8 @@ class PushNotificationService {
           ),
           backgroundColor: isEmergency ? Colors.red.shade600 : AppTheme.primary,
           duration: const Duration(seconds: 6),
+          behavior: SnackBarBehavior.floating,
+          dismissDirection: DismissDirection.horizontal,
           action: route != null ? SnackBarAction(
             label: "VIEW", 
             textColor: Colors.white, 
