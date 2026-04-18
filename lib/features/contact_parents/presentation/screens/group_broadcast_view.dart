@@ -249,12 +249,24 @@ class _GroupBroadcastViewState extends State<GroupBroadcastView> {
   }
 
   Future<void> _startRecording() async {
+    setState(() { _isRecording = true; _isCanceled = false; });
+    
     if (await Permission.microphone.request().isGranted) {
+      if (!_isRecording || _isCanceled) return;
       final tempDir = Directory.systemTemp;
       final path = p.join(tempDir.path, 'broadcast_msg_${DateTime.now().millisecondsSinceEpoch}.m4a');
-      await _audioRecorder.start(const RecordConfig(encoder: AudioEncoder.aacLc), path: path);
-      setState(() { _isRecording = true; _isCanceled = false; });
-      _startTimer();
+      try {
+        await _audioRecorder.start(const RecordConfig(encoder: AudioEncoder.aacLc), path: path);
+        if (!_isRecording || _isCanceled) {
+           await _audioRecorder.stop();
+           return;
+        }
+        _startTimer();
+      } catch (e) {
+        if (mounted) setState(() => _isRecording = false);
+      }
+    } else {
+      if (mounted) setState(() => _isRecording = false);
     }
   }
 
@@ -262,11 +274,17 @@ class _GroupBroadcastViewState extends State<GroupBroadcastView> {
     _recordingTimer?.cancel();
     if (!_isRecording) return;
     
-    final path = await _audioRecorder.stop();
     setState(() => _isRecording = false);
+    
+    String? path;
+    try {
+      path = await _audioRecorder.stop();
+    } catch (_) {}
 
     if (_isCanceled || path == null) {
-      if (path != null) File(path).deleteSync();
+      if (path != null && File(path).existsSync()) {
+        File(path).deleteSync();
+      }
       return;
     }
 
@@ -746,32 +764,37 @@ class _GroupBroadcastViewState extends State<GroupBroadcastView> {
             _addPendingAndSend(text, null, null, null);
           }
         },
-        child: CircleAvatar(
+        child: const CircleAvatar(
           radius: 24,
-          backgroundColor: const Color(0xFFdb2777),
-          child: const Icon(Icons.send, color: Colors.white, size: 20),
+          backgroundColor: Color(0xFFdb2777),
+          child: Icon(Icons.send, color: Colors.white, size: 20),
         ),
       );
     }
 
-    return GestureDetector(
-      onLongPressStart: (_) => _startRecording(),
-      onLongPressMoveUpdate: (details) {
-        if (_isRecording && details.localOffsetFromOrigin.dx < -50) {
+    return Listener(
+      onPointerDown: (_) => _startRecording(),
+      onPointerMove: (event) {
+        if (_isRecording && event.localPosition.dx < -50) {
            setState(() => _isCanceled = true);
            _stopRecordingSafely();
         }
       },
-      onLongPressEnd: (_) => _stopRecordingSafely(),
+      onPointerUp: (_) => _stopRecordingSafely(),
+      onPointerCancel: (_) => _stopRecordingSafely(),
       child: AnimatedContainer(
         duration: const Duration(milliseconds: 200),
-        curve: Curves.easeOut,
-        child: CircleAvatar(
-          radius: _isRecording ? 30 : 24,
-          backgroundColor: const Color(0xFFdb2777),
+        curve: Curves.easeOutBack,
+        width: _isRecording ? 64 : 48,
+        height: _isRecording ? 64 : 48,
+        decoration: const BoxDecoration(
+          color: Color(0xFFdb2777),
+          shape: BoxShape.circle,
+        ),
+        child: Center(
           child: widget.state.isSending 
               ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)) 
-              : Icon(_isRecording ? Icons.mic : Icons.mic_none, color: Colors.white, size: _isRecording ? 28 : 24),
+              : Icon(_isRecording ? Icons.mic : Icons.mic_none, color: Colors.white, size: _isRecording ? 32 : 24),
         ),
       ),
     );
