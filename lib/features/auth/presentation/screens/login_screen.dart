@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:teacher_mobile_app/features/auth/auth_provider.dart';
 import 'package:go_router/go_router.dart';
+import 'package:flutter_secure_storage/flutter_secure_storage.dart';
+import 'package:local_auth/local_auth.dart';
+import 'package:flutter/services.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -16,6 +19,73 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
   final _schoolIdController = TextEditingController(); // New School ID controller
   final _formKey = GlobalKey<FormState>();
   bool _isPasswordObscured = true;
+  
+  final _storage = const FlutterSecureStorage(
+    aOptions: AndroidOptions(encryptedSharedPreferences: true),
+  );
+  final LocalAuthentication auth = LocalAuthentication();
+  bool _hasSavedCredentials = false;
+  bool _isAuthenticating = false;
+
+  @override
+  void initState() {
+    super.initState();
+    _loadSavedCredentials();
+  }
+
+  Future<void> _loadSavedCredentials() async {
+    final savedEmail = await _storage.read(key: 'saved_email');
+    final savedPassword = await _storage.read(key: 'saved_password');
+    final savedSchoolId = await _storage.read(key: 'saved_school_id');
+
+    if (savedEmail != null && savedPassword != null && savedSchoolId != null) {
+      if (mounted) {
+        setState(() {
+          _emailController.text = savedEmail;
+          _passwordController.text = savedPassword;
+          _schoolIdController.text = savedSchoolId;
+          _hasSavedCredentials = true;
+        });
+      }
+    }
+  }
+
+  Future<void> _authenticateWithBiometrics() async {
+    bool authenticated = false;
+    try {
+      if (mounted) {
+        setState(() {
+          _isAuthenticating = true;
+        });
+      }
+      authenticated = await auth.authenticate(
+        localizedReason: 'Please confirm your identity to login',
+        options: const AuthenticationOptions(
+          stickyAuth: true,
+          biometricOnly: false, // Allows pattern/pin if biometrics fail/missing
+        ),
+      );
+      if (mounted) {
+        setState(() {
+          _isAuthenticating = false;
+        });
+      }
+    } on PlatformException catch (e) {
+      print("Local Auth Error: $e");
+      if (mounted) {
+        setState(() {
+          _isAuthenticating = false;
+        });
+      }
+      return;
+    }
+    
+    if (!mounted) return;
+
+    if (authenticated) {
+      _submit();
+    }
+  }
 
   @override
   void dispose() {
@@ -42,6 +112,11 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         
         print('LoginScreen: SignIn call completed.'); 
         
+        // Save credentials upon successful sign-in securely
+        await _storage.write(key: 'saved_email', value: _emailController.text.trim());
+        await _storage.write(key: 'saved_password', value: _passwordController.text.trim());
+        await _storage.write(key: 'saved_school_id', value: _schoolIdController.text.trim());
+        
         // Navigation ONLY on success
         if (mounted) {
            context.go('/dashboard');
@@ -49,8 +124,14 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
 
       } catch (e) {
         print('LoginScreen: SignIn threw error: $e'); 
-        // SnackBar is already handled by ref.listen in build, 
-        // but we catch here to prevent context.go('/dashboard') from running.
+        if (mounted) {
+          ScaffoldMessenger.of(context).showSnackBar(
+            SnackBar(
+              content: Text('Error: ${e.toString().replaceAll('Exception: ', '')}'),
+              backgroundColor: Colors.red,
+            ),
+          );
+        }
       }
     }
   }
@@ -136,7 +217,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       const SizedBox(height: 24),
                       TextFormField(
                         controller: _schoolIdController,
-                        enabled: !isLoading,
+                        enabled: !isLoading && !_isAuthenticating,
                         style: const TextStyle(color: Colors.white),
                         decoration: const InputDecoration(
                           labelText: 'School ID',
@@ -156,7 +237,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       const SizedBox(height: 16),
                       TextFormField(
                         controller: _emailController,
-                        enabled: !isLoading,
+                        enabled: !isLoading && !_isAuthenticating,
                         style: const TextStyle(color: Colors.white),
                         decoration: const InputDecoration(
                           labelText: 'Email',
@@ -175,7 +256,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                       const SizedBox(height: 16),
                       TextFormField(
                         controller: _passwordController,
-                        enabled: !isLoading,
+                        enabled: !isLoading && !_isAuthenticating,
                         obscureText: _isPasswordObscured,
                         style: const TextStyle(color: Colors.white),
                         decoration: InputDecoration(
@@ -208,9 +289,9 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                         width: double.infinity,
                         height: 48,
                         child: FilledButton(
-                          onPressed: isLoading ? null : _submit,
+                          onPressed: isLoading || _isAuthenticating ? null : _submit,
                           style: FilledButton.styleFrom(backgroundColor: Colors.blueAccent),
-                          child: isLoading
+                          child: isLoading || _isAuthenticating
                               ? const SizedBox(
                                   width: 24,
                                   height: 24,
@@ -222,6 +303,22 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
                               : const Text('Login'),
                         ),
                       ),
+                      if (_hasSavedCredentials) ...[
+                        const SizedBox(height: 20),
+                        const Divider(color: Colors.white24),
+                        const SizedBox(height: 8),
+                        TextButton.icon(
+                          onPressed: isLoading || _isAuthenticating ? null : _authenticateWithBiometrics,
+                          icon: const Icon(Icons.fingerprint, color: Colors.white, size: 28),
+                          label: const Text('Login with Device Lock', style: TextStyle(color: Colors.white)),
+                          style: TextButton.styleFrom(
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            shape: RoundedRectangleBorder(
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                          ),
+                        ),
+                      ]
                     ],
                   ),
                 ),

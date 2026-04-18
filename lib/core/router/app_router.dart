@@ -23,8 +23,10 @@ import 'package:teacher_mobile_app/features/notebook/screens/note_editor_screen.
 import 'package:teacher_mobile_app/features/notebook/models/note_model.dart';
 import 'package:teacher_mobile_app/features/timetable/presentation/screens/timetable_screen.dart';
 final GlobalKey<ScaffoldMessengerState> rootScaffoldMessengerKey = GlobalKey<ScaffoldMessengerState>();
+final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
 final appRouter = GoRouter(
+  navigatorKey: navigatorKey,
   initialLocation: '/splash',
   routes: [
     GoRoute(

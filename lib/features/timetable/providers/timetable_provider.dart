@@ -46,13 +46,13 @@ final timetableProvider = StreamProvider<List<TimetableSlot>>((ref) async* {
     final List<dynamic> cols = data['cols'] ?? [];
     final List<dynamic> rows = data['rows'] ?? [];
 
-    // Find row belonging to current teacher
+    // Find row belonging to current teacher securely
     final myRow = rows.firstWhere(
-      (r) => r['teacherId'] == user.uid,
-      orElse: () => null,
+      (r) => r != null && (r as Map)['teacherId'] == user.uid,
+      orElse: () => <String, dynamic>{},
     );
 
-    if (myRow == null) return <TimetableSlot>[];
+    if (myRow == null || (myRow as Map).isEmpty) return <TimetableSlot>[];
 
     final List<dynamic> cells = myRow['cells'] ?? [];
     final List<TimetableSlot> slots = [];

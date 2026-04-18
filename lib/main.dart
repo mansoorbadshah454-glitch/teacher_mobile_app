@@ -1,6 +1,7 @@
 import 'package:firebase_core/firebase_core.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:teacher_mobile_app/core/providers/theme_provider.dart';
 import 'package:teacher_mobile_app/core/router/app_router.dart';
 import 'package:teacher_mobile_app/core/theme/app_theme.dart';
@@ -35,6 +36,13 @@ void main() async {
       } else {
         print("🔥 [Main] Firebase already initialized");
       }
+
+      // Enable aggressive offline persistence
+      FirebaseFirestore.instance.settings = const Settings(
+        persistenceEnabled: true,
+        cacheSizeBytes: Settings.CACHE_SIZE_UNLIMITED,
+      );
+      print("💽 [Main] Firestore Offline Persistence Enabled");
       FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);
       
       FirebaseMessaging.instance.getInitialMessage().then((message) {
