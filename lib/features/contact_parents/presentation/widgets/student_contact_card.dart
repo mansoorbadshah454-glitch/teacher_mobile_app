@@ -432,7 +432,10 @@ class _StudentContactCardState extends State<StudentContactCard> {
                             ),
                           ),
                           const SizedBox(height: 4),
-                          Row(
+                          Wrap(
+                            crossAxisAlignment: WrapCrossAlignment.center,
+                            spacing: 8,
+                            runSpacing: 4,
                             children: [
                               Container(
                                 padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
@@ -445,7 +448,32 @@ class _StudentContactCardState extends State<StudentContactCard> {
                                   style: TextStyle(color: isDark ? Colors.white70 : Colors.grey[700], fontSize: 12),
                                 ),
                               ),
-                              const SizedBox(width: 8),
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: widget.parentData != null ? Colors.green.withOpacity(0.1) : Colors.red.withOpacity(0.1),
+                                  borderRadius: BorderRadius.circular(6),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: [
+                                    Icon(
+                                      widget.parentData != null ? Icons.link : Icons.link_off,
+                                      color: widget.parentData != null ? Colors.green : Colors.red,
+                                      size: 10,
+                                    ),
+                                    const SizedBox(width: 4),
+                                    Text(
+                                      widget.parentData != null ? "Linked" : "Unlinked",
+                                      style: TextStyle(
+                                        color: widget.parentData != null ? Colors.green : Colors.red,
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ],
+                                ),
+                              ),
                               const Text(
                                 "• Tap to Message",
                                 style: TextStyle(color: Colors.grey, fontSize: 12),

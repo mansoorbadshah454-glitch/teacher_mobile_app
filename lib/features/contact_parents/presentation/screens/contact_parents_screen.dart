@@ -78,6 +78,8 @@ class _ContactParentsScreenState extends ConsumerState<ContactParentsScreen> {
   }
 
   Widget _buildHeader(BuildContext context, ContactParentsState state, ContactParentsNotifier notifier) {
+    int linkedParentsCount = state.students.where((s) => state.parentMap.containsKey(s['id'])).length;
+
     return Container(
       padding: EdgeInsets.fromLTRB(16, MediaQuery.of(context).padding.top + 16, 16, 16),
       decoration: BoxDecoration(
@@ -129,7 +131,7 @@ class _ContactParentsScreenState extends ConsumerState<ContactParentsScreen> {
                     ),
                     Text(
                       state.assignedClass != null 
-                        ? (state.isGroupMode ? "${state.parentMap.length} Total Parents" : "${state.assignedClass!['name']} • ${state.students.length} Students")
+                        ? (state.isGroupMode ? "$linkedParentsCount Parents Linked" : "${state.assignedClass!['name']} • ${state.students.length} Students • $linkedParentsCount Parents")
                         : "Fetching class...",
                       style: TextStyle(
                         fontSize: 14,

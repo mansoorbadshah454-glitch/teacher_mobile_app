@@ -586,16 +586,13 @@ class _HistoryTabContent extends ConsumerWidget {
                   final dateStr = '$year-${month.toString().padLeft(2, '0')}-${day.toString().padLeft(2, '0')}';
                   
                   final log = historyMap[dateStr];
-                  // If no log exists but date is in the past, consider it absent or holiday (mock logic fallback). 
-                  // But usually, real systems generate "Absent" automatically. If missing, we assume "Absent" or "Holiday" for Sundays.
                   String status = "Upcoming";
-                  // Make today upcoming instead of absent if log is missing
-                  if (!dateObj.isBefore(today)) {
+                  if (log != null) {
+                    status = log['status'] ?? "Present";
+                  } else if (!dateObj.isBefore(today)) {
                     status = "Upcoming";
                   } else if (dateObj.weekday == 7) {
                     status = "Holiday"; // Sunday
-                  } else if (log != null) {
-                    status = log['status'] ?? "Present";
                   } else {
                     status = "Absent"; // Missing log for past day
                   }
