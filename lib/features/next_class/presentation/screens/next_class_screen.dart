@@ -7,6 +7,7 @@ import 'package:teacher_mobile_app/features/next_class/providers/next_class_prov
 import 'package:teacher_mobile_app/features/next_class/presentation/widgets/student_score_card.dart';
 import 'package:teacher_mobile_app/features/next_class/presentation/widgets/class_card.dart';
 import 'package:teacher_mobile_app/features/next_class/services/pdf_generator_service.dart';
+import 'package:teacher_mobile_app/features/timetable/providers/timetable_provider.dart';
 
 class NextClassScreen extends ConsumerWidget {
   const NextClassScreen({Key? key}) : super(key: key);
@@ -17,6 +18,7 @@ class NextClassScreen extends ConsumerWidget {
     final notifier = ref.read(nextClassProvider.notifier);
     final teacherData = ref.watch(teacherDataProvider).value;
     final schoolData = ref.watch(schoolDataProvider).value;
+    final timetableSlots = ref.watch(timetableProvider).value ?? [];
 
     final isLight = Theme.of(context).brightness == Brightness.light;
 
@@ -37,7 +39,7 @@ class NextClassScreen extends ConsumerWidget {
               Expanded(
                 child: AnimatedSwitcher(
                   duration: const Duration(milliseconds: 300),
-                  child: _buildBody(context, state, notifier, teacherData, schoolData),
+                  child: _buildBody(context, state, notifier, teacherData, schoolData, timetableSlots),
                 ),
               ),
             ],
@@ -211,7 +213,7 @@ class NextClassScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildBody(BuildContext context, NextClassState state, NextClassNotifier notifier, Map<String, dynamic>? teacherData, Map<String, dynamic>? schoolData) {
+  Widget _buildBody(BuildContext context, NextClassState state, NextClassNotifier notifier, Map<String, dynamic>? teacherData, Map<String, dynamic>? schoolData, List<TimetableSlot> timetableSlots) {
     if (state.isLoading && state.classes.isEmpty && state.students.isEmpty) {
       return const Center(
         child: CircularProgressIndicator(color: AppTheme.primary),
@@ -222,7 +224,7 @@ class NextClassScreen extends ConsumerWidget {
       case NextClassViewMode.classes:
         return _buildClassesView(context, state, notifier);
       case NextClassViewMode.subjects:
-        return _buildSubjectsView(context, state, notifier, teacherData);
+        return _buildSubjectsView(context, state, notifier, timetableSlots);
       case NextClassViewMode.students:
         return _buildStudentsView(context, state, notifier);
       case NextClassViewMode.test:
@@ -256,9 +258,9 @@ class NextClassScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildSubjectsView(BuildContext context, NextClassState state, NextClassNotifier notifier, Map<String, dynamic>? teacherData) {
+  Widget _buildSubjectsView(BuildContext context, NextClassState state, NextClassNotifier notifier, List<TimetableSlot> timetableSlots) {
     final subjects = List<String>.from(state.selectedClass?['subjects'] ?? []);
-    final assignedSubjects = List<String>.from(teacherData?['subjects'] ?? []);
+    final className = state.selectedClass?['name'];
 
     if (subjects.isEmpty) {
       return const Center(
@@ -273,12 +275,12 @@ class NextClassScreen extends ConsumerWidget {
         final isLight = Theme.of(context).brightness == Brightness.light;
         final isDark = !isLight;
         final subject = subjects[index];
-        final isAssigned = assignedSubjects.contains(subject);
+        final isAssigned = timetableSlots.any((slot) => slot.className == className && slot.subject == subject);
 
         return GestureDetector(
           onTap: isAssigned ? () => notifier.selectSubject(subject) : () {
             ScaffoldMessenger.of(context).showSnackBar(
-              const SnackBar(content: Text("You are not assigned to teach this subject.")),
+              const SnackBar(content: Text("No period assigned on timetable for this specific subject/class.")),
             );
           },
           child: Opacity(
@@ -325,7 +327,7 @@ class NextClassScreen extends ConsumerWidget {
                         ),
                         if (!isAssigned)
                           const Text(
-                            "Not Assigned",
+                            "No Period on Timetable",
                             style: TextStyle(
                               color: Colors.grey,
                               fontSize: 11,
