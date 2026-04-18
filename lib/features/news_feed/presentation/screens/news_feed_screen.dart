@@ -1,7 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:go_router/go_router.dart';
 import 'package:teacher_mobile_app/core/theme/app_theme.dart';
 import 'package:teacher_mobile_app/features/news_feed/presentation/widgets/news_post_card.dart';
 import 'package:teacher_mobile_app/features/news_feed/presentation/screens/create_post_screen.dart';
@@ -135,10 +134,7 @@ class _NewsFeedScreenState extends ConsumerState<NewsFeedScreen> {
               floating: true,
               pinned: true,
               elevation: 4,
-              leading: IconButton(
-                icon: const Icon(Icons.arrow_back, color: Colors.white),
-                onPressed: () => context.pop(),
-              ),
+              automaticallyImplyLeading: false,
               title: Row(
                 children: [
                   if (schoolLogo != null)
@@ -151,12 +147,13 @@ class _NewsFeedScreenState extends ConsumerState<NewsFeedScreen> {
                   const SizedBox(width: 8),
                   Expanded(
                     child: Text(
-                      schoolName ?? "School Feed",
-                      style: Theme.of(context).textTheme.titleLarge?.copyWith(
-                            fontSize: 20,
-                            fontWeight: FontWeight.bold,
-                            color: Colors.white,
-                          ),
+                      "SchoolBook",
+                      style: TextStyle(
+                        fontWeight: FontWeight.w900,
+                        fontSize: 30,
+                        letterSpacing: -1.5,
+                        color: Colors.white,
+                      ),
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
@@ -251,14 +248,19 @@ class _NewsFeedScreenState extends ConsumerState<NewsFeedScreen> {
 
   Widget _buildCreatePostTrigger(BuildContext context) {
     final user = ref.watch(currentUserProvider);
+    final teacherDataAsync = ref.watch(teacherDataProvider);
+    final teacherData = teacherDataAsync.value;
+    
+    final teacherName = teacherData?['name'] ?? user?.displayName ?? 'Teacher';
+    final role = teacherData?['role'] ?? 'Teacher';
     final isDark = Theme.of(context).brightness == Brightness.dark;
     
     return Container(
-      margin: const EdgeInsets.fromLTRB(16, 8, 16, 8),
+      margin: const EdgeInsets.only(bottom: 8),
       padding: const EdgeInsets.all(12),
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surface,
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.zero,
         boxShadow: isDark ? null : [
           BoxShadow(
             color: Colors.black.withOpacity(0.1),
@@ -267,55 +269,84 @@ class _NewsFeedScreenState extends ConsumerState<NewsFeedScreen> {
           ),
         ],
       ),
-      child: Row(
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          CircleAvatar(
-            backgroundImage: user?.photoURL != null 
-                ? NetworkImage(user!.photoURL!) 
-                : null,
-            radius: 20,
-            child: user?.photoURL == null 
-                ? const Icon(Icons.person) 
-                : null,
-          ),
-          const SizedBox(width: 12),
-          Expanded(
-            child: GestureDetector(
-              onTap: () {
-                if (schoolId != null) {
-                   Navigator.push(
-                     context,
-                     MaterialPageRoute(builder: (_) => CreatePostScreen(schoolId: schoolId!)),
-                   );
-                }
-              },
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                decoration: BoxDecoration(
-                  color: isDark ? Colors.white.withOpacity(0.05) : Colors.grey[100],
-                  borderRadius: BorderRadius.circular(24),
-                  border: Border.all(color: Theme.of(context).dividerColor.withOpacity(0.1)),
-                ),
-                child: Text(
-                  "Write a post...",
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                        color: Theme.of(context).textTheme.bodyMedium?.color?.withOpacity(0.6),
-                      ),
+          Row(
+            children: [
+              CircleAvatar(
+                backgroundImage: user?.photoURL != null 
+                    ? NetworkImage(user!.photoURL!) 
+                    : null,
+                radius: 20,
+                child: user?.photoURL == null 
+                    ? const Icon(Icons.person) 
+                    : null,
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      teacherName,
+                      style: Theme.of(context).textTheme.titleMedium?.copyWith(
+                            fontWeight: FontWeight.bold,
+                          ),
+                    ),
+                    Text(
+                      role,
+                      style: Theme.of(context).textTheme.bodySmall?.copyWith(
+                            color: Theme.of(context).textTheme.bodySmall?.color?.withOpacity(0.6),
+                          ),
+                    ),
+                  ],
                 ),
               ),
-            ),
+            ],
           ),
-          const SizedBox(width: 8),
-          IconButton(
-            icon: const Icon(Icons.image, color: Colors.green),
-            onPressed: () {
-                 if (schoolId != null) {
-                   Navigator.push(
-                     context,
-                     MaterialPageRoute(builder: (_) => CreatePostScreen(schoolId: schoolId!)),
-                   );
-                }
-            },
+          const SizedBox(height: 12),
+          Row(
+            children: [
+              Expanded(
+                child: GestureDetector(
+                  onTap: () {
+                    if (schoolId != null) {
+                       Navigator.push(
+                         context,
+                         MaterialPageRoute(builder: (_) => CreatePostScreen(schoolId: schoolId!)),
+                       );
+                    }
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: isDark ? Colors.white.withOpacity(0.05) : Colors.grey[100],
+                      borderRadius: BorderRadius.circular(24),
+                      border: Border.all(color: Theme.of(context).dividerColor.withOpacity(0.1)),
+                    ),
+                    child: Text(
+                      "Write a post...",
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                            color: Theme.of(context).textTheme.bodyMedium?.color?.withOpacity(0.6),
+                          ),
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 8),
+              IconButton(
+                icon: const Icon(Icons.image, color: Colors.green),
+                onPressed: () {
+                     if (schoolId != null) {
+                       Navigator.push(
+                         context,
+                         MaterialPageRoute(builder: (_) => CreatePostScreen(schoolId: schoolId!)),
+                       );
+                    }
+                },
+              ),
+            ],
           ),
         ],
       ),

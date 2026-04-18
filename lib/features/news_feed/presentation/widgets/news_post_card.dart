@@ -11,6 +11,82 @@ import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:teacher_mobile_app/features/auth/auth_provider.dart';
 
+class _ReactionPopup extends StatefulWidget {
+  final ValueNotifier<int> hoverNotifier;
+  final List<GlobalKey> emojiKeys;
+
+  const _ReactionPopup({
+    required this.hoverNotifier,
+    required this.emojiKeys,
+  });
+
+  @override
+  State<_ReactionPopup> createState() => _ReactionPopupState();
+}
+
+class _ReactionPopupState extends State<_ReactionPopup> with SingleTickerProviderStateMixin {
+  late AnimationController _controller;
+  final List<String> _emojiChars = ['👍', '❤️', '😂', '😮'];
+
+  @override
+  void initState() {
+    super.initState();
+    _controller = AnimationController(vsync: this, duration: const Duration(milliseconds: 300));
+    _controller.forward();
+  }
+
+  @override
+  void dispose() {
+    _controller.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return ScaleTransition(
+      scale: CurvedAnimation(parent: _controller, curve: Curves.easeOutBack),
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+        decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.surface,
+          borderRadius: BorderRadius.circular(30),
+          boxShadow: const [
+            BoxShadow(color: Colors.black26, blurRadius: 10, offset: Offset(0, 4))
+          ],
+        ),
+        child: ValueListenableBuilder<int>(
+          valueListenable: widget.hoverNotifier,
+          builder: (context, hoverIndex, child) {
+            return Row(
+              mainAxisSize: MainAxisSize.min,
+              children: List.generate(4, (i) {
+                final isHovered = hoverIndex == i;
+                return Row(
+                  children: [
+                    if (i > 0) const SizedBox(width: 16),
+                    AnimatedScale(
+                      scale: isHovered ? 1.5 : 1.0,
+                      duration: const Duration(milliseconds: 150),
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 150),
+                        padding: EdgeInsets.only(bottom: isHovered ? 10 : 0),
+                        child: Container(
+                          key: widget.emojiKeys[i],
+                          child: Text(_emojiChars[i], style: TextStyle(fontSize: 28, color: i == 1 ? Colors.red : null)),
+                        ),
+                      ),
+                    ),
+                  ],
+                );
+              }),
+            );
+          },
+        ),
+      ),
+    );
+  }
+}
+
 class NewsPostCard extends ConsumerStatefulWidget {
   final String id;
   final Map<String, dynamic> data;
@@ -51,13 +127,73 @@ class _NewsPostCardState extends ConsumerState<NewsPostCard> {
     // isLiked will be computed in build using ref.watch
   }
 
+  OverlayEntry? _overlayEntry;
+  final ValueNotifier<int> _hoverIndexNotifier = ValueNotifier(-1);
+  final List<GlobalKey> _emojiKeys = List.generate(4, (_) => GlobalKey());
+
   @override
   void dispose() {
-    // _videoController?.dispose();
+    _hideReactions();
     super.dispose();
   }
 
-  Future<void> _toggleLike() async {
+  void _showReactions(BuildContext context) {
+    if (_overlayEntry != null) return;
+    final RenderBox renderBox = context.findRenderObject() as RenderBox;
+    final offset = renderBox.localToGlobal(Offset.zero);
+    _hoverIndexNotifier.value = -1;
+
+    _overlayEntry = OverlayEntry(
+      builder: (context) => Stack(
+        children: [
+          GestureDetector(
+            onTap: _hideReactions,
+            behavior: HitTestBehavior.opaque,
+            child: Container(color: Colors.transparent),
+          ),
+          Positioned(
+            left: offset.dx,
+            top: offset.dy - 60, // Above the button
+            child: Material(
+              color: Colors.transparent,
+              child: _ReactionPopup(
+                hoverNotifier: _hoverIndexNotifier,
+                emojiKeys: _emojiKeys,
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+    Overlay.of(context).insert(_overlayEntry!);
+  }
+
+  void _hideReactions() {
+    _overlayEntry?.remove();
+    _overlayEntry = null;
+  }
+
+  void _updateHover(Offset globalPos) {
+    int newHover = -1;
+    for (int i = 0; i < _emojiKeys.length; i++) {
+       final key = _emojiKeys[i];
+       if (key.currentContext != null) {
+          final box = key.currentContext!.findRenderObject() as RenderBox;
+          final pos = box.localToGlobal(Offset.zero);
+          final size = box.size;
+          final rect = Rect.fromLTWH(pos.dx - 20, pos.dy - 60, size.width + 40, size.height + 120);
+          if (rect.contains(globalPos)) {
+             newHover = i;
+             break;
+          }
+       }
+    }
+    if (_hoverIndexNotifier.value != newHover) {
+       _hoverIndexNotifier.value = newHover;
+    }
+  }
+
+  Future<void> _updateReaction(String type) async {
     final user = ref.read(currentUserProvider);
     if (user == null) return;
 
@@ -67,29 +203,57 @@ class _NewsPostCardState extends ConsumerState<NewsPostCard> {
         .collection('posts')
         .doc(widget.id);
 
-    setState(() {
-      isLiked = !isLiked;
-      likeCount += isLiked ? 1 : -1;
-    });
+    try {
+      await postRef.set({
+        'reactions': { user.uid: type }
+      }, SetOptions(merge: true));
+    } catch (e) {
+      print("Error updating reaction: $e");
+    }
+  }
+
+  Future<void> _removeReaction() async {
+    final user = ref.read(currentUserProvider);
+    if (user == null) return;
+
+    final postRef = FirebaseFirestore.instance
+        .collection('schools')
+        .doc(widget.schoolId)
+        .collection('posts')
+        .doc(widget.id);
 
     try {
-      if (isLiked) {
-        await postRef.update({
-          'likes': FieldValue.arrayUnion([user.uid])
-        });
-      } else {
-        await postRef.update({
-          'likes': FieldValue.arrayRemove([user.uid])
-        });
-      }
-    } catch (e) {
-      // Revert if failed
-      setState(() {
-        isLiked = !isLiked;
-        likeCount += isLiked ? 1 : -1;
+      await postRef.update({
+        'reactions.${user.uid}': FieldValue.delete()
       });
-      print("Error liking post: $e");
+    } catch (e) {
+      if (e.toString().contains("No document to update")) return;
+      print("Error deleting reaction: $e");
     }
+  }
+
+  Widget _getReactionIcon(String type, BuildContext context) {
+    if (type == 'heart') return const Text('❤️', style: TextStyle(fontSize: 18, color: Colors.red));
+    if (type == 'haha') return const Text('😂', style: TextStyle(fontSize: 18));
+    if (type == 'wow') return const Text('😮', style: TextStyle(fontSize: 18));
+    if (type == 'like') return Icon(Icons.thumb_up, color: Theme.of(context).primaryColor, size: 18);
+    return Icon(Icons.thumb_up_outlined, color: Theme.of(context).textTheme.bodyMedium?.color?.withOpacity(0.7), size: 18);
+  }
+
+  String _getReactionText(String type) {
+    if (type == 'heart') return 'Love';
+    if (type == 'haha') return 'Haha';
+    if (type == 'wow') return 'Wow';
+    if (type == 'like') return 'Like';
+    return 'Like';
+  }
+
+  Color _getReactionColor(String type, BuildContext context) {
+    if (type == 'heart') return Colors.red;
+    if (type == 'haha') return Colors.orange;
+    if (type == 'wow') return Colors.amber;
+    if (type == 'like') return Theme.of(context).primaryColor;
+    return Theme.of(context).textTheme.bodyMedium?.color?.withOpacity(0.7) ?? Colors.grey;
   }
 
   @override
@@ -110,19 +274,35 @@ class _NewsPostCardState extends ConsumerState<NewsPostCard> {
 
     final isDark = Theme.of(context).brightness == Brightness.dark;
     
+    final authUser = ref.watch(currentUserProvider);
     final likesList = List<String>.from(widget.data['likes'] ?? []);
-    isLiked = user != null && likesList.contains(user.uid);
+    final reactionsMap = widget.data['reactions'] as Map<String, dynamic>? ?? {};
+    
+    String currentReaction = 'none';
+    if (authUser != null) {
+      if (reactionsMap.containsKey(authUser.uid)) {
+        currentReaction = reactionsMap[authUser.uid];
+      } else if (likesList.contains(authUser.uid)) {
+        currentReaction = 'like';
+      }
+    }
+
+    final Set<String> totalReactors = {...likesList, ...reactionsMap.keys};
+    final int combinedLikeCount = totalReactors.length;
+    final bool hasHearts = reactionsMap.values.contains('heart');
+    final bool hasHahas = reactionsMap.values.contains('haha');
+    final bool hasWows = reactionsMap.values.contains('wow');
 
     return Container(
-      margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8), // Gap between posts
+      margin: const EdgeInsets.only(bottom: 12), // Full width, only vertical gaps
       decoration: BoxDecoration(
         color: Theme.of(context).colorScheme.surface, // Card background
-        borderRadius: BorderRadius.circular(12),
+        borderRadius: BorderRadius.zero,
         boxShadow: isDark ? null : [
           BoxShadow(
-            color: Colors.black.withOpacity(0.1),
-            blurRadius: 20,
-            offset: const Offset(0, 4),
+            color: Colors.black.withOpacity(0.05),
+            blurRadius: 10,
+            offset: const Offset(0, 2),
           ),
         ],
       ),
@@ -227,7 +407,7 @@ class _NewsPostCardState extends ConsumerState<NewsPostCard> {
                   textAlign: TextAlign.center,
                   style: const TextStyle(
                     color: Colors.white,
-                    fontSize: 28,
+                    fontSize: 24,
                     fontWeight: FontWeight.bold,
                   ),
                 ),
@@ -237,7 +417,7 @@ class _NewsPostCardState extends ConsumerState<NewsPostCard> {
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
                 child: Text(
                   text,
-                  style: Theme.of(context).textTheme.bodyMedium,
+                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontSize: 15),
                 ),
               ),
           
@@ -280,10 +460,13 @@ class _NewsPostCardState extends ConsumerState<NewsPostCard> {
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
             child: Row(
               children: [
-                if (likeCount > 0) ...[
-                    Icon(Icons.thumb_up, size: 14, color: Theme.of(context).primaryColor),
-                    const SizedBox(width: 4),
-                    Text("$likeCount", style: Theme.of(context).textTheme.labelSmall),
+                if (combinedLikeCount > 0) ...[
+                    if (hasHearts) const Text('❤️', style: TextStyle(fontSize: 12, color: Colors.red)),
+                    if (hasHahas) const Text('😂', style: TextStyle(fontSize: 12)),
+                    if (hasWows) const Text('😮', style: TextStyle(fontSize: 12)),
+                    if (!hasHearts && !hasHahas && !hasWows) Icon(Icons.thumb_up, size: 14, color: Theme.of(context).primaryColor),
+                    const SizedBox(width: 6),
+                    Text("$combinedLikeCount", style: Theme.of(context).textTheme.labelSmall),
                 ],
                 const Spacer(),
                 Text("${data['commentCount'] ?? 0} comments", style: Theme.of(context).textTheme.labelSmall),
@@ -297,23 +480,52 @@ class _NewsPostCardState extends ConsumerState<NewsPostCard> {
           Row(
             children: [
               Expanded(
-                child: TextButton.icon(
-                  style: TextButton.styleFrom(padding: EdgeInsets.zero),
-                  onPressed: _toggleLike,
-                  icon: Icon(
-                      isLiked ? Icons.thumb_up : Icons.thumb_up_outlined,
-                      color: isLiked ? Theme.of(context).primaryColor : Theme.of(context).textTheme.bodyMedium?.color?.withOpacity(0.7),
-                      size: 18
-                  ),
-                  label: FittedBox(
-                    fit: BoxFit.scaleDown,
-                    child: Text(
-                        "Like",
-                        style: TextStyle(
-                            color: isLiked ? Theme.of(context).primaryColor : Theme.of(context).textTheme.bodyMedium?.color?.withOpacity(0.7),
-                        )
-                    ),
-                  ),
+                child: Builder(
+                  builder: (btnContext) {
+                    return GestureDetector(
+                      onLongPressStart: (_) => _showReactions(btnContext),
+                      onLongPressMoveUpdate: (details) => _updateHover(details.globalPosition),
+                      onLongPressEnd: (_) {
+                        final emojis = ['like', 'heart', 'haha', 'wow'];
+                        if (_hoverIndexNotifier.value != -1) {
+                           final selected = emojis[_hoverIndexNotifier.value];
+                           _updateReaction(selected);
+                        }
+                        _hideReactions();
+                      },
+                      child: TextButton.icon(
+                        style: TextButton.styleFrom(padding: EdgeInsets.zero),
+                        onPressed: () {
+                          if (currentReaction == 'none') {
+                             _updateReaction('like');
+                          } else {
+                             _removeReaction();
+                             final authUser = ref.read(currentUserProvider);
+                             if (authUser != null && likesList.contains(authUser.uid)) {
+                               // Also remove from legacy array implicitly to be clean
+                               FirebaseFirestore.instance
+                                  .collection('schools')
+                                  .doc(widget.schoolId)
+                                  .collection('posts')
+                                  .doc(widget.id)
+                                  .update({ 'likes': FieldValue.arrayRemove([authUser.uid]) });
+                             }
+                          }
+                        },
+                        icon: _getReactionIcon(currentReaction, context),
+                        label: FittedBox(
+                          fit: BoxFit.scaleDown,
+                          child: Text(
+                              _getReactionText(currentReaction),
+                              style: TextStyle(
+                                  color: _getReactionColor(currentReaction, context),
+                                  fontWeight: currentReaction != 'none' ? FontWeight.bold : FontWeight.normal,
+                              )
+                          ),
+                        ),
+                      ),
+                    );
+                  }
                 ),
               ),
               Expanded(
