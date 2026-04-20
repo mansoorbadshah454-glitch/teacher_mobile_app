@@ -10,6 +10,7 @@ class TimetableSlot {
   final String className;
   final String subject;
   final bool isFree;
+  final bool isBreak;
 
   TimetableSlot({
     required this.time,
@@ -17,10 +18,38 @@ class TimetableSlot {
     required this.className,
     required this.subject,
     this.isFree = false,
+    this.isBreak = false,
   });
 }
 
 // 1. Live Firestore Timetable Stream
+final schoolSettingsProvider = StreamProvider<Map<String, dynamic>>((ref) async* {
+  final user = ref.watch(currentUserProvider);
+  final teacherDataAsync = ref.watch(teacherDataProvider);
+  final teacherData = teacherDataAsync.value;
+
+  if (user == null || teacherData == null || !teacherData.containsKey('schoolId')) {
+    yield {};
+    return;
+  }
+
+  final String schoolId = teacherData['schoolId'];
+
+  final stream = FirebaseFirestore.instance
+      .collection('schools')
+      .doc(schoolId)
+      .collection('settings')
+      .doc('profile')
+      .snapshots()
+      .map((snapshot) {
+    if (!snapshot.exists || snapshot.data() == null) return <String, dynamic>{};
+    return snapshot.data()!;
+  });
+
+  yield* stream;
+});
+
+// 2. Live Firestore Timetable Stream
 final timetableProvider = StreamProvider<List<TimetableSlot>>((ref) async* {
   final user = ref.watch(currentUserProvider);
   final teacherDataAsync = ref.watch(teacherDataProvider);
@@ -64,7 +93,8 @@ final timetableProvider = StreamProvider<List<TimetableSlot>>((ref) async* {
       final subject = cell['subject'] as String? ?? '';
       final timeStr = cols[i] as String;
       
-      final isFree = className.isEmpty || className == 'FREE' || className == 'BREAK';
+      final isFree = className.isEmpty || className == 'FREE';
+      final isBreak = className == 'BREAK';
 
       slots.add(TimetableSlot(
         time: timeStr,
@@ -73,6 +103,7 @@ final timetableProvider = StreamProvider<List<TimetableSlot>>((ref) async* {
         className: className,
         subject: subject,
         isFree: isFree,
+        isBreak: isBreak,
       ));
     }
     return slots;
@@ -81,7 +112,7 @@ final timetableProvider = StreamProvider<List<TimetableSlot>>((ref) async* {
   yield* stream;
 });
 
-// 2. Emergency Notification Badge Logic
+// 3. Emergency Notification Badge Logic
 // We use a StateNotifier to handle SharedPreferences persistence for emergency unread badge
 class EmergencyBadgeNotifier extends StateNotifier<String?> {
   EmergencyBadgeNotifier() : super(null) {

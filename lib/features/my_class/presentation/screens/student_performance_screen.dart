@@ -1,9 +1,9 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:teacher_mobile_app/core/providers/user_data_provider.dart';
 import 'package:teacher_mobile_app/features/attendance/providers/attendance_provider.dart';
 import 'package:teacher_mobile_app/features/my_class/providers/student_performance_provider.dart';
+import 'package:teacher_mobile_app/features/timetable/providers/timetable_provider.dart';
 
 class StudentPerformanceScreen extends ConsumerStatefulWidget {
   final String studentId;
@@ -43,10 +43,18 @@ class _StudentPerformanceScreenState extends ConsumerState<StudentPerformanceScr
   Widget build(BuildContext context) {
     final performanceAsync = ref.watch(studentPerformanceProvider(widget.studentId));
     final studentsData = ref.watch(classStudentsProvider).value;
-    final teacherData = ref.watch(teacherDataProvider).value;
     
     final student = studentsData?.firstWhere((s) => s['id'] == widget.studentId, orElse: () => {});
-    final teacherAssignedSubjects = List<String>.from(teacherData?['subjects'] ?? []);
+    
+    final timetableSlots = ref.watch(timetableProvider).value ?? [];
+    final assignedClass = ref.watch(assignedClassProvider).value;
+    final currentClassName = assignedClass?['name'] ?? '';
+
+    final teacherAssignedSubjects = timetableSlots
+        .where((slot) => !slot.isFree && slot.className == currentClassName && slot.subject.isNotEmpty)
+        .map((slot) => slot.subject)
+        .toSet()
+        .toList();
 
     final isLight = Theme.of(context).brightness == Brightness.light;
     final isDark = !isLight;

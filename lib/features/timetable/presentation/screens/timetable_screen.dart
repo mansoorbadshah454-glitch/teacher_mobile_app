@@ -11,7 +11,13 @@ class TimetableScreen extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final timetableAsync = ref.watch(timetableProvider);
     final emergencyText = ref.watch(emergencyBadgeProvider);
+    final settingsAsync = ref.watch(schoolSettingsProvider);
     final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    final settings = settingsAsync.value ?? {};
+    final breakStart = settings['breakStartTime'] as String? ?? '';
+    final breakEnd = settings['breakEndTime'] as String? ?? '';
+    final displayBreakTime = breakStart.isNotEmpty && breakEnd.isNotEmpty ? '$breakStart\n   to\n$breakEnd' : 'Break Time';
 
     return Scaffold(
       backgroundColor: Theme.of(context).colorScheme.background,
@@ -104,7 +110,7 @@ class TimetableScreen extends ConsumerWidget {
                     ),
                     itemBuilder: (context, index) {
                       final slot = timetable[index];
-                      return _buildTimeSlot(slot, isDark);
+                      return _buildTimeSlot(slot, isDark, displayBreakTime);
                     },
                   ),
                 );
@@ -169,8 +175,8 @@ class TimetableScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildTimeSlot(TimetableSlot slot, bool isDark) {
-    if (slot.isFree) {
+  Widget _buildTimeSlot(TimetableSlot slot, bool isDark, String displayBreakTime) {
+    if (slot.isFree || slot.isBreak) {
       return Padding(
         padding: const EdgeInsets.symmetric(vertical: 16, horizontal: 20),
         child: Row(
@@ -181,22 +187,25 @@ class TimetableScreen extends ConsumerWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Text(
-                    slot.time,
+                    slot.isBreak ? displayBreakTime : slot.time,
                     style: TextStyle(
-                      fontSize: 15,
+                      fontSize: slot.isBreak ? 13 : 15,
                       fontWeight: FontWeight.bold,
                       color: isDark ? Colors.white70 : Colors.black87,
+                      height: 1.3,
                     ),
                   ),
-                  const SizedBox(height: 2),
-                  Text(
-                    "(${slot.period})",
-                    style: const TextStyle(
-                      fontSize: 12,
-                      color: Colors.grey,
-                      fontWeight: FontWeight.w600,
+                  if (!slot.isBreak) ...[
+                    const SizedBox(height: 2),
+                    Text(
+                      "(${slot.period})",
+                      style: const TextStyle(
+                        fontSize: 12,
+                        color: Colors.grey,
+                        fontWeight: FontWeight.w600,
+                      ),
                     ),
-                  ),
+                  ],
                 ],
               ),
             ),
@@ -205,17 +214,23 @@ class TimetableScreen extends ConsumerWidget {
               child: Container(
                 padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 16),
                 decoration: BoxDecoration(
-                  color: isDark ? Colors.white.withOpacity(0.05) : Colors.grey.shade100,
+                  color: isDark 
+                      ? (slot.isBreak ? const Color(0xFF1E3A8A).withOpacity(0.3) : Colors.white.withOpacity(0.05))
+                      : (slot.isBreak ? const Color(0xFFDBEAFE) : Colors.grey.shade100),
                   borderRadius: BorderRadius.circular(8),
                   border: Border.all(
-                    color: isDark ? Colors.white12 : Colors.grey.shade300,
+                    color: isDark 
+                        ? (slot.isBreak ? const Color(0xFF1E40AF).withOpacity(0.5) : Colors.white12)
+                        : (slot.isBreak ? const Color(0xFFBFDBFE) : Colors.grey.shade300),
                   ),
                 ),
                 child: Center(
                   child: Text(
-                    "FREE",
+                    slot.isBreak ? "BREAK TIME" : "FREE",
                     style: TextStyle(
-                      color: isDark ? Colors.white54 : Colors.grey.shade500,
+                      color: isDark 
+                          ? (slot.isBreak ? const Color(0xFF93C5FD) : Colors.white54)
+                          : (slot.isBreak ? const Color(0xFF2563EB) : Colors.grey.shade500),
                       fontWeight: FontWeight.bold,
                       letterSpacing: 2,
                     ),

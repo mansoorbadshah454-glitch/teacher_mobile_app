@@ -3,6 +3,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter/material.dart';
 import 'package:teacher_mobile_app/core/router/app_router.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
 import 'package:teacher_mobile_app/core/theme/app_theme.dart';
 
@@ -13,6 +14,7 @@ class PushNotificationService {
 
   final FirebaseMessaging _fcm = FirebaseMessaging.instance;
   bool _isInitialized = false;
+  final FlutterLocalNotificationsPlugin _localNotificationsPlugin = FlutterLocalNotificationsPlugin();
 
   // Route resolution
   static String? getRouteFromType(String? type) {
@@ -61,6 +63,31 @@ class PushNotificationService {
 
   Future<void> init(String schoolId, String uid, {Function(String type, String title, String body)? onMessageAlert}) async {
     if (_isInitialized) return;
+    
+    // Initialize Local Notifications for Tap Handling (Terminated & Background)
+    const AndroidInitializationSettings initializationSettingsAndroid = AndroidInitializationSettings('@mipmap/ic_launcher');
+    const InitializationSettings initializationSettings = InitializationSettings(android: initializationSettingsAndroid);
+    await _localNotificationsPlugin.initialize(
+      initializationSettings,
+      onDidReceiveNotificationResponse: (NotificationResponse response) {
+        final type = response.payload;
+        final route = getRouteFromType(type);
+        if (route != null) {
+          appRouter.push(route);
+        }
+      },
+    );
+
+    // Handle initialization from terminated state tapping local notification
+    final NotificationAppLaunchDetails? launchDetails = await _localNotificationsPlugin.getNotificationAppLaunchDetails();
+    if (launchDetails?.didNotificationLaunchApp ?? false) {
+      if (launchDetails?.notificationResponse != null) {
+         Future.delayed(const Duration(milliseconds: 1000), () {
+             final route = getRouteFromType(launchDetails!.notificationResponse!.payload);
+             if (route != null) appRouter.push(route);
+         });
+      }
+    }
     
     // Request permission
     NotificationSettings settings = await _fcm.requestPermission(

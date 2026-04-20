@@ -9,16 +9,53 @@ import 'package:teacher_mobile_app/core/theme/app_theme.dart';
 import 'dart:async';
 import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:teacher_mobile_app/services/push_notification_service.dart';
 
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
-  await Firebase.initializeApp();
-  if (message.data['type'] == 'timetable_update' && message.notification?.title?.contains('Urgent') == true) {
-    final body = message.notification?.body ?? 'Emergency Timetable update received.';
-    final prefs = await SharedPreferences.getInstance();
-    await prefs.setString('timetable_emergency_message', body);
-    await prefs.setString('timetable_emergency_date', DateTime.now().toIso8601String());
+  try {
+    await Firebase.initializeApp();
+    
+    final data = message.data;
+    final title = data['title'] ?? message.notification?.title ?? 'New Notification';
+    final body = data['body'] ?? message.notification?.body ?? 'You have a new update';
+    final type = data['type'] ?? 'info';
+    
+    bool isEmergency = type == 'timetable_update' && title.toString().toLowerCase().contains('urgent');
+
+    if (isEmergency) {
+      final prefs = await SharedPreferences.getInstance();
+      await prefs.setString('timetable_emergency_message', body.isEmpty ? 'Emergency Timetable update received.' : body);
+      await prefs.setString('timetable_emergency_date', DateTime.now().toIso8601String());
+    }
+
+    final FlutterLocalNotificationsPlugin localNotificationsPlugin = FlutterLocalNotificationsPlugin();
+    const AndroidInitializationSettings initializationSettingsAndroid = AndroidInitializationSettings('@mipmap/ic_launcher');
+    const InitializationSettings initializationSettings = InitializationSettings(android: initializationSettingsAndroid);
+    await localNotificationsPlugin.initialize(initializationSettings);
+
+    AndroidNotificationDetails androidDetails = AndroidNotificationDetails(
+      isEmergency ? 'emergency_channel' : 'high_importance_channel',
+      isEmergency ? 'Emergency Alerts' : 'Important Notifications',
+      channelDescription: 'Used for important teacher app notifications.',
+      importance: isEmergency ? Importance.max : Importance.high,
+      priority: isEmergency ? Priority.max : Priority.high,
+      enableVibration: true,
+      playSound: true,
+    );
+
+    NotificationDetails platformDetails = NotificationDetails(android: androidDetails);
+
+    await localNotificationsPlugin.show(
+      message.messageId.hashCode,
+      title,
+      body,
+      platformDetails,
+      payload: type,
+    );
+  } catch (e) {
+    print("Background Isolate Crash Prevented: $e");
   }
 }
 
