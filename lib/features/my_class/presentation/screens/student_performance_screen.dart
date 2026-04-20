@@ -4,6 +4,7 @@ import 'package:go_router/go_router.dart';
 import 'package:teacher_mobile_app/features/attendance/providers/attendance_provider.dart';
 import 'package:teacher_mobile_app/features/my_class/providers/student_performance_provider.dart';
 import 'package:teacher_mobile_app/features/timetable/providers/timetable_provider.dart';
+import 'package:file_picker/file_picker.dart';
 
 class StudentPerformanceScreen extends ConsumerStatefulWidget {
   final String studentId;
@@ -17,6 +18,7 @@ class StudentPerformanceScreen extends ConsumerStatefulWidget {
 class _StudentPerformanceScreenState extends ConsumerState<StudentPerformanceScreen> {
   bool _saving = false;
   bool _hasUnsavedChanges = false;
+  bool _isUploadingCard = false;
 
   Future<bool> _showDiscardDialog(BuildContext context) async {
     final result = await showDialog<bool>(
@@ -359,6 +361,96 @@ class _StudentPerformanceScreenState extends ConsumerState<StudentPerformanceScr
                                   },
                                 ),
                               ),
+                            ],
+                        ),
+                      ),
+
+                      // --- 5. Result Card ---
+                      Padding(
+                        padding: const EdgeInsets.symmetric(horizontal: 16.0, vertical: 8.0),
+                        child: Container(
+                          padding: const EdgeInsets.all(20),
+                          decoration: BoxDecoration(
+                            color: isDark ? Colors.white.withOpacity(0.03) : Colors.white,
+                            borderRadius: BorderRadius.circular(28),
+                            border: Border.all(color: isDark ? Colors.white.withOpacity(0.05) : Colors.black.withOpacity(0.05)),
+                            boxShadow: isLight ? [BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 15, offset: const Offset(0, 8))] : [],
+                          ),
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Row(
+                                children: [
+                                  const Icon(Icons.picture_as_pdf, color: Colors.redAccent, size: 20),
+                                  const SizedBox(width: 8),
+                                  Text("Result Card", style: TextStyle(fontSize: 16, fontWeight: FontWeight.w800, color: isDark ? Colors.white : Colors.indigo[900])),
+                                ],
+                              ),
+                              const SizedBox(height: 16),
+                              if (student['resultCardUrl'] != null) ...[
+                                Container(
+                                  padding: const EdgeInsets.all(12),
+                                  decoration: BoxDecoration(
+                                    color: (isLight ? Colors.greenAccent : Colors.green).withOpacity(0.1),
+                                    borderRadius: BorderRadius.circular(12),
+                                    border: Border.all(color: (isLight ? Colors.greenAccent : Colors.green).withOpacity(0.3)),
+                                  ),
+                                  child: Row(
+                                    children: [
+                                      const Icon(Icons.check_circle, color: Colors.green),
+                                      const SizedBox(width: 8),
+                                      Expanded(
+                                        child: Text(
+                                          "Uploaded: ${student['resultCardName'] ?? 'result_card.pdf'}",
+                                          style: TextStyle(color: isDark ? Colors.white : Colors.indigo[900], fontWeight: FontWeight.w500, fontSize: 13),
+                                        ),
+                                      ),
+                                    ],
+                                  ),
+                                ),
+                                const SizedBox(height: 12),
+                              ],
+                              ElevatedButton.icon(
+                                onPressed: _isUploadingCard ? null : () async {
+                                  try {
+                                    FilePickerResult? result = await FilePicker.platform.pickFiles(
+                                      type: FileType.custom,
+                                      allowedExtensions: ['pdf', 'jpg', 'jpeg', 'png'],
+                                    );
+
+                                    if (result != null && result.files.single.path != null) {
+                                      setState(() => _isUploadingCard = true);
+                                      final filePath = result.files.single.path!;
+                                      final fileName = result.files.single.name;
+                                      
+                                      await ref.read(studentPerformanceProvider(widget.studentId).notifier).uploadResultCard(filePath, fileName);
+                                      
+                                      if (mounted) {
+                                        ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Result Card Uploaded Successfully!"), backgroundColor: Colors.green));
+                                      }
+                                    }
+                                  } catch (e) {
+                                    if (mounted) {
+                                      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Upload Error: $e"), backgroundColor: Colors.red));
+                                    }
+                                  } finally {
+                                    if (mounted) setState(() => _isUploadingCard = false);
+                                  }
+                                },
+                                style: ElevatedButton.styleFrom(
+                                  backgroundColor: isLight ? Colors.indigoAccent.withOpacity(0.1) : Colors.white.withOpacity(0.1),
+                                  foregroundColor: isLight ? Colors.indigoAccent : Colors.white,
+                                  elevation: 0,
+                                  minimumSize: const Size(double.infinity, 50),
+                                  shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+                                ),
+                                icon: _isUploadingCard 
+                                    ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2)) 
+                                    : const Icon(Icons.upload_file),
+                                label: Text(_isUploadingCard ? "Uploading..." : (student['resultCardUrl'] != null ? "Upload New Result Card" : "Upload Result Card"), style: const TextStyle(fontWeight: FontWeight.bold)),
+                              ),
+                              const SizedBox(height: 8),
+                              Text("Parents will be able to download this from their app.", style: TextStyle(fontSize: 12, color: Colors.grey[500], fontStyle: FontStyle.italic)),
                             ],
                           ),
                         ),

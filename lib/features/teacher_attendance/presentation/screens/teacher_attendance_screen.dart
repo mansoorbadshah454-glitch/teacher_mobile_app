@@ -463,6 +463,9 @@ class _HistoryTabContent extends ConsumerWidget {
     final year = ref.watch(attendanceYearProvider);
     final historyAsync = ref.watch(monthlyTeacherAttendanceProvider);
     
+    final settingsAsync = ref.watch(schoolSettingsProvider);
+    final endTimeStr = settingsAsync.value?['teacherEndTime'] as String? ?? "14:00";
+    
     final isDark = Theme.of(context).brightness == Brightness.dark;
     
     // Webapp Colors matched, but dulled slightly in Dark mode
@@ -589,6 +592,38 @@ class _HistoryTabContent extends ConsumerWidget {
                   String status = "Upcoming";
                   if (log != null) {
                     status = log['status'] ?? "Present";
+                    if (log['checkOut'] != null) {
+                      final coData = log['checkOut'];
+                      final ciData = log['checkIn'];
+                      DateTime? checkOutDt;
+                      DateTime? checkInDt;
+                      
+                      if (coData is Timestamp) checkOutDt = coData.toDate();
+                      else if (coData is String) checkOutDt = DateTime.tryParse(coData);
+                      
+                      if (ciData is Timestamp) checkInDt = ciData.toDate();
+                      else if (ciData is String) checkInDt = DateTime.tryParse(ciData);
+                      
+                      if (checkOutDt != null) {
+                        final parts = endTimeStr.trim().split(':');
+                        final endHour = int.tryParse(parts[0]) ?? 14;
+                        final endMinute = parts.length > 1 ? (int.tryParse(parts[1]) ?? 0) : 0;
+                        final endDateTimeForDay = DateTime(checkOutDt.year, checkOutDt.month, checkOutDt.day, endHour, endMinute);
+                        
+                        bool isShortDuration = false;
+                        if (checkInDt != null) {
+                           final durationMinutes = checkOutDt.difference(checkInDt).inMinutes;
+                           if (durationMinutes >= 0 && durationMinutes < 240) {
+                               isShortDuration = true;
+                           }
+                        }
+                        
+                        // Override to Half day if checkout was early OR total shift was less than 4 hours
+                        if (checkOutDt.isBefore(endDateTimeForDay) || isShortDuration) {
+                          status = "Half Day";
+                        }
+                      }
+                    }
                   } else if (!dateObj.isBefore(today)) {
                     status = "Upcoming";
                   } else if (dateObj.weekday == 7) {

@@ -1,3 +1,5 @@
+import 'dart:io';
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:teacher_mobile_app/core/providers/user_data_provider.dart';
@@ -289,6 +291,72 @@ class StudentPerformanceNotifier extends StateNotifier<AsyncValue<StudentPerform
 
     } catch(e) {
         print("Failed to send notification: $e");
+    }
+  }
+
+  Future<void> uploadResultCard(String filePath, String fileName) async {
+    final teacherData = ref.read(teacherDataProvider).value;
+    final assignedClass = ref.read(assignedClassProvider).value;
+    final studentsData = ref.read(classStudentsProvider).value;
+
+    if (teacherData == null || assignedClass == null || studentsData == null) {
+      throw Exception("Missing required data for upload.");
+    }
+
+    final String schoolId = teacherData['schoolId'];
+    final String classId = assignedClass['id'];
+    final student = studentsData.firstWhere((s) => s['id'] == studentId, orElse: () => {});
+
+    if (student.isEmpty) {
+      throw Exception("Student not found.");
+    }
+
+    final storageRef = FirebaseStorage.instance
+        .ref()
+        .child('schools')
+        .child(schoolId)
+        .child('students')
+        .child(studentId)
+        .child('result_cards')
+        .child('${DateTime.now().millisecondsSinceEpoch}_$fileName');
+
+    final uploadTask = await storageRef.putFile(File(filePath));
+    final String downloadUrl = await uploadTask.ref.getDownloadURL();
+
+    final studentRef = FirebaseFirestore.instance
+        .collection('schools')
+        .doc(schoolId)
+        .collection('classes')
+        .doc(classId)
+        .collection('students')
+        .doc(studentId);
+
+    await studentRef.update({
+      'resultCardUrl': downloadUrl,
+      'resultCardName': fileName,
+      'resultCardUpdatedAt': FieldValue.serverTimestamp(),
+    });
+
+    String? parentId;
+    if (student['parentDetails'] != null && student['parentDetails']['parentId'] != null) {
+        parentId = student['parentDetails']['parentId'];
+    }
+
+    if (parentId != null) {
+        await FirebaseFirestore.instance
+             .collection('schools')
+             .doc(schoolId)
+             .collection('notifications')
+             .add({
+                 'parentId': parentId,
+                 'studentId': studentId,
+                 'studentName': student['name'],
+                 'title': '📄 New Result Card',
+                 'message': 'A new result card ($fileName) has been uploaded for ${student['name']}.',
+                 'type': 'document',
+                 'read': false,
+                 'createdAt': FieldValue.serverTimestamp(),
+             });
     }
   }
 
