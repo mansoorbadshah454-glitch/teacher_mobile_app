@@ -132,13 +132,11 @@ final schoolDataProvider = StreamProvider<Map<String, dynamic>?>((ref) async* {
                   }
                 }
                 
-                if (settingsData.containsKey('schoolName')) {
-                  final freshName = settingsData['schoolName'];
-                  if (freshName != null && freshName != schoolData['name']) {
-                      schoolData['name'] = freshName;
-                      await prefs.setString('cached_school_name_$schoolId', freshName);
-                      changed = true;
-                  }
+                final freshName = settingsData['name'] ?? settingsData['schoolName'];
+                if (freshName != null && freshName != schoolData['name']) {
+                    schoolData['name'] = freshName;
+                    await prefs.setString('cached_school_name_$schoolId', freshName);
+                    changed = true;
                 }
 
                 if (changed) {

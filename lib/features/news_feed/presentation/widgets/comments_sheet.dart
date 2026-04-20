@@ -166,6 +166,35 @@ class _CommentsSheetState extends ConsumerState<CommentsSheet> {
                                crossAxisAlignment: CrossAxisAlignment.start,
                                children: [
                                   Text(data['authorName'] ?? 'Unknown', style: Theme.of(context).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.bold)),
+                                  if (data['studentContext'] != null || data['role'] != null) ...[
+                                    const SizedBox(height: 2),
+                                    Row(
+                                      children: [
+                                        if (data['studentContext'] != null) ...[
+                                          Flexible(
+                                            child: Text(data['studentContext'], style: Theme.of(context).textTheme.labelSmall?.copyWith(color: Colors.grey[700], fontSize: 10), overflow: TextOverflow.ellipsis),
+                                          ),
+                                          const SizedBox(width: 6),
+                                        ],
+                                        if (data['role'] != null)
+                                          Flexible(
+                                            child: Container(
+                                              padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                                              decoration: BoxDecoration(
+                                                color: Theme.of(context).primaryColor.withOpacity(0.1),
+                                                borderRadius: BorderRadius.circular(4),
+                                              ),
+                                              child: Text(
+                                                data['role'],
+                                                style: Theme.of(context).textTheme.labelSmall?.copyWith(color: Theme.of(context).primaryColor, fontWeight: FontWeight.bold, fontSize: 9) ?? TextStyle(fontSize: 9, color: Theme.of(context).primaryColor, fontWeight: FontWeight.bold),
+                                                overflow: TextOverflow.ellipsis,
+                                              ),
+                                            ),
+                                          ),
+                                      ],
+                                    ),
+                                  ],
+                                  const SizedBox(height: 2),
                                   Text(data['text'] ?? '', style: Theme.of(context).textTheme.bodySmall),
                                ]
                              )
@@ -299,7 +328,35 @@ class _CommentsSheetState extends ConsumerState<CommentsSheet> {
                                         data['authorName'] ?? 'Unknown',
                                         style: Theme.of(context).textTheme.bodySmall?.copyWith(fontWeight: FontWeight.bold),
                                       ),
-                                      const SizedBox(height: 2),
+                                      if (data['studentContext'] != null || data['role'] != null) ...[
+                                        const SizedBox(height: 2),
+                                        Row(
+                                          children: [
+                                            if (data['studentContext'] != null) ...[
+                                              Flexible(
+                                                child: Text(data['studentContext'], style: Theme.of(context).textTheme.labelSmall?.copyWith(color: Colors.grey[700], fontSize: 11), overflow: TextOverflow.ellipsis),
+                                              ),
+                                              const SizedBox(width: 6),
+                                            ],
+                                            if (data['role'] != null)
+                                              Flexible(
+                                                child: Container(
+                                                  padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 1),
+                                                  decoration: BoxDecoration(
+                                                    color: Theme.of(context).primaryColor.withOpacity(0.1),
+                                                    borderRadius: BorderRadius.circular(4),
+                                                  ),
+                                                  child: Text(
+                                                    data['role'],
+                                                    style: Theme.of(context).textTheme.labelSmall?.copyWith(color: Theme.of(context).primaryColor, fontWeight: FontWeight.bold, fontSize: 10) ?? TextStyle(fontSize: 10, color: Theme.of(context).primaryColor, fontWeight: FontWeight.bold),
+                                                    overflow: TextOverflow.ellipsis,
+                                                  ),
+                                                ),
+                                              ),
+                                          ],
+                                        ),
+                                      ],
+                                      const SizedBox(height: 4),
                                       Text(
                                         data['text'] ?? '',
                                         style: Theme.of(context).textTheme.bodyMedium,

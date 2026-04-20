@@ -57,6 +57,8 @@ void main() async {
                }
             });
          }
+      }).catchError((e) {
+          print("💥 [Main] getInitialMessage Error: $e");
       });
     } catch (e) {
       print("💥 [Main] Firebase Init Error: $e");

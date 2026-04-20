@@ -48,16 +48,16 @@ class AppDrawer extends ConsumerWidget {
               mainAxisSize: MainAxisSize.min,
               children: [
                 CircleAvatar(
-                  radius: 42,
+                  radius: 54, // Increased logo size
                   backgroundColor: Colors.white,
                   backgroundImage: schoolLogo.isNotEmpty 
                       ? CachedNetworkImageProvider(schoolLogo)
                       : null,
                   child: schoolLogo.isEmpty 
-                      ? const Icon(Icons.school, size: 45, color: AppTheme.primary)
+                      ? const Icon(Icons.school, size: 55, color: AppTheme.primary)
                       : null,
                 ),
-                const SizedBox(height: 12),
+                const SizedBox(height: 8), // Slightly reduced spacing to balance the larger logo
                 Text(
                   schoolName,
                   textAlign: TextAlign.center,
