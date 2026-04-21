@@ -98,16 +98,20 @@ class PushNotificationService {
 
     if (settings.authorizationStatus == AuthorizationStatus.authorized) {
       print('User granted permission');
-      // Get the token
-      String? token = await _fcm.getToken();
-      if (token != null) {
-         await saveTokenToDatabase(token, schoolId, uid);
-      }
+      // Get the token securely
+      try {
+        String? token = await _fcm.getToken();
+        if (token != null) {
+           await saveTokenToDatabase(token, schoolId, uid);
+        }
 
-      // Any time the token refreshes, store this in the database too.
-      _fcm.onTokenRefresh.listen((newToken) {
-         saveTokenToDatabase(newToken, schoolId, uid);
-      });
+        // Any time the token refreshes, store this in the database too.
+        _fcm.onTokenRefresh.listen((newToken) {
+           saveTokenToDatabase(newToken, schoolId, uid);
+        });
+      } catch (e) {
+        print("💥 Navigation/Token Init Error prevented: $e");
+      }
 
       // Foreground message handler
       FirebaseMessaging.onMessage.listen((RemoteMessage message) async {
@@ -123,7 +127,7 @@ class PushNotificationService {
           } else {
             // Fallback: Write directly to disk and show alert if callback fails
             bool isEmergency = false;
-            if (type == 'timetable_update' && title.contains('Urgent') == true) {
+            if (type == 'timetable_update' && title.toString().toLowerCase().contains('urgent') == true) {
               isEmergency = true;
               final prefs = await SharedPreferences.getInstance();
               await prefs.setString('timetable_emergency_message', body.isEmpty ? 'Emergency Timetable update received.' : body);
@@ -145,7 +149,7 @@ class PushNotificationService {
          if (onMessageAlert != null && message.notification != null) {
             final title = message.notification?.title ?? '';
             final body = message.notification?.body ?? '';
-            if (type == 'timetable_update' && title.contains('Urgent')) {
+            if (type == 'timetable_update' && title.toString().toLowerCase().contains('urgent')) {
                onMessageAlert(type!, title, body);
             }
          }

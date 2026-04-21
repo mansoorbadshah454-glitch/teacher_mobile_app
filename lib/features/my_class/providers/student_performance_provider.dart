@@ -52,7 +52,7 @@ class StudentPerformanceNotifier extends StateNotifier<AsyncValue<StudentPerform
       return;
     }
 
-    final student = studentsData.firstWhere((s) => s['id'] == studentId, orElse: () => {});
+    final student = studentsData.firstWhere((s) => s['id'] == studentId, orElse: () { return <String, dynamic>{}; });
     if (student.isEmpty) {
       state = const AsyncValue.data(null);
       return;
@@ -63,14 +63,14 @@ class StudentPerformanceNotifier extends StateNotifier<AsyncValue<StudentPerform
     Map<String, int> acScores = {};
     for (String subj in currentSubjects) {
       final existing = (student['academicScores'] as List<dynamic>?)
-          ?.firstWhere((s) => s['subject'] == subj, orElse: () => {'score': 0});
+          ?.firstWhere((s) => s['subject'] == subj, orElse: () { return <String, dynamic>{'score': 0}; });
       acScores[subj] = int.tryParse(existing?['score'].toString() ?? '0') ?? 0;
     }
 
     Map<String, int> hwScores = {};
     for (String subj in currentSubjects) {
       final existing = (student['homeworkScores'] as List<dynamic>?)
-          ?.firstWhere((s) => s['subject'] == subj, orElse: () => {'score': 0});
+          ?.firstWhere((s) => s['subject'] == subj, orElse: () { return <String, dynamic>{'score': 0}; });
       hwScores[subj] = int.tryParse(existing?['score'].toString() ?? '0') ?? 0;
     }
 
@@ -305,7 +305,7 @@ class StudentPerformanceNotifier extends StateNotifier<AsyncValue<StudentPerform
 
     final String schoolId = teacherData['schoolId'];
     final String classId = assignedClass['id'];
-    final student = studentsData.firstWhere((s) => s['id'] == studentId, orElse: () => {});
+    final student = studentsData.firstWhere((s) => s['id'] == studentId, orElse: () { return <String, dynamic>{}; });
 
     if (student.isEmpty) {
       throw Exception("Student not found.");

@@ -78,7 +78,7 @@ final timetableProvider = StreamProvider<List<TimetableSlot>>((ref) async* {
     // Find row belonging to current teacher securely
     final myRow = rows.firstWhere(
       (r) => r != null && (r as Map)['teacherId'] == user.uid,
-      orElse: () => <String, dynamic>{},
+      orElse: () { return <String, dynamic>{}; },
     );
 
     if (myRow == null || (myRow as Map).isEmpty) return <TimetableSlot>[];

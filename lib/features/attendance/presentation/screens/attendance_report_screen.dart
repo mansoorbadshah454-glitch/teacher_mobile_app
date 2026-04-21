@@ -73,7 +73,7 @@ class _AttendanceReportScreenState extends ConsumerState<AttendanceReportScreen>
           final records = data['records'] as List<dynamic>? ?? [];
           for (var r in records) {
              if (r['status'] == 'absent') {
-                final studentMap = studentsTrack.firstWhere((s) => s['id'] == r['id'], orElse: () => {});
+                final studentMap = studentsTrack.firstWhere((s) => s['id'] == r['id'], orElse: () { return <String, dynamic>{}; });
                 if (studentMap.isNotEmpty) {
                     studentMap['absentCount'] = (studentMap['absentCount'] as int) + 1;
                 }

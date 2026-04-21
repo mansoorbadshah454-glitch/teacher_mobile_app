@@ -157,7 +157,7 @@ class AttendanceNotifier extends StateNotifier<AsyncValue<Map<String, String>>> 
         'records': attendanceMap.entries.map((entry) {
           final sId = entry.key;
           final status = entry.value;
-          final sName = students.firstWhere((s) => s['id'] == sId, orElse: () => {'name': 'Unknown'})['name'];
+          final sName = students.firstWhere((s) => s['id'] == sId, orElse: () { return <String, dynamic>{'name': 'Unknown'}; })['name'];
           return {
             'id': sId,
             'name': sName,

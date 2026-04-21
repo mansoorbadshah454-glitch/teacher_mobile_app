@@ -1,3 +1,5 @@
+import 'dart:io';
+import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:teacher_mobile_app/core/providers/user_data_provider.dart';
@@ -220,10 +222,10 @@ class NextClassNotifier extends StateNotifier<NextClassState> {
     
     final subjectScore = scoresArray.firstWhere(
       (s) => s['subject'] == state.selectedSubject,
-      orElse: () => null,
+      orElse: () { return <String, dynamic>{}; },
     );
 
-    if (subjectScore != null) {
+    if (subjectScore is Map && subjectScore.isNotEmpty) {
       return int.tryParse(subjectScore['score'].toString()) ?? 0;
     }
     return 0;
@@ -258,7 +260,7 @@ class NextClassNotifier extends StateNotifier<NextClassState> {
         final updates = entry.value;
 
         // Find student in current list
-        final student = state.students.firstWhere((s) => s['id'] == studentId, orElse: () => {});
+        final student = state.students.firstWhere((s) => s['id'] == studentId, orElse: () { return <String, dynamic>{}; });
         if (student.isEmpty) continue;
 
         final studentRef = FirebaseFirestore.instance
@@ -319,6 +321,67 @@ class NextClassNotifier extends StateNotifier<NextClassState> {
 
   void resetTestScores() {
     state = state.copyWith(testScores: {});
+  }
+
+  Future<void> uploadResultCard(String studentId, String filePath, String fileName) async {
+    if (schoolId == null || state.selectedClass == null) {
+      throw Exception("Missing required data for upload.");
+    }
+    
+    final classId = state.selectedClass!['id'];
+    final student = state.students.firstWhere((s) => s['id'] == studentId, orElse: () { return <String, dynamic>{}; });
+    
+    if (student.isEmpty) {
+      throw Exception("Student not found.");
+    }
+
+    final storageRef = FirebaseStorage.instance
+        .ref()
+        .child('schools')
+        .child(schoolId!)
+        .child('students')
+        .child(studentId)
+        .child('result_cards')
+        .child('${DateTime.now().millisecondsSinceEpoch}_$fileName');
+
+    final uploadTask = await storageRef.putFile(File(filePath));
+    final String downloadUrl = await uploadTask.ref.getDownloadURL();
+
+    final studentRef = FirebaseFirestore.instance
+        .collection('schools')
+        .doc(schoolId)
+        .collection('classes')
+        .doc(classId)
+        .collection('students')
+        .doc(studentId);
+
+    await studentRef.update({
+      'resultCardUrl': downloadUrl,
+      'resultCardName': fileName,
+      'resultCardUpdatedAt': FieldValue.serverTimestamp(),
+    });
+
+    String? parentId;
+    if (student['parentDetails'] != null && student['parentDetails']['parentId'] != null) {
+        parentId = student['parentDetails']['parentId'];
+    }
+
+    if (parentId != null) {
+        await FirebaseFirestore.instance
+             .collection('schools')
+             .doc(schoolId)
+             .collection('notifications')
+             .add({
+                 'parentId': parentId,
+                 'studentId': studentId,
+                 'studentName': student['name'],
+                 'title': '📄 New Result Card',
+                 'message': 'A new result card ($fileName) has been uploaded for ${student['name']}.',
+                 'type': 'document',
+                 'read': false,
+                 'createdAt': FieldValue.serverTimestamp(),
+             });
+    }
   }
 }
 

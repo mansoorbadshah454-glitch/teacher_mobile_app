@@ -46,7 +46,7 @@ class _StudentPerformanceScreenState extends ConsumerState<StudentPerformanceScr
     final performanceAsync = ref.watch(studentPerformanceProvider(widget.studentId));
     final studentsData = ref.watch(classStudentsProvider).value;
     
-    final student = studentsData?.firstWhere((s) => s['id'] == widget.studentId, orElse: () => {});
+    final student = studentsData?.firstWhere((s) => s['id'] == widget.studentId, orElse: () { return <String, dynamic>{}; });
     
     final timetableSlots = ref.watch(timetableProvider).value ?? [];
     final assignedClass = ref.watch(assignedClassProvider).value;
@@ -361,9 +361,10 @@ class _StudentPerformanceScreenState extends ConsumerState<StudentPerformanceScr
                                   },
                                 ),
                               ),
-                            ],
+                          ],
                         ),
                       ),
+                    ),
 
                       // --- 5. Result Card ---
                       Padding(
