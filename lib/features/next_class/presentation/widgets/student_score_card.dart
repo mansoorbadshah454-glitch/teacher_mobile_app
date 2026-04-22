@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:file_picker/file_picker.dart';
-import '../providers/next_class_provider.dart';
+import '../../providers/next_class_provider.dart';
 
 class StudentScoreCard extends ConsumerStatefulWidget {
   final Map<String, dynamic> student;

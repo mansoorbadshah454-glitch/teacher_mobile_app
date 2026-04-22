@@ -28,9 +28,9 @@ class CreatePostScreen extends ConsumerStatefulWidget {
 class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
   final TextEditingController _textController = TextEditingController();
   bool _isPosting = false;
-  File? _selectedMedia;
-  String? _existingMediaUrl; // For edit mode
-  String _mediaType = 'none'; // 'image', 'video', 'none'
+  
+  List<Map<String, dynamic>> _selectedMediaList = [];
+  List<Map<String, dynamic>> _existingMediaList = [];
   
   // Background selection
   int _selectedBackgroundIndex = 0;
@@ -45,13 +45,18 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
   ];
 
   void _onBackgroundSelected(int index) {
+    if (index != 0 && _textController.text.length > 130) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Backgrounds can only be used for posts under 130 characters.")),
+      );
+      return;
+    }
     setState(() {
       _selectedBackgroundIndex = index;
       if (index != 0) {
         // Selecting a background clears media
-        _selectedMedia = null;
-        _existingMediaUrl = null;
-        _mediaType = 'none';
+        _selectedMediaList.clear();
+        _existingMediaList.clear();
       }
     });
   }
@@ -75,11 +80,15 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
       _textController.text = data['text'] ?? '';
       
       // Initialize media state if exists
-      if (data['mediaUrl'] != null) {
-        // We can't easily convert URL to File, so we track it separately
-        // We'll use a new variable _existingMediaUrl
-        _existingMediaUrl = data['mediaUrl'];
-        _mediaType = data['mediaType'] ?? 'image';
+      if (data['media'] != null) {
+          _existingMediaList = List<Map<String, dynamic>>.from(data['media']);
+      } else if (data['mediaUrl'] != null || data['imageUrl'] != null) {
+          _existingMediaList = [
+              {
+                  'url': data['mediaUrl'] ?? data['imageUrl'],
+                  'type': data['mediaType'] ?? (data['imageUrl'] != null ? 'image' : 'none')
+              }
+          ];
       }
 
       // Initialize Audience
@@ -114,23 +123,34 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
     }
   }
 
-  Future<void> _pickMedia(ImageSource source, {bool isVideo = false}) async {
+  Future<void> _pickMedia(ImageSource source, {bool isVideo = false, bool isMultiple = false}) async {
     final picker = ImagePicker();
-    XFile? file;
     
     try {
       if (isVideo) {
-        file = await picker.pickVideo(source: source);
+        final XFile? file = await picker.pickVideo(source: source);
+        if (file != null) {
+          setState(() {
+            _selectedBackgroundIndex = 0;
+            _selectedMediaList.add({'file': File(file.path), 'type': 'video'});
+          });
+        }
+      } else if (isMultiple) {
+        final List<XFile> files = await picker.pickMultiImage();
+        if (files.isNotEmpty) {
+          setState(() {
+            _selectedBackgroundIndex = 0;
+            _selectedMediaList.addAll(files.map((f) => {'file': File(f.path), 'type': 'image'}));
+          });
+        }
       } else {
-        file = await picker.pickImage(source: source);
-      }
-
-      if (file != null) {
-        setState(() {
-          _selectedBackgroundIndex = 0; // Reset background if media is added
-          _selectedMedia = File(file!.path);
-          _mediaType = isVideo ? 'video' : 'image';
-        });
+        final XFile? file = await picker.pickImage(source: source);
+        if (file != null) {
+          setState(() {
+            _selectedBackgroundIndex = 0;
+            _selectedMediaList.add({'file': File(file.path), 'type': 'image'});
+          });
+        }
       }
     } catch (e) {
       print("Error picking media: $e");
@@ -142,7 +162,7 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
 
   Future<void> _createPost() async {
     final text = _textController.text.trim();
-    if (text.isEmpty && _selectedMedia == null) return;
+    if (text.isEmpty && _selectedMediaList.isEmpty && _existingMediaList.isEmpty) return;
 
     setState(() => _isPosting = true);
 
@@ -151,24 +171,30 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
       if (user == null) throw Exception("User not logged in");
 
       // 1. Upload Media (if any)
-      String? mediaUrl = _existingMediaUrl; // Default to existing
+      List<Map<String, dynamic>> finalMediaList = List.from(_existingMediaList);
       
-      if (_selectedMedia != null) {
-        final ref = FirebaseStorage.instance
-            .ref()
-            .child('schools/${widget.schoolId}/posts/${DateTime.now().millisecondsSinceEpoch}_${user.uid}');
-        
-        await ref.putFile(_selectedMedia!);
-        mediaUrl = await ref.getDownloadURL(); // Override with new
+      if (_selectedMediaList.isNotEmpty) {
+        final uploadedMedia = await Future.wait(_selectedMediaList.map((media) async {
+            final file = media['file'] as File;
+            final type = media['type'] as String;
+            final ref = FirebaseStorage.instance
+                .ref()
+                .child('schools/${widget.schoolId}/posts/${DateTime.now().millisecondsSinceEpoch}_${user.uid}_${file.path.split('/').last}');
+            
+            await ref.putFile(file);
+            final url = await ref.getDownloadURL();
+            return {'url': url, 'type': type};
+        }));
+        finalMediaList.addAll(uploadedMedia);
       }
 
       // 2. Prepare Post Data
       final Map<String, dynamic> postData = {
         'text': text,
         'authorId': user.uid,
-        'authorName': user.displayName ?? "Teacher", //Ideally fetch from profile
+        'authorName': user.displayName ?? "Teacher",
         'authorImage': user.photoURL ?? "",
-        'role': 'Teacher', // Should fetch from claim
+        'role': 'Teacher',
         'timestamp': FieldValue.serverTimestamp(),
         'likes': [],
         'comments': [],
@@ -176,11 +202,12 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
         'targetAudience': _selectedAudience == 'all' ? 'all' : 'class',
       };
 
-      if (mediaUrl != null) {
-        postData['mediaUrl'] = mediaUrl;
-        postData['mediaType'] = _mediaType;
-        // Legacy support
-        if (_mediaType == 'image') postData['imageUrl'] = mediaUrl;
+      if (finalMediaList.isNotEmpty) {
+         postData['media'] = finalMediaList;
+         // legacy attributes for backward compatibility
+         postData['mediaUrl'] = finalMediaList.first['url'];
+         postData['mediaType'] = finalMediaList.first['type'];
+         if (finalMediaList.first['type'] == 'image') postData['imageUrl'] = finalMediaList.first['url'];
       }
 
       if (_selectedAudience != 'all') {
@@ -217,8 +244,43 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
     }
   }
 
+  Widget _buildMediaPreviewItem({required BuildContext context, required bool isLocal, File? file, String? url, required String type, required VoidCallback onRemove}) {
+      return Stack(
+          children: [
+              Container(
+                  width: 100,
+                  height: 100,
+                  decoration: BoxDecoration(
+                      borderRadius: BorderRadius.circular(8),
+                      border: Border.all(color: Theme.of(context).dividerColor.withOpacity(0.2)),
+                  ),
+                  child: ClipRRect(
+                      borderRadius: BorderRadius.circular(8),
+                      child: isLocal 
+                          ? (type == 'image' ? Image.file(file!, fit: BoxFit.cover) : Container(color: Colors.black87, child: const Center(child: Icon(Icons.play_circle_fill, size: 32, color: Colors.white))))
+                          : (type == 'image' ? Image.network(url!, fit: BoxFit.cover) : Container(color: Colors.black87, child: const Center(child: Icon(Icons.play_circle_fill, size: 32, color: Colors.white))))
+                  ),
+              ),
+              Positioned(
+                  top: 4,
+                  right: 4,
+                  child: GestureDetector(
+                      onTap: onRemove,
+                      child: Container(
+                          padding: const EdgeInsets.all(4),
+                          decoration: const BoxDecoration(color: Colors.black54, shape: BoxShape.circle),
+                          child: const Icon(Icons.close, color: Colors.white, size: 16),
+                      ),
+                  ),
+              )
+          ]
+      );
+  }
+
   @override
   Widget build(BuildContext context) {
+    bool hasMedia = _selectedMediaList.isNotEmpty || _existingMediaList.isNotEmpty;
+    
     return Scaffold(
       backgroundColor: Theme.of(context).scaffoldBackgroundColor,
       appBar: AppBar(
@@ -239,14 +301,14 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
         ),
         actions: [
           TextButton(
-            onPressed: (_textController.text.isNotEmpty || _selectedMedia != null) && !_isPosting
+            onPressed: (_textController.text.isNotEmpty || hasMedia) && !_isPosting
                 ? _createPost
                 : null,
             child: _isPosting 
                 ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2, color: Colors.white))
                 : Text(widget.postId != null ? "UPDATE" : "POST", 
                     style: TextStyle(
-                      color: (_textController.text.isNotEmpty || _selectedMedia != null || _existingMediaUrl != null) 
+                      color: (_textController.text.isNotEmpty || hasMedia) 
                           ? Colors.white
                           : Colors.white70,
                       fontWeight: FontWeight.bold
@@ -324,8 +386,9 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
                     child: TextField(
                       controller: _textController,
                       style: TextStyle(
-                          color: _selectedBackgroundIndex != 0 ? Colors.white : Theme.of(context).textTheme.bodyLarge?.color, 
-                          fontSize: _selectedBackgroundIndex != 0 ? 28 : 18,
+                          color: _selectedBackgroundIndex != 0 ? Colors.white : Theme.of(context).textTheme.bodyMedium?.color, 
+                          fontSize: _selectedBackgroundIndex != 0 ? (_textController.text.length < 85 ? 28 : 22) : 15,
+                          height: _selectedBackgroundIndex != 0 ? null : 1.4,
                           fontWeight: _selectedBackgroundIndex != 0 ? FontWeight.bold : FontWeight.normal,
                       ),
                       textAlign: _selectedBackgroundIndex != 0 ? TextAlign.center : TextAlign.start,
@@ -336,16 +399,22 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
                         hintStyle: TextStyle(
                             color: _selectedBackgroundIndex != 0 
                                 ? Colors.white70 
-                                : Theme.of(context).textTheme.bodyLarge?.color?.withOpacity(0.4),
+                                : Theme.of(context).textTheme.bodyMedium?.color?.withOpacity(0.4),
                         ),
                         border: InputBorder.none,
                       ),
-                      onChanged: (_) => setState(() {}),
+                      onChanged: (val) {
+                        setState(() {
+                          if (val.length > 130 && _selectedBackgroundIndex != 0) {
+                             _selectedBackgroundIndex = 0;
+                          }
+                        });
+                      },
                     ),
                   ),
 
                   // Background Selection Row
-                  if (_selectedMedia == null && _existingMediaUrl == null)
+                  if (!hasMedia)
                     SizedBox(
                       height: 50,
                       child: ListView.builder(
@@ -375,7 +444,7 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
                       ),
                     ),
 
-                  // Bottom Actions (Moved up below text field)
+                  // Bottom Actions
                   Container(
                     margin: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
                     padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
@@ -393,7 +462,7 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
                         const Spacer(),
                         IconButton(
                           icon: const Icon(Icons.image, color: Colors.green),
-                          onPressed: () => _pickMedia(ImageSource.gallery),
+                          onPressed: () => _pickMedia(ImageSource.gallery, isMultiple: true),
                         ),
                         IconButton(
                           icon: const Icon(Icons.videocam, color: Colors.red),
@@ -408,40 +477,42 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
                   ),
 
                   // Media Preview
-                  if (_selectedMedia != null || _existingMediaUrl != null)
+                  if (hasMedia)
                      Container(
-                       height: 200,
                        width: double.infinity,
                        margin: const EdgeInsets.all(16),
-                       decoration: BoxDecoration(
-                         border: Border.all(color: Colors.white24),
-                         borderRadius: BorderRadius.circular(8),
-                       ),
-                       child: Stack(
+                       child: Wrap(
+                         spacing: 8,
+                         runSpacing: 8,
                          children: [
-                           _mediaType == 'image' 
-                              ? (_selectedMedia != null 
-                                  ? Image.file(_selectedMedia!, width: double.infinity, height: double.infinity, fit: BoxFit.cover)
-                                  : Image.network(_existingMediaUrl!, width: double.infinity, height: double.infinity, fit: BoxFit.cover))
-                              : const Center(child: Icon(Icons.videocam, size: 64, color: Colors.white)),
-                           Positioned(
-                             top: 8,
-                             right: 8,
-                             child: GestureDetector(
-                               onTap: () => setState(() {
-                                 _selectedMedia = null;
-                                 _existingMediaUrl = null;
-                                 _mediaType = 'none';
-                               }),
-                               child: Container(
-                                 padding: const EdgeInsets.all(4),
-                                 decoration: const BoxDecoration(color: Colors.black54, shape: BoxShape.circle),
-                                 child: const Icon(Icons.close, color: Colors.white, size: 20),
-                               ),
-                             ),
-                           )
+                           ..._existingMediaList.asMap().entries.map((entry) {
+                               int idx = entry.key;
+                               var m = entry.value;
+                               return _buildMediaPreviewItem(
+                                   context: context,
+                                   isLocal: false, 
+                                   url: m['url'], 
+                                   type: m['type'], 
+                                   onRemove: () {
+                                       setState(() => _existingMediaList.removeAt(idx));
+                                   }
+                               );
+                           }),
+                           ..._selectedMediaList.asMap().entries.map((entry) {
+                               int idx = entry.key;
+                               var m = entry.value;
+                               return _buildMediaPreviewItem(
+                                   context: context,
+                                   isLocal: true, 
+                                   file: m['file'], 
+                                   type: m['type'], 
+                                   onRemove: () {
+                                       setState(() => _selectedMediaList.removeAt(idx));
+                                   }
+                               );
+                           })
                          ],
-                       ),
+                       )
                      ),
                 ],
               ),

@@ -123,17 +123,6 @@ class MyClassScreen extends ConsumerWidget {
                               ],
                             ),
                           ),
-                          const SizedBox(width: 8),
-                          TextButton.icon(
-                            onPressed: () => context.push('/my-class/all-results'),
-                            icon: const Text("Next", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                            label: const Icon(Icons.arrow_forward_ios, color: Colors.white, size: 14),
-                            style: TextButton.styleFrom(
-                              backgroundColor: Colors.white.withOpacity(0.2),
-                              padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
-                              shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20), side: BorderSide(color: Colors.white.withOpacity(0.3))),
-                            ),
-                          ),
                         ],
                       ),
                     ),

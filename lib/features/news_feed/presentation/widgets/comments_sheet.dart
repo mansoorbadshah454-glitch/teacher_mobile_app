@@ -537,21 +537,7 @@ class LikersDialog extends StatelessWidget {
         bool isParent = false;
         bool found = false;
 
-        // 1. Check Principal / School Admin
-        if (!found) {
-          try {
-            var doc = await FirebaseFirestore.instance.collection('schools').doc(schoolId).collection('users').doc(uid).get();
-            if (doc.exists && doc.data() != null) {
-              var data = doc.data()!;
-              finalName = data['displayName'] ?? data['name'] ?? 'Principal';
-              String rawRole = data['role']?.toString().toUpperCase() ?? '';
-              role = (rawRole == 'SCHOOL ADMIN' || rawRole == 'ADMIN') ? 'Admin' : 'Principal';
-              found = true;
-            }
-          } catch (e) {}
-        }
-
-        // 2. Check Teacher
+        // 1. Check Teacher
         if (!found) {
           try {
             var doc = await FirebaseFirestore.instance.collection('schools').doc(schoolId).collection('teachers').doc(uid).get();
@@ -564,7 +550,7 @@ class LikersDialog extends StatelessWidget {
           } catch (e) {}
         }
 
-        // 3. Check Parent
+        // 2. Check Parent
         if (!found) {
           try {
             var doc = await FirebaseFirestore.instance.collection('schools').doc(schoolId).collection('parents').doc(uid).get();
@@ -596,6 +582,20 @@ class LikersDialog extends StatelessWidget {
                   role = kidClass;
                 }
               } catch (e) {}
+            }
+          } catch (e) {}
+        }
+
+        // 3. Check Principal / School Admin
+        if (!found) {
+          try {
+            var doc = await FirebaseFirestore.instance.collection('schools').doc(schoolId).collection('users').doc(uid).get();
+            if (doc.exists && doc.data() != null) {
+              var data = doc.data()!;
+              finalName = data['displayName'] ?? data['name'] ?? 'Principal';
+              String rawRole = data['role']?.toString().toUpperCase() ?? '';
+              role = (rawRole == 'SCHOOL ADMIN' || rawRole == 'ADMIN') ? 'Admin' : 'Principal';
+              found = true;
             }
           } catch (e) {}
         }

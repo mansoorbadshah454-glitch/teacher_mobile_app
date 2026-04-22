@@ -355,11 +355,31 @@ class NextClassNotifier extends StateNotifier<NextClassState> {
         .collection('students')
         .doc(studentId);
 
-    await studentRef.update({
+    final masterStudentRef = FirebaseFirestore.instance
+        .collection('schools')
+        .doc(schoolId)
+        .collection('students')
+        .doc(studentId);
+
+    final fileExtension = fileName.contains('.') ? fileName.split('.').last.toLowerCase() : 'pdf';
+
+    final updateData = {
       'resultCardUrl': downloadUrl,
       'resultCardName': fileName,
+      'uploadedResultUrl': downloadUrl,
+      'uploadedResultType': fileExtension,
       'resultCardUpdatedAt': FieldValue.serverTimestamp(),
-    });
+      'uploadedResultAt': FieldValue.serverTimestamp(),
+    };
+
+    await studentRef.update(updateData);
+    
+    try {
+        await masterStudentRef.update(updateData);
+    } catch (e) {
+        // Ignore if master record missing
+        print("Master student record not found to update: $e");
+    }
 
     String? parentId;
     if (student['parentDetails'] != null && student['parentDetails']['parentId'] != null) {
@@ -377,7 +397,7 @@ class NextClassNotifier extends StateNotifier<NextClassState> {
                  'studentName': student['name'],
                  'title': '📄 New Result Card',
                  'message': 'A new result card ($fileName) has been uploaded for ${student['name']}.',
-                 'type': 'document',
+                 'type': 'result',
                  'read': false,
                  'createdAt': FieldValue.serverTimestamp(),
              });

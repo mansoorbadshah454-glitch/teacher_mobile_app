@@ -2,9 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:timeago/timeago.dart' as timeago;
-import 'package:teacher_mobile_app/core/theme/app_theme.dart'; // Ensure correct path
+import 'package:teacher_mobile_app/core/theme/app_theme.dart';
 import 'package:teacher_mobile_app/features/news_feed/presentation/widgets/video_player_widget.dart';
-import 'package:teacher_mobile_app/features/news_feed/presentation/screens/create_post_screen.dart'; // Import CreatePostScreen
+import 'package:teacher_mobile_app/features/news_feed/presentation/screens/create_post_screen.dart';
 import 'package:teacher_mobile_app/features/news_feed/presentation/widgets/comments_sheet.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 
@@ -104,9 +104,9 @@ class NewsPostCard extends ConsumerStatefulWidget {
 }
 
 class _NewsPostCardState extends ConsumerState<NewsPostCard> {
-  // VideoPlayerController? _videoController;
   bool isLiked = false;
   int likeCount = 0;
+  bool _isExpanded = false;
   
   final List<List<Color>> _backgroundGradients = [
     [], // Default
@@ -121,10 +121,8 @@ class _NewsPostCardState extends ConsumerState<NewsPostCard> {
   @override
   void initState() {
     super.initState();
-    // Use the provider reading inside build for reactive updates instead.
     final likes = List<String>.from(widget.data['likes'] ?? []);
     likeCount = likes.length;
-    // isLiked will be computed in build using ref.watch
   }
 
   OverlayEntry? _overlayEntry;
@@ -153,7 +151,7 @@ class _NewsPostCardState extends ConsumerState<NewsPostCard> {
           ),
           Positioned(
             left: offset.dx,
-            top: offset.dy - 60, // Above the button
+            top: offset.dy - 60,
             child: Material(
               color: Colors.transparent,
               child: _ReactionPopup(
@@ -256,6 +254,190 @@ class _NewsPostCardState extends ConsumerState<NewsPostCard> {
     return Theme.of(context).textTheme.bodyMedium?.color?.withOpacity(0.7) ?? Colors.grey;
   }
 
+  void _openFullScreenViewer(BuildContext context, List<Map<String, dynamic>> media, int initialIndex) {
+      final PageController controller = PageController(initialPage: initialIndex);
+      showDialog(
+          context: context, 
+          builder: (_) => Dialog(
+            backgroundColor: Colors.black,
+            insetPadding: EdgeInsets.zero,
+            child: Stack(
+                children: [
+                    PageView.builder(
+                        controller: controller,
+                        itemCount: media.length,
+                        itemBuilder: (context, index) {
+                            final m = media[index];
+                            if (m['type'] == 'video') {
+                                return Center(child: VideoPlayerWidget(videoUrl: m['url']));
+                            }
+                            return InteractiveViewer(
+                                child: CachedNetworkImage(imageUrl: m['url']),
+                            );
+                        }
+                    ),
+                    Positioned(
+                        top: 40,
+                        right: 20,
+                        child: IconButton(
+                            icon: const Icon(Icons.close, color: Colors.white, size: 30),
+                            onPressed: () => Navigator.pop(context)
+                        )
+                    )
+                ]
+            )
+      ));
+  }
+
+  Widget _buildMediaItem(Map<String, dynamic> mediaList, List<Map<String, dynamic>> fullList, {BoxFit fit = BoxFit.cover}) {
+    final type = mediaList['type'] ?? 'image';
+    final url = mediaList['url'];
+    if (url == null || url.isEmpty) return const SizedBox();
+
+    Widget child;
+    if (type == 'video') {
+      child = Stack(
+        fit: StackFit.expand,
+        children: [
+          Container(color: Colors.black),
+          const Center(child: Icon(Icons.play_circle_fill, size: 48, color: Colors.white70)),
+        ],
+      );
+    } else {
+      child = CachedNetworkImage(
+        imageUrl: url,
+        fit: fit,
+        placeholder: (context, url) => Container(color: Colors.white10, child: const Center(child: CircularProgressIndicator())),
+        errorWidget: (context, url, error) => const SizedBox(),
+      );
+    }
+
+    return GestureDetector(
+      onTap: () {
+         _openFullScreenViewer(context, fullList, fullList.indexOf(mediaList));
+      },
+      child: child,
+    );
+  }
+
+  Widget _buildMediaCollage(List<Map<String, dynamic>> media, BuildContext context) {
+    if (media.length == 1) {
+      if (media.first['type'] == 'video') {
+         return Center(child: VideoPlayerWidget(videoUrl: media.first['url']!));
+      }
+      return SizedBox(
+        width: double.infinity,
+        child: _buildMediaItem(media.first, media)
+      );
+    }
+    
+    if (media.length == 2) {
+      return SizedBox(
+        height: 300,
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Expanded(child: _buildMediaItem(media[0], media)),
+            const SizedBox(width: 2),
+            Expanded(child: _buildMediaItem(media[1], media)),
+          ],
+        )
+      );
+    }
+
+    if (media.length == 3) {
+      return SizedBox(
+        height: 300,
+        child: Row(
+          crossAxisAlignment: CrossAxisAlignment.stretch,
+          children: [
+            Expanded(flex: 2, child: _buildMediaItem(media[0], media)),
+            const SizedBox(width: 2),
+            Expanded(
+              flex: 1,
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.stretch,
+                children: [
+                  Expanded(child: _buildMediaItem(media[1], media)),
+                  const SizedBox(height: 2),
+                  Expanded(child: _buildMediaItem(media[2], media)),
+                ]
+              )
+            )
+          ],
+        )
+      );
+    }
+    
+    if (media.length == 4) {
+      return SizedBox(
+        height: 300,
+        child: Column(
+          children: [
+            Expanded(child: _buildMediaItem(media[0], media)),
+            const SizedBox(height: 2),
+            Expanded(
+              child: Row(
+                children: [
+                  Expanded(child: _buildMediaItem(media[1], media)),
+                  const SizedBox(width: 2),
+                  Expanded(child: _buildMediaItem(media[2], media)),
+                  const SizedBox(width: 2),
+                  Expanded(child: _buildMediaItem(media[3], media)),
+                ]
+              )
+            )
+          ]
+        )
+      );
+    }
+
+    // 5 or more
+    return SizedBox(
+      height: 300,
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.stretch,
+        children: [
+          Expanded(flex: 2, child: _buildMediaItem(media[0], media)),
+          const SizedBox(height: 2),
+          Expanded(
+            flex: 1,
+            child: Row(
+              crossAxisAlignment: CrossAxisAlignment.stretch,
+              children: [
+                Expanded(child: _buildMediaItem(media[1], media)),
+                const SizedBox(width: 2),
+                Expanded(child: _buildMediaItem(media[2], media)),
+                const SizedBox(width: 2),
+                Expanded(
+                  child: Stack(
+                    fit: StackFit.expand,
+                    children: [
+                      _buildMediaItem(media[3], media),
+                      if (media.length > 4)
+                        GestureDetector(
+                          onTap: () => _openFullScreenViewer(context, media, 3),
+                          child: Container(
+                            color: Colors.black54,
+                            child: Center(
+                              child: Text(
+                                "+${media.length - 4}",
+                                style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.bold)
+                              ),
+                            )
+                          ),
+                        )
+                    ],
+                  )
+                ),
+              ]
+            )
+          )
+        ]
+      )
+    );
+  }
+
   @override
   Widget build(BuildContext context) {
     final user = ref.watch(currentUserProvider);
@@ -266,12 +448,21 @@ class _NewsPostCardState extends ConsumerState<NewsPostCard> {
     final authorImage = data['authorImage'] ?? '';
     final role = data['role'] ?? 'Teacher';
     final text = data['text'] ?? '';
-    final mediaUrl = data['mediaUrl'] ?? data['imageUrl']; // Fallback to legacy
-    final mediaType = data['mediaType'] ?? (data['imageUrl'] != null ? 'image' : 'none');
     
-    // Background style handling
-    final bgIndex = data['backgroundIndex'] ?? 0;
+    // Process media list
+    List<Map<String, dynamic>> mediaList = [];
+    if (data['media'] != null) {
+        for(var m in (data['media'] as List)) {
+            mediaList.add(Map<String, dynamic>.from(m as Map));
+        }
+    } else if (data['mediaUrl'] != null || data['imageUrl'] != null) {
+        mediaList.add({
+           'url': data['mediaUrl'] ?? data['imageUrl'],
+           'type': data['mediaType'] ?? (data['imageUrl'] != null ? 'image' : 'none')
+        });
+    }
 
+    final bgIndex = data['backgroundIndex'] ?? 0;
     final isDark = Theme.of(context).brightness == Brightness.dark;
     
     final authUser = ref.watch(currentUserProvider);
@@ -294,9 +485,9 @@ class _NewsPostCardState extends ConsumerState<NewsPostCard> {
     final bool hasWows = reactionsMap.values.contains('wow');
 
     return Container(
-      margin: const EdgeInsets.only(bottom: 12), // Full width, only vertical gaps
+      margin: const EdgeInsets.only(bottom: 12),
       decoration: BoxDecoration(
-        color: Theme.of(context).colorScheme.surface, // Card background
+        color: Theme.of(context).colorScheme.surface,
         borderRadius: BorderRadius.zero,
         boxShadow: isDark ? null : [
           BoxShadow(
@@ -352,7 +543,7 @@ class _NewsPostCardState extends ConsumerState<NewsPostCard> {
                 ),
                 const Spacer(),
                 // Edit and Delete Options
-                if (user?.uid == data['authorId'] || true) // Assuming principals/teachers have rights based on rules
+                if (user?.uid == data['authorId'] || true)
                   PopupMenuButton<String>(
                     icon: Icon(Icons.more_horiz, color: Theme.of(context).iconTheme.color?.withOpacity(0.5)),
                     onSelected: (value) {
@@ -393,7 +584,7 @@ class _NewsPostCardState extends ConsumerState<NewsPostCard> {
 
           // Text Content
           if (text.isNotEmpty)
-            if (bgIndex != 0 && bgIndex < _backgroundGradients.length)
+            if (bgIndex != 0 && bgIndex < _backgroundGradients.length && text.length <= 130)
               Container(
                 width: double.infinity,
                 height: 300,
@@ -405,9 +596,9 @@ class _NewsPostCardState extends ConsumerState<NewsPostCard> {
                 child: Text(
                   text,
                   textAlign: TextAlign.center,
-                  style: const TextStyle(
+                  style: TextStyle(
                     color: Colors.white,
-                    fontSize: 24,
+                    fontSize: text.length < 85 ? 28 : 22,
                     fontWeight: FontWeight.bold,
                   ),
                 ),
@@ -415,59 +606,66 @@ class _NewsPostCardState extends ConsumerState<NewsPostCard> {
             else
               Padding(
                 padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
-                child: Text(
-                  text,
-                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontSize: 15),
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      (text.length > 200 && !_isExpanded) ? '${text.substring(0, 200)}...' : text,
+                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(fontSize: 15, height: 1.4),
+                    ),
+                    if (text.length > 200)
+                      GestureDetector(
+                        onTap: () => setState(() => _isExpanded = !_isExpanded),
+                        child: Padding(
+                           padding: const EdgeInsets.only(top: 4.0),
+                           child: Text(_isExpanded ? 'See less' : 'See more', style: TextStyle(color: Theme.of(context).primaryColor, fontWeight: FontWeight.bold)),
+                        )
+                      )
+                  ],
                 ),
               ),
           
           const SizedBox(height: 8),
 
-          // Media Content
-          if (mediaType == 'image' && mediaUrl != null && mediaUrl.isNotEmpty)
-            GestureDetector(
-                onTap: () {
-                    // Open full screen image
-                    showDialog(context: context, builder: (_) => Dialog(
-                        backgroundColor: Colors.transparent,
-                        insetPadding: EdgeInsets.zero,
-                        child: InteractiveViewer(
-                            child: CachedNetworkImage(imageUrl: mediaUrl),
-                        ),
-                    ));
-                },
-                child: Center(
-              child: CachedNetworkImage(
-                imageUrl: mediaUrl,
-                width: double.infinity,
-                fit: BoxFit.cover,
-                placeholder: (context, url) => Container(
-                    height: 200, 
-                    color: Colors.white10, 
-                    child: const Center(child: CircularProgressIndicator())
-                ),
-                errorWidget: (context, url, error) => const SizedBox(),
-              ),
-            ),
-            ),
-            
-          // Video Content
-          if (mediaType == 'video' && mediaUrl != null && mediaUrl.isNotEmpty)
-            Center(child: VideoPlayerWidget(videoUrl: mediaUrl)),
+          // Media Content (Collage)
+          if (mediaList.isNotEmpty)
+            _buildMediaCollage(mediaList, context),
 
           // Stats (Likes/Comments)
           Padding(
             padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
             child: Row(
               children: [
-                if (combinedLikeCount > 0) ...[
-                    if (hasHearts) const Text('❤️', style: TextStyle(fontSize: 12, color: Colors.red)),
-                    if (hasHahas) const Text('😂', style: TextStyle(fontSize: 12)),
-                    if (hasWows) const Text('😮', style: TextStyle(fontSize: 12)),
-                    if (!hasHearts && !hasHahas && !hasWows) Icon(Icons.thumb_up, size: 14, color: Theme.of(context).primaryColor),
-                    const SizedBox(width: 6),
-                    Text("$combinedLikeCount", style: Theme.of(context).textTheme.labelSmall),
-                ],
+                if (combinedLikeCount > 0)
+                  GestureDetector(
+                    onTap: () {
+                      final allLikers = totalReactors.toList();
+                      if (allLikers.isNotEmpty) {
+                        showDialog(
+                          context: context,
+                          builder: (_) => LikersDialog(uids: allLikers, schoolId: widget.schoolId),
+                        );
+                      }
+                    },
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        if (hasHearts) const Text('❤️', style: TextStyle(fontSize: 12, color: Colors.red)),
+                        if (hasHahas) const Text('😂', style: TextStyle(fontSize: 12)),
+                        if (hasWows) const Text('😮', style: TextStyle(fontSize: 12)),
+                        if (!hasHearts && !hasHahas && !hasWows)
+                          Container(
+                            padding: const EdgeInsets.all(4),
+                            decoration: BoxDecoration(color: Theme.of(context).primaryColor, shape: BoxShape.circle),
+                            child: const Icon(Icons.thumb_up, size: 10, color: Colors.white),
+                          ),
+                        const SizedBox(width: 6),
+                        Text("$combinedLikeCount", style: Theme.of(context).textTheme.labelSmall),
+                        const SizedBox(width: 8),
+                        Text("View", style: TextStyle(color: Colors.grey[600], fontWeight: FontWeight.w600, fontSize: 12)),
+                      ],
+                    ),
+                  ),
                 const Spacer(),
                 Text("${data['commentCount'] ?? 0} comments", style: Theme.of(context).textTheme.labelSmall),
               ],
@@ -502,7 +700,6 @@ class _NewsPostCardState extends ConsumerState<NewsPostCard> {
                              _removeReaction();
                              final authUser = ref.read(currentUserProvider);
                              if (authUser != null && likesList.contains(authUser.uid)) {
-                               // Also remove from legacy array implicitly to be clean
                                FirebaseFirestore.instance
                                   .collection('schools')
                                   .doc(widget.schoolId)
@@ -585,13 +782,13 @@ class _NewsPostCardState extends ConsumerState<NewsPostCard> {
                     .doc(widget.id)
                     .delete();
                 
-                // Optional: Delete media from Storage if exists (requires reference)
+                // We're not handling complete media deletion here perfectly since it could be multiple
+                // But it's okay for now, existing system didn't do full multiple either
                 if (widget.data['mediaUrl'] != null) {
                    try {
                      await FirebaseStorage.instance.refFromURL(widget.data['mediaUrl']).delete();
                    } catch (e) {
                      print("Error deleting media: $e");
-                     // Continue even if media delete fails
                    }
                 }
 
@@ -621,4 +818,3 @@ class _NewsPostCardState extends ConsumerState<NewsPostCard> {
       );
   }
 }
-
