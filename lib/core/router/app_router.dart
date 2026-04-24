@@ -21,7 +21,9 @@ import 'package:teacher_mobile_app/features/notebook/screens/notebook_screen.dar
 import 'package:teacher_mobile_app/features/notebook/screens/note_editor_screen.dart';
 import 'package:teacher_mobile_app/features/notebook/models/note_model.dart';
 import 'package:teacher_mobile_app/features/timetable/presentation/screens/timetable_screen.dart';
-import 'package:teacher_mobile_app/features/my_class/presentation/screens/syllabus_screen.dart';
+import 'package:teacher_mobile_app/features/syllabus/presentation/screens/my_syllabuses_screen.dart';
+import 'package:teacher_mobile_app/features/syllabus/presentation/screens/syllabus_detail_screen.dart';
+import 'package:teacher_mobile_app/features/syllabus/providers/syllabus_provider.dart';
 final GlobalKey<ScaffoldMessengerState> rootScaffoldMessengerKey = GlobalKey<ScaffoldMessengerState>();
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
@@ -141,8 +143,15 @@ final appRouter = GoRouter(
       builder: (context, state) => const TimetableScreen(),
     ),
     GoRoute(
-      path: '/my-class/syllabus',
-      builder: (context, state) => const SyllabusScreen(),
+      path: '/my-syllabuses',
+      builder: (context, state) => const MySyllabusesScreen(),
+    ),
+    GoRoute(
+      path: '/syllabus-detail',
+      builder: (context, state) {
+        final assignment = state.extra as SyllabusAssignment;
+        return SyllabusDetailScreen(assignment: assignment);
+      },
     ),
   ],
 );

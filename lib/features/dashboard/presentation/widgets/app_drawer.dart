@@ -117,6 +117,14 @@ class AppDrawer extends ConsumerWidget {
             },
           ),
           _DrawerItem(
+            icon: Icons.auto_stories,
+            title: 'Syllabus',
+            onTap: () {
+              Navigator.pop(context);
+              context.push('/my-syllabuses');
+            },
+          ),
+          _DrawerItem(
             icon: Icons.settings_outlined,
             title: 'Settings',
             onTap: () {
