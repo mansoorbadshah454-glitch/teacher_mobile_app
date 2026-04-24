@@ -1,10 +1,49 @@
-import 'dart:io';
-import 'package:firebase_storage/firebase_storage.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:teacher_mobile_app/core/providers/user_data_provider.dart';
 
-enum NextClassViewMode { classes, subjects, students, test }
+import 'package:flutter/material.dart';
+import 'dart:async';
+
+enum NextClassViewMode { classes, subjects, students, scheduleTest, test, activeTestScore }
+
+class ScheduleTestDraft {
+  final DateTime? date;
+  final TimeOfDay? time;
+  final String paragraphs;
+  final String type;
+  final int maxMarks;
+  final String chapter;
+
+  ScheduleTestDraft({
+    this.date,
+    this.time,
+    this.paragraphs = '',
+    this.type = 'Written',
+    this.maxMarks = 10,
+    this.chapter = '',
+  });
+
+  ScheduleTestDraft copyWith({
+    DateTime? date,
+    TimeOfDay? time,
+    String? paragraphs,
+    String? type,
+    int? maxMarks,
+    String? chapter,
+    bool clearDate = false,
+    bool clearTime = false,
+  }) {
+    return ScheduleTestDraft(
+      date: clearDate ? null : (date ?? this.date),
+      time: clearTime ? null : (time ?? this.time),
+      paragraphs: paragraphs ?? this.paragraphs,
+      type: type ?? this.type,
+      maxMarks: maxMarks ?? this.maxMarks,
+      chapter: chapter ?? this.chapter,
+    );
+  }
+}
 
 class NextClassState {
   final NextClassViewMode viewMode;
@@ -15,13 +54,26 @@ class NextClassState {
   final bool isLoading;
   final bool isSaving;
   final String searchTerm;
-  final String testChapter;
   
   // Maps studentId to a map of { 'academic': score, 'homework': score }
   final Map<String, Map<String, int>> scoreUpdates;
   
   // Maps studentId to test score
   final Map<String, int> testScores;
+
+  // Schedule Test Drafts per subject
+  final Map<String, ScheduleTestDraft> scheduleDrafts;
+
+  // Getters for UI backward compatibility
+  DateTime? get scheduleDate => selectedSubject != null ? scheduleDrafts[selectedSubject!]?.date : null;
+  TimeOfDay? get scheduleTime => selectedSubject != null ? scheduleDrafts[selectedSubject!]?.time : null;
+  String get scheduleParagraphs => selectedSubject != null ? (scheduleDrafts[selectedSubject!]?.paragraphs ?? '') : '';
+  String get testType => selectedSubject != null ? (scheduleDrafts[selectedSubject!]?.type ?? 'Written') : 'Written';
+  int get maxMarks => selectedSubject != null ? (scheduleDrafts[selectedSubject!]?.maxMarks ?? 10) : 10;
+  String get testChapter => selectedSubject != null ? (scheduleDrafts[selectedSubject!]?.chapter ?? '') : '';
+
+  final Map<String, dynamic>? activeScheduledTest;
+  final bool isFetchingTest;
 
   NextClassState({
     this.viewMode = NextClassViewMode.classes,
@@ -32,9 +84,11 @@ class NextClassState {
     this.isLoading = false,
     this.isSaving = false,
     this.searchTerm = '',
-    this.testChapter = '',
     this.scoreUpdates = const {},
     this.testScores = const {},
+    this.scheduleDrafts = const {},
+    this.activeScheduledTest,
+    this.isFetchingTest = false,
   });
 
   NextClassState copyWith({
@@ -46,9 +100,11 @@ class NextClassState {
     bool? isLoading,
     bool? isSaving,
     String? searchTerm,
-    String? testChapter,
     Map<String, Map<String, int>>? scoreUpdates,
     Map<String, int>? testScores,
+    Map<String, ScheduleTestDraft>? scheduleDrafts,
+    Map<String, dynamic>? activeScheduledTest,
+    bool? isFetchingTest,
   }) {
     return NextClassState(
       viewMode: viewMode ?? this.viewMode,
@@ -59,9 +115,11 @@ class NextClassState {
       isLoading: isLoading ?? this.isLoading,
       isSaving: isSaving ?? this.isSaving,
       searchTerm: searchTerm ?? this.searchTerm,
-      testChapter: testChapter ?? this.testChapter,
       scoreUpdates: scoreUpdates ?? this.scoreUpdates,
       testScores: testScores ?? this.testScores,
+      scheduleDrafts: scheduleDrafts ?? this.scheduleDrafts,
+      activeScheduledTest: activeScheduledTest ?? this.activeScheduledTest,
+      isFetchingTest: isFetchingTest ?? this.isFetchingTest,
     );
   }
 }
@@ -70,10 +128,22 @@ class NextClassNotifier extends StateNotifier<NextClassState> {
   final Ref ref;
   final String? schoolId;
 
+  StreamSubscription<QuerySnapshot>? _classesSubscription;
+  StreamSubscription<QuerySnapshot>? _studentsSubscription;
+  StreamSubscription<QuerySnapshot>? _scheduledTestSubscription;
+
   NextClassNotifier(this.ref, this.schoolId) : super(NextClassState()) {
     if (schoolId != null) {
       _fetchClasses();
     }
+  }
+
+  @override
+  void dispose() {
+    _classesSubscription?.cancel();
+    _studentsSubscription?.cancel();
+    _scheduledTestSubscription?.cancel();
+    super.dispose();
   }
 
   void _fetchClasses() {
@@ -81,14 +151,15 @@ class NextClassNotifier extends StateNotifier<NextClassState> {
     
     state = state.copyWith(isLoading: true);
     
-    FirebaseFirestore.instance
+    _classesSubscription?.cancel();
+    _classesSubscription = FirebaseFirestore.instance
         .collection('schools')
         .doc(schoolId)
         .collection('classes')
         .snapshots()
         .listen((snapshot) {
       final classesData = snapshot.docs.map((doc) {
-        final data = doc.data();
+        final data = Map<String, dynamic>.from(doc.data());
         data['id'] = doc.id;
         return data;
       }).toList();
@@ -132,8 +203,57 @@ class NextClassNotifier extends StateNotifier<NextClassState> {
       viewMode: NextClassViewMode.students,
       scoreUpdates: {},
       testScores: {},
+      activeScheduledTest: {},
     );
     _fetchStudents();
+    _fetchScheduledTest();
+  }
+
+  void _fetchScheduledTest() {
+    if (schoolId == null || state.selectedClass == null || state.selectedSubject == null) return;
+    final classId = state.selectedClass!['id'];
+    state = state.copyWith(isFetchingTest: true);
+
+    _scheduledTestSubscription?.cancel();
+    _scheduledTestSubscription = FirebaseFirestore.instance
+        .collection('schools')
+        .doc(schoolId)
+        .collection('classes')
+        .doc(classId)
+        .collection('scheduled_tests')
+        .snapshots()
+        .listen((snapshot) {
+      if (mounted) {
+        final validDocs = snapshot.docs.where((doc) {
+          final data = Map<String, dynamic>.from(doc.data());
+          return data['subject'] == state.selectedSubject && data['status'] == 'scheduled';
+        }).toList();
+
+        if (validDocs.isNotEmpty) {
+          // Sort by createdAt descending to always pick the newest test if duplicates exist
+          validDocs.sort((a, b) {
+            final aData = Map<String, dynamic>.from(a.data());
+            final bData = Map<String, dynamic>.from(b.data());
+            final aTime = aData['createdAt'];
+            final bTime = bData['createdAt'];
+            if (aTime == null || bTime == null) return 0;
+            // Handle Timestamp
+            if (aTime is Timestamp && bTime is Timestamp) {
+              return bTime.compareTo(aTime);
+            }
+            return 0;
+          });
+
+          final data = Map<String, dynamic>.from(validDocs.first.data());
+          data['id'] = validDocs.first.id;
+          state = state.copyWith(activeScheduledTest: data, isFetchingTest: false);
+        } else {
+          state = state.copyWith(activeScheduledTest: {}, isFetchingTest: false);
+        }
+      }
+    }, onError: (e) {
+      if (mounted) state = state.copyWith(isFetchingTest: false);
+    });
   }
 
   void _fetchStudents() {
@@ -143,7 +263,8 @@ class NextClassNotifier extends StateNotifier<NextClassState> {
 
     state = state.copyWith(isLoading: true);
 
-    FirebaseFirestore.instance
+    _studentsSubscription?.cancel();
+    _studentsSubscription = FirebaseFirestore.instance
         .collection('schools')
         .doc(schoolId)
         .collection('classes')
@@ -152,7 +273,7 @@ class NextClassNotifier extends StateNotifier<NextClassState> {
         .snapshots()
         .listen((snapshot) {
       final studentsData = snapshot.docs.map((doc) {
-        final data = doc.data();
+        final data = Map<String, dynamic>.from(doc.data());
         data['id'] = doc.id;
         return data;
       }).toList();
@@ -178,7 +299,9 @@ class NextClassNotifier extends StateNotifier<NextClassState> {
   }
 
   void goBack() {
-    if (state.viewMode == NextClassViewMode.test) {
+    if (state.viewMode == NextClassViewMode.test || state.viewMode == NextClassViewMode.activeTestScore) {
+      state = state.copyWith(viewMode: NextClassViewMode.scheduleTest);
+    } else if (state.viewMode == NextClassViewMode.scheduleTest) {
       state = state.copyWith(viewMode: NextClassViewMode.students);
     } else if (state.viewMode == NextClassViewMode.students) {
       state = state.copyWith(
@@ -198,12 +321,301 @@ class NextClassNotifier extends StateNotifier<NextClassState> {
     state = state.copyWith(viewMode: NextClassViewMode.test);
   }
 
+  void goToScheduleTestMode() {
+    state = state.copyWith(viewMode: NextClassViewMode.scheduleTest);
+  }
+
+  void goToActiveTestScoreMode() {
+    state = state.copyWith(
+      viewMode: NextClassViewMode.activeTestScore,
+      testScores: {}, // Reset test scores when entering
+    );
+  }
+
   void setSearchTerm(String term) {
     state = state.copyWith(searchTerm: term);
   }
 
+  ScheduleTestDraft get _currentDraft => state.selectedSubject != null 
+      ? (state.scheduleDrafts[state.selectedSubject!] ?? ScheduleTestDraft())
+      : ScheduleTestDraft();
+
+  void _updateDraft(ScheduleTestDraft newDraft) {
+    if (state.selectedSubject == null) return;
+    final newDrafts = Map<String, ScheduleTestDraft>.from(state.scheduleDrafts);
+    newDrafts[state.selectedSubject!] = newDraft;
+    state = state.copyWith(scheduleDrafts: newDrafts);
+  }
+
   void setTestChapter(String chapter) {
-    state = state.copyWith(testChapter: chapter);
+    _updateDraft(_currentDraft.copyWith(chapter: chapter));
+  }
+
+  void setScheduleDate(DateTime date) {
+    _updateDraft(_currentDraft.copyWith(date: date));
+  }
+
+  void setScheduleTime(TimeOfDay time) {
+    _updateDraft(_currentDraft.copyWith(time: time));
+  }
+
+  void setScheduleParagraphs(String paragraphs) {
+    _updateDraft(_currentDraft.copyWith(paragraphs: paragraphs));
+  }
+
+  void setTestType(String type) {
+    _updateDraft(_currentDraft.copyWith(type: type));
+  }
+
+  void setMaxMarks(int marks) {
+    _updateDraft(_currentDraft.copyWith(maxMarks: marks));
+  }
+
+  Future<void> saveScheduledTest() async {
+    if (schoolId == null || state.selectedClass == null || state.selectedSubject == null) return;
+    
+    state = state.copyWith(isSaving: true);
+
+    try {
+      final classId = state.selectedClass!['id'];
+      
+      final scheduleDateTime = DateTime(
+        state.scheduleDate!.year,
+        state.scheduleDate!.month,
+        state.scheduleDate!.day,
+        state.scheduleTime!.hour,
+        state.scheduleTime!.minute,
+      );
+      final isoDate = scheduleDateTime.toIso8601String();
+      
+      final dateStr = state.scheduleDate != null ? "${state.scheduleDate!.year}-${state.scheduleDate!.month.toString().padLeft(2, '0')}-${state.scheduleDate!.day.toString().padLeft(2, '0')}" : "TBD";
+      final timeStr = state.scheduleTime != null ? "${state.scheduleTime!.hour.toString().padLeft(2, '0')}:${state.scheduleTime!.minute.toString().padLeft(2, '0')}" : "TBD";
+      
+      final alertData = {
+        'type': 'test_alert',
+        'title': 'Test Scheduled: ${state.selectedSubject}',
+        'body': 'A ${state.testType} test has been scheduled for ${state.selectedSubject}.\nChapter: ${state.testChapter}\nTopic: ${state.scheduleParagraphs}\nDate: $dateStr at $timeStr\nMax Marks: ${state.maxMarks}',
+        'classId': classId,
+        'subject': state.selectedSubject,
+        'date': isoDate,
+        'createdAt': FieldValue.serverTimestamp(),
+      };
+
+      final testData = {
+        'subject': state.selectedSubject,
+        'chapter': state.testChapter,
+        'paragraphs': state.scheduleParagraphs,
+        'dateStr': dateStr,
+        'timeStr': timeStr,
+        'isoDate': isoDate,
+        'maxMarks': state.maxMarks,
+        'testType': state.testType,
+        'status': 'scheduled',
+        'createdAt': FieldValue.serverTimestamp(),
+      };
+
+      final testRef = FirebaseFirestore.instance
+          .collection('schools')
+          .doc(schoolId)
+          .collection('classes')
+          .doc(classId)
+          .collection('scheduled_tests')
+          .doc();
+
+      final localTestState = Map<String, dynamic>.from(testData);
+      localTestState['id'] = testRef.id;
+
+      final newDrafts = Map<String, ScheduleTestDraft>.from(state.scheduleDrafts);
+      newDrafts.remove(state.selectedSubject);
+
+      // FAST OPTIMISTIC UI UPDATE
+      state = state.copyWith(
+        isSaving: false,
+        activeScheduledTest: localTestState,
+        scheduleDrafts: newDrafts,
+      );
+
+      // ASYNCHRONOUS BACKGROUND SAVE (TEST FIRST, THEN ALERTS)
+      testRef.set(testData).then((_) {
+        try {
+          final batch = FirebaseFirestore.instance.batch();
+          for (var student in state.students) {
+            final alertRef = FirebaseFirestore.instance
+                .collection('schools')
+                .doc(schoolId)
+                .collection('classes')
+                .doc(classId)
+                .collection('students')
+                .doc(student['id'])
+                .collection('alerts')
+                .doc();
+            batch.set(alertRef, alertData);
+          }
+          batch.commit().catchError((e) => print("Error sending parent alerts: $e"));
+        } catch (e) {
+          print("Error preparing alerts batch: $e");
+        }
+      }).catchError((e) {
+        print("Error saving scheduled test to Firebase: $e");
+      });
+
+    } catch (e) {
+      print("Error processing scheduled test locally: $e");
+      state = state.copyWith(isSaving: false);
+    }
+  }
+
+  Future<void> cancelScheduledTest() async {
+    if (schoolId == null || state.selectedClass == null || state.activeScheduledTest == null || state.activeScheduledTest!.isEmpty) return;
+    
+    final classId = state.selectedClass!['id'];
+    final testId = state.activeScheduledTest!['id'];
+    final testType = state.activeScheduledTest!['testType'] ?? 'Written';
+
+    // OPTIMISTIC UI UPDATE: Instantly route to form
+    state = state.copyWith(isSaving: false, activeScheduledTest: {}, viewMode: NextClassViewMode.scheduleTest);
+
+    try {
+      final alertData = {
+        'type': 'test_cancelled',
+        'title': 'Test Cancelled: ${state.selectedSubject}',
+        'body': 'The $testType test for ${state.selectedSubject} has been cancelled and will be scheduled in the future.',
+        'classId': classId,
+        'subject': state.selectedSubject,
+        'createdAt': FieldValue.serverTimestamp(),
+      };
+
+      final testRef = FirebaseFirestore.instance
+          .collection('schools')
+          .doc(schoolId)
+          .collection('classes')
+          .doc(classId)
+          .collection('scheduled_tests')
+          .doc(testId);
+          
+      // Delete the test independently first
+      await testRef.delete();
+
+      // Run alerts in a separate background try-catch to prevent permission failures
+      try {
+        final batch = FirebaseFirestore.instance.batch();
+        for (var student in state.students) {
+          final alertRef = FirebaseFirestore.instance
+              .collection('schools')
+              .doc(schoolId)
+              .collection('classes')
+              .doc(classId)
+              .collection('students')
+              .doc(student['id'])
+              .collection('alerts')
+              .doc();
+          batch.set(alertRef, alertData);
+        }
+        batch.commit().catchError((e) => print("Error sending cancel alerts: $e"));
+      } catch (e) {
+        print("Error preparing cancel alerts: $e");
+      }
+      
+    } catch (e) {
+      print("Error cancelling scheduled test: $e");
+    }
+  }
+
+  Future<void> completeScheduledTest() async {
+    if (schoolId == null || state.selectedClass == null || state.activeScheduledTest == null || state.activeScheduledTest!.isEmpty) return;
+    
+    final classId = state.selectedClass!['id'];
+    final testId = state.activeScheduledTest!['id'];
+
+    // OPTIMISTIC UI UPDATE: Instantly route to form
+    state = state.copyWith(isSaving: false, activeScheduledTest: {}, viewMode: NextClassViewMode.scheduleTest);
+
+    try {
+      final testRef = FirebaseFirestore.instance
+          .collection('schools')
+          .doc(schoolId)
+          .collection('classes')
+          .doc(classId)
+          .collection('scheduled_tests')
+          .doc(testId);
+          
+      await testRef.update({'status': 'completed'});
+    } catch (e) {
+      print("Error completing scheduled test: $e");
+    }
+  }
+
+  Future<void> saveActiveTestScores(String message) async {
+    if (schoolId == null || state.selectedClass == null || state.activeScheduledTest == null || state.activeScheduledTest!.isEmpty) return;
+    
+    state = state.copyWith(isSaving: true);
+
+    try {
+      final classId = state.selectedClass!['id'];
+      final testId = state.activeScheduledTest!['id'];
+      final batch = FirebaseFirestore.instance.batch();
+
+      // Alert payload
+      final alertData = {
+        'type': 'test_result_alert',
+        'title': 'Test Results: ${state.selectedSubject}',
+        'body': message.isNotEmpty ? message : 'The scores for the ${state.activeScheduledTest!['testType']} test in ${state.selectedSubject} have been published.',
+        'classId': classId,
+        'subject': state.selectedSubject,
+        'createdAt': FieldValue.serverTimestamp(),
+      };
+
+      for (var student in state.students) {
+        final studentId = student['id'];
+
+        // Write individual alert
+        final alertRef = FirebaseFirestore.instance
+            .collection('schools')
+            .doc(schoolId)
+            .collection('classes')
+            .doc(classId)
+            .collection('students')
+            .doc(studentId)
+            .collection('alerts')
+            .doc();
+        batch.set(alertRef, alertData);
+
+        // Save score if it was entered
+        if (state.testScores.containsKey(studentId)) {
+          final score = state.testScores[studentId]!;
+          final studentRef = FirebaseFirestore.instance
+              .collection('schools')
+              .doc(schoolId)
+              .collection('classes')
+              .doc(classId)
+              .collection('students')
+              .doc(studentId);
+
+          // Assuming we add it to a generic testHistory array or just write a subcollection
+          // We'll write to a 'testScores' subcollection to be safe and structured
+          final scoreRef = studentRef.collection('testScores').doc(testId);
+          batch.set(scoreRef, {
+            'subject': state.selectedSubject,
+            'testType': state.activeScheduledTest!['testType'],
+            'score': score,
+            'maxMarks': state.activeScheduledTest!['maxMarks'],
+            'date': state.activeScheduledTest!['dateStr'],
+            'createdAt': FieldValue.serverTimestamp(),
+          });
+        }
+      }
+
+      await batch.commit();
+
+      state = state.copyWith(
+        isSaving: false,
+        viewMode: NextClassViewMode.scheduleTest,
+        testScores: {},
+      );
+    } catch (e) {
+      print("Error saving active test scores: $e");
+      state = state.copyWith(isSaving: false);
+    }
   }
 
   // --- Scoring Logic ---
@@ -323,86 +735,6 @@ class NextClassNotifier extends StateNotifier<NextClassState> {
     state = state.copyWith(testScores: {});
   }
 
-  Future<void> uploadResultCard(String studentId, String filePath, String fileName) async {
-    if (schoolId == null || state.selectedClass == null) {
-      throw Exception("Missing required data for upload.");
-    }
-    
-    final classId = state.selectedClass!['id'];
-    final student = state.students.firstWhere((s) => s['id'] == studentId, orElse: () { return <String, dynamic>{}; });
-    
-    if (student.isEmpty) {
-      throw Exception("Student not found.");
-    }
-
-    final storageRef = FirebaseStorage.instance
-        .ref()
-        .child('schools')
-        .child(schoolId!)
-        .child('students')
-        .child(studentId)
-        .child('result_cards')
-        .child('${DateTime.now().millisecondsSinceEpoch}_$fileName');
-
-    final uploadTask = await storageRef.putFile(File(filePath));
-    final String downloadUrl = await uploadTask.ref.getDownloadURL();
-
-    final studentRef = FirebaseFirestore.instance
-        .collection('schools')
-        .doc(schoolId)
-        .collection('classes')
-        .doc(classId)
-        .collection('students')
-        .doc(studentId);
-
-    final masterStudentRef = FirebaseFirestore.instance
-        .collection('schools')
-        .doc(schoolId)
-        .collection('students')
-        .doc(studentId);
-
-    final fileExtension = fileName.contains('.') ? fileName.split('.').last.toLowerCase() : 'pdf';
-
-    final updateData = {
-      'resultCardUrl': downloadUrl,
-      'resultCardName': fileName,
-      'uploadedResultUrl': downloadUrl,
-      'uploadedResultType': fileExtension,
-      'resultCardUpdatedAt': FieldValue.serverTimestamp(),
-      'uploadedResultAt': FieldValue.serverTimestamp(),
-    };
-
-    await studentRef.update(updateData);
-    
-    try {
-        await masterStudentRef.update(updateData);
-    } catch (e) {
-        // Ignore if master record missing
-        print("Master student record not found to update: $e");
-    }
-
-    String? parentId;
-    if (student['parentDetails'] != null && student['parentDetails']['parentId'] != null) {
-        parentId = student['parentDetails']['parentId'];
-    }
-
-    if (parentId != null) {
-        await FirebaseFirestore.instance
-             .collection('schools')
-             .doc(schoolId)
-             .collection('notifications')
-             .add({
-                 'parentId': parentId,
-                 'studentId': studentId,
-                 'studentName': student['name'],
-                 'title': '📄 New Result Card',
-                 'message': 'A new result card ($fileName) has been uploaded for ${student['name']}.',
-                 'type': 'result',
-                 'read': false,
-                 'createdAt': FieldValue.serverTimestamp(),
-             });
-    }
-  }
 }
 
 final nextClassProvider = StateNotifierProvider.autoDispose<NextClassNotifier, NextClassState>((ref) {

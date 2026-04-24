@@ -8,6 +8,8 @@ import 'package:teacher_mobile_app/features/next_class/presentation/widgets/stud
 import 'package:teacher_mobile_app/features/next_class/presentation/widgets/class_card.dart';
 import 'package:teacher_mobile_app/features/next_class/services/pdf_generator_service.dart';
 import 'package:teacher_mobile_app/features/timetable/providers/timetable_provider.dart';
+import 'package:teacher_mobile_app/features/next_class/utils/test_report_pdf_generator.dart';
+import 'package:share_plus/share_plus.dart';
 
 class NextClassScreen extends ConsumerWidget {
   const NextClassScreen({Key? key}) : super(key: key);
@@ -113,9 +115,15 @@ class NextClassScreen extends ConsumerWidget {
       title = state.selectedSubject ?? "Students";
       subtitle = "${state.selectedClass?['name']} • ${state.students.length} Students";
       showNextBtn = true;
+    } else if (state.viewMode == NextClassViewMode.scheduleTest) {
+      title = "Schedule Test";
+      subtitle = state.selectedSubject ?? "Details";
     } else if (state.viewMode == NextClassViewMode.test) {
       title = "Test: ${state.selectedSubject}";
       subtitle = "Enter scores & generate report";
+    } else if (state.viewMode == NextClassViewMode.activeTestScore) {
+      title = "Record Scores";
+      subtitle = "${state.selectedSubject} • ${state.activeScheduledTest?['testType'] ?? ''} Test";
     }
 
     return Container(
@@ -185,7 +193,7 @@ class NextClassScreen extends ConsumerWidget {
           ),
           if (showNextBtn)
             GestureDetector(
-              onTap: () => notifier.goToTestMode(),
+              onTap: () => notifier.goToScheduleTestMode(),
               child: Container(
                 padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
                 decoration: BoxDecoration(
@@ -227,8 +235,12 @@ class NextClassScreen extends ConsumerWidget {
         return _buildSubjectsView(context, state, notifier, timetableSlots);
       case NextClassViewMode.students:
         return _buildStudentsView(context, state, notifier);
+      case NextClassViewMode.scheduleTest:
+        return _buildScheduleTestView(context, state, notifier);
       case NextClassViewMode.test:
         return _buildTestView(context, state, notifier, teacherData, schoolData);
+      case NextClassViewMode.activeTestScore:
+        return _buildActiveTestScoreView(context, state, notifier, teacherData, schoolData);
     }
   }
 
@@ -674,6 +686,615 @@ class NextClassScreen extends ConsumerWidget {
             },
             child: const Text("Reset", style: TextStyle(color: Colors.red)),
           ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildScheduleTestView(BuildContext context, NextClassState state, NextClassNotifier notifier) {
+    if (state.isFetchingTest) {
+      return const Center(child: CircularProgressIndicator(color: AppTheme.primary));
+    }
+    
+    if (state.activeScheduledTest != null && state.activeScheduledTest!.isNotEmpty) {
+      return _buildScheduledTestDetailsWidget(context, state, notifier);
+    }
+
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Test Type Chips
+          Text("Test Type", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: isDark ? Colors.white : Colors.indigo[900])),
+          const SizedBox(height: 12),
+          SingleChildScrollView(
+            scrollDirection: Axis.horizontal,
+            child: Row(
+              children: ['Written', 'Oral', 'Practical', 'Surprise'].map((type) {
+                final isSelected = state.testType == type;
+                return GestureDetector(
+                  onTap: () => notifier.setTestType(type),
+                  child: Container(
+                    margin: const EdgeInsets.only(right: 12),
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 10),
+                    decoration: BoxDecoration(
+                      color: isSelected ? const Color(0xFF6366f1) : (isDark ? Colors.white.withOpacity(0.05) : Colors.grey[100]),
+                      borderRadius: BorderRadius.circular(20),
+                      border: Border.all(color: isSelected ? Colors.transparent : (isDark ? Colors.transparent : Colors.grey[300]!)),
+                    ),
+                    child: Text(
+                      type,
+                      style: TextStyle(
+                        color: isSelected ? Colors.white : (isDark ? Colors.white70 : Colors.black54),
+                        fontWeight: isSelected ? FontWeight.bold : FontWeight.normal,
+                      ),
+                    ),
+                  ),
+                );
+              }).toList(),
+            ),
+          ),
+          const SizedBox(height: 24),
+
+          // Chapter and Paragraphs
+          _buildInputSection(
+            context,
+            title: "Chapter Name",
+            hint: "e.g., Chapter 4: Photosynthesis",
+            icon: Icons.menu_book,
+            onChanged: notifier.setTestChapter,
+            initialValue: state.testChapter,
+          ),
+          const SizedBox(height: 16),
+          _buildInputSection(
+            context,
+            title: "Paragraph / Topic Details",
+            hint: "e.g., Paragraphs 1 to 5",
+            icon: Icons.format_list_bulleted,
+            onChanged: notifier.setScheduleParagraphs,
+            initialValue: state.scheduleParagraphs,
+          ),
+          const SizedBox(height: 16),
+          _buildInputSection(
+            context,
+            title: "Max Marks",
+            hint: "10",
+            icon: Icons.score,
+            isNumber: true,
+            onChanged: (val) => notifier.setMaxMarks(int.tryParse(val) ?? 10),
+            initialValue: state.maxMarks.toString(),
+          ),
+          const SizedBox(height: 24),
+
+          // Date and Time Row
+          Row(
+            children: [
+              Expanded(
+                child: GestureDetector(
+                  onTap: () async {
+                    final date = await showDatePicker(
+                      context: context,
+                      initialDate: state.scheduleDate ?? DateTime.now(),
+                      firstDate: DateTime.now(),
+                      lastDate: DateTime.now().add(const Duration(days: 365)),
+                    );
+                    if (date != null) notifier.setScheduleDate(date);
+                  },
+                  child: _buildDateTimeWidget(
+                    context, 
+                    title: "Date",
+                    value: state.scheduleDate != null ? "${state.scheduleDate!.day}/${state.scheduleDate!.month}/${state.scheduleDate!.year}" : "Select Date",
+                    icon: Icons.calendar_today,
+                    isSelected: state.scheduleDate != null,
+                  ),
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: GestureDetector(
+                  onTap: () async {
+                    final time = await showTimePicker(
+                      context: context,
+                      initialTime: state.scheduleTime ?? TimeOfDay.now(),
+                    );
+                    if (time != null) notifier.setScheduleTime(time);
+                  },
+                  child: _buildDateTimeWidget(
+                    context, 
+                    title: "Time",
+                    value: state.scheduleTime != null ? state.scheduleTime!.format(context) : "Select Time",
+                    icon: Icons.access_time,
+                    isSelected: state.scheduleTime != null,
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 40),
+
+          // Save Button
+          GestureDetector(
+            onTap: state.isSaving ? null : () async {
+               if (state.testChapter.isEmpty || state.scheduleDate == null || state.scheduleTime == null) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    const SnackBar(content: Text("Please select a Date, Time, and Chapter")),
+                  );
+                  return;
+               }
+               // INSTANT UI UPDATE
+               notifier.saveScheduledTest();
+            },
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [Color(0xFF6366f1), Color(0xFF4f46e5)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(color: const Color(0xFF6366f1).withOpacity(0.4), blurRadius: 16, offset: const Offset(0, 8)),
+                ],
+              ),
+              alignment: Alignment.center,
+              child: state.isSaving
+                  ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                  : const Text("Schedule & Alert Parents", style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+            ),
+          ),
+          const SizedBox(height: 100), // padding
+        ],
+      ),
+    );
+  }
+
+  Widget _buildInputSection(BuildContext context, {required String title, required String hint, required IconData icon, required Function(String) onChanged, String? initialValue, bool isNumber = false}) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Text(title, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: isDark ? Colors.white70 : Colors.grey[700])),
+        const SizedBox(height: 8),
+        Container(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          decoration: BoxDecoration(
+            color: isDark ? Colors.white.withOpacity(0.05) : Colors.grey[50],
+            borderRadius: BorderRadius.circular(12),
+            border: Border.all(color: isDark ? Colors.transparent : Colors.grey[200]!),
+          ),
+          child: TextFormField(
+            initialValue: initialValue,
+            onChanged: onChanged,
+            keyboardType: isNumber ? TextInputType.number : TextInputType.text,
+            style: TextStyle(color: isDark ? Colors.white : Colors.black),
+            decoration: InputDecoration(
+              icon: Icon(icon, color: const Color(0xFF6366f1), size: 20),
+              border: InputBorder.none,
+              hintText: hint,
+              hintStyle: TextStyle(color: isDark ? Colors.grey[600] : Colors.grey[400]),
+            ),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Widget _buildDateTimeWidget(BuildContext context, {required String title, required String value, required IconData icon, required bool isSelected}) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    
+    return Container(
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: isSelected ? const Color(0xFF6366f1).withOpacity(0.1) : (isDark ? Colors.white.withOpacity(0.05) : Colors.grey[50]),
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: isSelected ? const Color(0xFF6366f1).withOpacity(0.5) : (isDark ? Colors.transparent : Colors.grey[200]!)),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Icon(icon, color: isSelected ? const Color(0xFF6366f1) : Colors.grey, size: 24),
+          const SizedBox(height: 12),
+          Text(title, style: TextStyle(fontSize: 12, color: Colors.grey[600])),
+          const SizedBox(height: 4),
+          Text(value, style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: isDark ? Colors.white : Colors.black)),
+        ],
+      ),
+    );
+  }
+
+
+  Widget _buildScheduledTestDetailsWidget(BuildContext context, NextClassState state, NextClassNotifier notifier) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final test = state.activeScheduledTest!;
+    
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(24),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [Color(0xFF6366f1), Color(0xFF4f46e5)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(24),
+              boxShadow: [BoxShadow(color: const Color(0xFF6366f1).withOpacity(0.3), blurRadius: 20, offset: const Offset(0, 10))],
+            ),
+            child: Column(
+              children: [
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
+                  decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), borderRadius: BorderRadius.circular(20)),
+                  child: Text("${test['testType']} Test", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
+                ),
+                const SizedBox(height: 16),
+                const Icon(Icons.event_available, color: Colors.white, size: 48),
+                const SizedBox(height: 16),
+                Text(test['subject'] ?? "Subject", style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.w800)),
+                const SizedBox(height: 8),
+                Text(test['chapter'] ?? "", style: TextStyle(color: Colors.white.withOpacity(0.9), fontSize: 16), textAlign: TextAlign.center),
+                if ((test['paragraphs'] ?? '').isNotEmpty)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 4),
+                    child: Text("Topic: ${test['paragraphs']}", style: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 14)),
+                  ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 24),
+          Row(
+            children: [
+              Expanded(child: _buildDetailCard(context, Icons.calendar_today, "Date", test['dateStr'] ?? "TBD")),
+              const SizedBox(width: 16),
+              Expanded(child: _buildDetailCard(context, Icons.access_time, "Time", test['timeStr'] ?? "TBD")),
+            ],
+          ),
+          const SizedBox(height: 16),
+          _buildDetailCard(context, Icons.score, "Max Marks", "${test['maxMarks'] ?? 10} Marks", fullWidth: true),
+          const SizedBox(height: 40),
+          Row(
+            children: [
+              Expanded(
+                child: GestureDetector(
+                  onTap: state.isSaving ? null : () => _showCancelDialog(context, notifier),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    decoration: BoxDecoration(
+                      color: isDark ? Colors.red.withOpacity(0.2) : Colors.red[50],
+                      borderRadius: BorderRadius.circular(16),
+                      border: Border.all(color: Colors.red.withOpacity(0.5)),
+                    ),
+                    alignment: Alignment.center,
+                    child: state.isSaving
+                        ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.red, strokeWidth: 2))
+                        : const Text("Cancel Test", style: TextStyle(color: Colors.red, fontSize: 16, fontWeight: FontWeight.bold)),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 16),
+              Expanded(
+                child: GestureDetector(
+                  onTap: state.isSaving ? null : () => notifier.completeScheduledTest(),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 16),
+                    decoration: BoxDecoration(
+                      gradient: const LinearGradient(
+                        colors: [Color(0xFF10b981), Color(0xFF059669)],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      borderRadius: BorderRadius.circular(16),
+                      boxShadow: [BoxShadow(color: const Color(0xFF10b981).withOpacity(0.4), blurRadius: 16, offset: const Offset(0, 8))],
+                    ),
+                    alignment: Alignment.center,
+                    child: state.isSaving
+                        ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                        : const Text("Completed", style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 24),
+          GestureDetector(
+            onTap: state.isSaving ? null : () => notifier.goToActiveTestScoreMode(),
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [Color(0xFF6366f1), Color(0xFF4f46e5)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [BoxShadow(color: const Color(0xFF6366f1).withOpacity(0.4), blurRadius: 16, offset: const Offset(0, 8))],
+              ),
+              alignment: Alignment.center,
+              child: const Text("Start Test", style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildDetailCard(BuildContext context, IconData icon, String title, String value, {bool fullWidth = false}) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    return Container(
+      width: fullWidth ? double.infinity : null,
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: isDark ? Colors.white.withOpacity(0.05) : Colors.white,
+        borderRadius: BorderRadius.circular(16),
+        border: Border.all(color: isDark ? Colors.transparent : Colors.black.withOpacity(0.05)),
+        boxShadow: isDark ? [] : [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 10, offset: const Offset(0, 4))],
+      ),
+      child: Row(
+        children: [
+          Container(
+            padding: const EdgeInsets.all(10),
+            decoration: BoxDecoration(color: const Color(0xFF6366f1).withOpacity(0.1), shape: BoxShape.circle),
+            child: Icon(icon, color: const Color(0xFF6366f1), size: 20),
+          ),
+          const SizedBox(width: 12),
+          Expanded(
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Text(title, style: TextStyle(color: Colors.grey[500], fontSize: 12)),
+                FittedBox(
+                  fit: BoxFit.scaleDown,
+                  alignment: Alignment.centerLeft,
+                  child: Text(value, style: TextStyle(color: isDark ? Colors.white : Colors.black87, fontWeight: FontWeight.bold, fontSize: 14)),
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showCancelDialog(BuildContext context, NextClassNotifier notifier) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: Theme.of(context).brightness == Brightness.dark ? AppTheme.surfaceDark : Colors.white,
+        title: Text("Cancel Test?", style: TextStyle(color: Theme.of(context).brightness == Brightness.dark ? Colors.white : Colors.indigo[900])),
+        content: Text("Are you sure you want to cancel this scheduled test? Parents will be notified immediately.", style: TextStyle(color: Theme.of(context).brightness == Brightness.dark ? Colors.grey : Colors.grey[600])),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text("Keep Test", style: TextStyle(color: Colors.grey)),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              notifier.cancelScheduledTest();
+            },
+            child: const Text("Cancel Test", style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildActiveTestScoreView(BuildContext context, NextClassState state, NextClassNotifier notifier, Map<String, dynamic>? teacherData, Map<String, dynamic>? schoolData) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final test = state.activeScheduledTest;
+    
+    if (test == null || test.isEmpty) return const Center(child: Text("No test available."));
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(24),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Simplified Details Widget (Top)
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(16),
+            decoration: BoxDecoration(
+              gradient: const LinearGradient(
+                colors: [Color(0xFF6366f1), Color(0xFF4f46e5)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.circular(16),
+            ),
+            child: Row(
+              children: [
+                const Icon(Icons.assignment, color: Colors.white, size: 32),
+                const SizedBox(width: 16),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text("${test['subject']} • ${test['testType']}", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 16)),
+                      const SizedBox(height: 4),
+                      Text("Chapter: ${test['chapter']}", style: TextStyle(color: Colors.white.withOpacity(0.8), fontSize: 14)),
+                      const SizedBox(height: 2),
+                      Text("Topic: ${test['paragraphs']}", style: TextStyle(color: Colors.white.withOpacity(0.8), fontSize: 14)),
+                      const SizedBox(height: 4),
+                      Text("Max Marks: ${test['maxMarks'] ?? 10}", style: const TextStyle(color: Colors.amber, fontWeight: FontWeight.bold, fontSize: 14)),
+                    ],
+                  ),
+                ),
+              ],
+            ),
+          ),
+          const SizedBox(height: 24),
+          Text("Enter Test Scores", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: isDark ? Colors.white : Colors.indigo[900])),
+          const SizedBox(height: 16),
+
+          // Students List
+          ...state.students.map((student) {
+            final studentId = student['id'];
+            final maxMarks = test['maxMarks'] ?? 10;
+            int maxM = (maxMarks is int) ? maxMarks : int.tryParse(maxMarks.toString()) ?? 10;
+            double currentScore = (state.testScores[studentId] ?? 0).toDouble();
+
+            Color sliderColor;
+            double percentage = maxM > 0 ? currentScore / maxM : 0.0;
+            if (percentage <= 0.3) {
+              sliderColor = const Color(0xFFEF4444); // Red
+            } else if (percentage <= 0.6) {
+              sliderColor = const Color(0xFFF59E0B); // Amber/Yellow
+            } else {
+              sliderColor = const Color(0xFF10B981); // Emerald/Green
+            }
+
+            return Container(
+              margin: const EdgeInsets.only(bottom: 12),
+              padding: const EdgeInsets.all(16),
+              decoration: BoxDecoration(
+                color: isDark ? Colors.white.withOpacity(0.05) : Colors.white,
+                borderRadius: BorderRadius.circular(16),
+                border: Border.all(color: isDark ? Colors.transparent : Colors.grey[200]!),
+                boxShadow: isDark ? [] : [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 10, offset: const Offset(0, 4))],
+              ),
+              child: Column(
+                children: [
+                  Row(
+                    children: [
+                      CircleAvatar(
+                        backgroundColor: const Color(0xFF6366f1).withOpacity(0.1),
+                        radius: 20,
+                        child: Text(
+                          student['name']?.substring(0, 1).toUpperCase() ?? "?",
+                          style: const TextStyle(color: Color(0xFF6366f1), fontWeight: FontWeight.bold),
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(student['name'] ?? 'Unknown', style: TextStyle(fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87, fontSize: 16)),
+                            Text("Roll No: ${student['rollNo'] ?? '-'}", style: TextStyle(color: Colors.grey[500], fontSize: 12)),
+                          ],
+                        ),
+                      ),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        decoration: BoxDecoration(
+                          color: sliderColor.withOpacity(0.1),
+                          borderRadius: BorderRadius.circular(12),
+                          border: Border.all(color: sliderColor.withOpacity(0.3)),
+                        ),
+                        child: Text(
+                          "${currentScore.toInt()} / $maxM",
+                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: sliderColor),
+                        ),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 12),
+                  SliderTheme(
+                    data: SliderTheme.of(context).copyWith(
+                      activeTrackColor: sliderColor,
+                      thumbColor: sliderColor,
+                      inactiveTrackColor: sliderColor.withOpacity(0.2),
+                      trackHeight: 6,
+                      thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 10),
+                      overlayShape: const RoundSliderOverlayShape(overlayRadius: 20),
+                    ),
+                    child: Slider(
+                      value: currentScore,
+                      min: 0,
+                      max: maxM.toDouble(),
+                      divisions: maxM > 0 ? maxM : 1,
+                      onChanged: (val) {
+                        notifier.updateTestScore(studentId, val.toInt());
+                      },
+                    ),
+                  ),
+                ],
+              ),
+            );
+          }).toList(),
+          
+          const SizedBox(height: 32),
+          // Generate Report Button
+          Builder(
+            builder: (ctx) {
+              bool allScoresSet = true;
+              if (state.students.isEmpty) allScoresSet = false;
+              for (var student in state.students) {
+                if (!state.testScores.containsKey(student['id'])) {
+                  allScoresSet = false;
+                  break;
+                }
+              }
+
+              return GestureDetector(
+                onTap: (!allScoresSet || state.isSaving) ? null : () async {
+                  final file = await TestReportPdfGenerator.generateReport(
+                    schoolData: schoolData ?? {},
+                    teacherData: teacherData ?? {},
+                    testData: test,
+                    students: state.students,
+                    testScores: state.testScores,
+                  );
+                  await Share.shareXFiles([XFile(file.path)], text: "Test Report for ${test['subject']}");
+                },
+                child: Container(
+                  width: double.infinity,
+                  padding: const EdgeInsets.symmetric(vertical: 16),
+                  margin: const EdgeInsets.only(bottom: 16),
+                  decoration: BoxDecoration(
+                    color: allScoresSet ? const Color(0xFFF59E0B) : Colors.grey[400],
+                    borderRadius: BorderRadius.circular(16),
+                    boxShadow: allScoresSet ? [BoxShadow(color: const Color(0xFFF59E0B).withOpacity(0.4), blurRadius: 16, offset: const Offset(0, 8))] : [],
+                  ),
+                  alignment: Alignment.center,
+                  child: Row(
+                    mainAxisAlignment: MainAxisAlignment.center,
+                    children: [
+                      Icon(allScoresSet ? Icons.picture_as_pdf : Icons.lock, color: Colors.white, size: 20),
+                      const SizedBox(width: 8),
+                      Text(allScoresSet ? "Generate Report" : "Generate Report (Set all scores)", style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+                    ],
+                  ),
+                ),
+              );
+            }
+          ),
+          
+          GestureDetector(
+            onTap: state.isSaving ? null : () {
+               notifier.saveActiveTestScores(""); // Send default message defined in provider
+            },
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [Color(0xFF6366f1), Color(0xFF4f46e5)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [BoxShadow(color: const Color(0xFF6366f1).withOpacity(0.4), blurRadius: 16, offset: const Offset(0, 8))],
+              ),
+              alignment: Alignment.center,
+              child: state.isSaving
+                  ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                  : const Text("Save & Notify Parents", style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+            ),
+          ),
+          const SizedBox(height: 100),
         ],
       ),
     );
