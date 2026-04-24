@@ -21,6 +21,7 @@ import 'package:teacher_mobile_app/features/notebook/screens/notebook_screen.dar
 import 'package:teacher_mobile_app/features/notebook/screens/note_editor_screen.dart';
 import 'package:teacher_mobile_app/features/notebook/models/note_model.dart';
 import 'package:teacher_mobile_app/features/timetable/presentation/screens/timetable_screen.dart';
+import 'package:teacher_mobile_app/features/my_class/presentation/screens/syllabus_screen.dart';
 final GlobalKey<ScaffoldMessengerState> rootScaffoldMessengerKey = GlobalKey<ScaffoldMessengerState>();
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
@@ -138,6 +139,10 @@ final appRouter = GoRouter(
     GoRoute(
       path: '/timetable',
       builder: (context, state) => const TimetableScreen(),
+    ),
+    GoRoute(
+      path: '/my-class/syllabus',
+      builder: (context, state) => const SyllabusScreen(),
     ),
   ],
 );
