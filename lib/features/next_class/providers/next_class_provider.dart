@@ -586,7 +586,7 @@ class NextClassNotifier extends StateNotifier<NextClassState> {
             'studentName': student['name'] ?? 'Student',
             'title': 'Test Results: ${state.selectedSubject}',
             'message': testMessage,
-            'type': 'result',
+            'type': 'academic',
             'read': false,
             'className': state.selectedClass?['name'] ?? '',
             'createdAt': FieldValue.serverTimestamp(),
