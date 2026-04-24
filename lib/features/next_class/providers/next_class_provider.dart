@@ -391,15 +391,7 @@ class NextClassNotifier extends StateNotifier<NextClassState> {
       final dateStr = state.scheduleDate != null ? "${state.scheduleDate!.year}-${state.scheduleDate!.month.toString().padLeft(2, '0')}-${state.scheduleDate!.day.toString().padLeft(2, '0')}" : "TBD";
       final timeStr = state.scheduleTime != null ? "${state.scheduleTime!.hour.toString().padLeft(2, '0')}:${state.scheduleTime!.minute.toString().padLeft(2, '0')}" : "TBD";
       
-      final alertData = {
-        'type': 'test_alert',
-        'title': 'Test Scheduled: ${state.selectedSubject}',
-        'body': 'A ${state.testType} test has been scheduled for ${state.selectedSubject}.\nChapter: ${state.testChapter}\nTopic: ${state.scheduleParagraphs}\nDate: $dateStr at $timeStr\nMax Marks: ${state.maxMarks}',
-        'classId': classId,
-        'subject': state.selectedSubject,
-        'date': isoDate,
-        'createdAt': FieldValue.serverTimestamp(),
-      };
+      final testMessage = 'A ${state.testType} test has been scheduled for ${state.selectedSubject}.\nChapter: ${state.testChapter}\nTopic: ${state.scheduleParagraphs}\nDate: $dateStr at $timeStr\nMax Marks: ${state.maxMarks}';
 
       final testData = {
         'subject': state.selectedSubject,
@@ -440,16 +432,28 @@ class NextClassNotifier extends StateNotifier<NextClassState> {
         try {
           final batch = FirebaseFirestore.instance.batch();
           for (var student in state.students) {
-            final alertRef = FirebaseFirestore.instance
-                .collection('schools')
-                .doc(schoolId)
-                .collection('classes')
-                .doc(classId)
-                .collection('students')
-                .doc(student['id'])
-                .collection('alerts')
-                .doc();
-            batch.set(alertRef, alertData);
+            String? parentId;
+            if (student['parentDetails'] != null && student['parentDetails']['parentId'] != null) {
+              parentId = student['parentDetails']['parentId'];
+            }
+            if (parentId != null) {
+              final alertRef = FirebaseFirestore.instance
+                  .collection('schools')
+                  .doc(schoolId)
+                  .collection('notifications')
+                  .doc();
+              batch.set(alertRef, {
+                'parentId': parentId,
+                'studentId': student['id'],
+                'studentName': student['name'] ?? 'Student',
+                'title': 'Test Scheduled: ${state.selectedSubject}',
+                'message': testMessage,
+                'type': 'academic',
+                'read': false,
+                'className': state.selectedClass?['name'] ?? '',
+                'createdAt': FieldValue.serverTimestamp(),
+              });
+            }
           }
           batch.commit().catchError((e) => print("Error sending parent alerts: $e"));
         } catch (e) {
@@ -476,14 +480,7 @@ class NextClassNotifier extends StateNotifier<NextClassState> {
     state = state.copyWith(isSaving: false, activeScheduledTest: {}, viewMode: NextClassViewMode.scheduleTest);
 
     try {
-      final alertData = {
-        'type': 'test_cancelled',
-        'title': 'Test Cancelled: ${state.selectedSubject}',
-        'body': 'The $testType test for ${state.selectedSubject} has been cancelled and will be scheduled in the future.',
-        'classId': classId,
-        'subject': state.selectedSubject,
-        'createdAt': FieldValue.serverTimestamp(),
-      };
+      final testMessage = 'The $testType test for ${state.selectedSubject} has been cancelled and will be scheduled in the future.';
 
       final testRef = FirebaseFirestore.instance
           .collection('schools')
@@ -500,16 +497,28 @@ class NextClassNotifier extends StateNotifier<NextClassState> {
       try {
         final batch = FirebaseFirestore.instance.batch();
         for (var student in state.students) {
-          final alertRef = FirebaseFirestore.instance
-              .collection('schools')
-              .doc(schoolId)
-              .collection('classes')
-              .doc(classId)
-              .collection('students')
-              .doc(student['id'])
-              .collection('alerts')
-              .doc();
-          batch.set(alertRef, alertData);
+          String? parentId;
+          if (student['parentDetails'] != null && student['parentDetails']['parentId'] != null) {
+            parentId = student['parentDetails']['parentId'];
+          }
+          if (parentId != null) {
+            final alertRef = FirebaseFirestore.instance
+                .collection('schools')
+                .doc(schoolId)
+                .collection('notifications')
+                .doc();
+            batch.set(alertRef, {
+              'parentId': parentId,
+              'studentId': student['id'],
+              'studentName': student['name'] ?? 'Student',
+              'title': 'Test Cancelled: ${state.selectedSubject}',
+              'message': testMessage,
+              'type': 'academic',
+              'read': false,
+              'className': state.selectedClass?['name'] ?? '',
+              'createdAt': FieldValue.serverTimestamp(),
+            });
+          }
         }
         batch.commit().catchError((e) => print("Error sending cancel alerts: $e"));
       } catch (e) {
@@ -555,30 +564,34 @@ class NextClassNotifier extends StateNotifier<NextClassState> {
       final testId = state.activeScheduledTest!['id'];
       final batch = FirebaseFirestore.instance.batch();
 
-      // Alert payload
-      final alertData = {
-        'type': 'test_result_alert',
-        'title': 'Test Results: ${state.selectedSubject}',
-        'body': message.isNotEmpty ? message : 'The scores for the ${state.activeScheduledTest!['testType']} test in ${state.selectedSubject} have been published.',
-        'classId': classId,
-        'subject': state.selectedSubject,
-        'createdAt': FieldValue.serverTimestamp(),
-      };
+      final testMessage = message.isNotEmpty ? message : 'The scores for the ${state.activeScheduledTest!['testType']} test in ${state.selectedSubject} have been published.';
 
       for (var student in state.students) {
         final studentId = student['id'];
 
-        // Write individual alert
-        final alertRef = FirebaseFirestore.instance
-            .collection('schools')
-            .doc(schoolId)
-            .collection('classes')
-            .doc(classId)
-            .collection('students')
-            .doc(studentId)
-            .collection('alerts')
-            .doc();
-        batch.set(alertRef, alertData);
+        String? parentId;
+        if (student['parentDetails'] != null && student['parentDetails']['parentId'] != null) {
+          parentId = student['parentDetails']['parentId'];
+        }
+
+        if (parentId != null) {
+          final alertRef = FirebaseFirestore.instance
+              .collection('schools')
+              .doc(schoolId)
+              .collection('notifications')
+              .doc();
+          batch.set(alertRef, {
+            'parentId': parentId,
+            'studentId': studentId,
+            'studentName': student['name'] ?? 'Student',
+            'title': 'Test Results: ${state.selectedSubject}',
+            'message': testMessage,
+            'type': 'result',
+            'read': false,
+            'className': state.selectedClass?['name'] ?? '',
+            'createdAt': FieldValue.serverTimestamp(),
+          });
+        }
 
         // Save score if it was entered
         if (state.testScores.containsKey(studentId)) {
