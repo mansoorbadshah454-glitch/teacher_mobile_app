@@ -54,14 +54,13 @@ final mySyllabusesProvider = Provider<AsyncValue<List<SyllabusAssignment>>>((ref
 });
 
 
-// 3. Stream Syllabus Chapters for a specific Class and Subject
-final syllabusChaptersProvider = StreamProvider.family<List<Map<String, dynamic>>, SyllabusAssignment>((ref, assignment) async* {
+// 3. Fetch Syllabus Chapters for a specific Class and Subject
+final syllabusChaptersProvider = FutureProvider.family<List<Map<String, dynamic>>, SyllabusAssignment>((ref, assignment) async {
   final teacherDataAsync = ref.watch(teacherDataProvider);
   final teacherData = teacherDataAsync.value;
 
   if (teacherData == null || !teacherData.containsKey('schoolId')) {
-    yield [];
-    return;
+    return [];
   }
 
   final schoolId = teacherData['schoolId'] as String;
@@ -74,13 +73,12 @@ final syllabusChaptersProvider = StreamProvider.family<List<Map<String, dynamic>
       .get();
 
   if (classSnapshot.docs.isEmpty) {
-    yield [];
-    return;
+    return [];
   }
 
   final classId = classSnapshot.docs.first.id;
 
-  yield* FirebaseFirestore.instance
+  final snapshot = await FirebaseFirestore.instance
       .collection('schools')
       .doc(schoolId)
       .collection('classes')
@@ -88,24 +86,23 @@ final syllabusChaptersProvider = StreamProvider.family<List<Map<String, dynamic>
       .collection('syllabus')
       .doc(assignment.subject)
       .collection('chapters')
-      .snapshots()
-      .map((snapshot) {
-    final docs = snapshot.docs.map((doc) {
-      return {'id': doc.id, ...doc.data()};
-    }).toList();
-    
-    // Sort locally by createdAt if available
-    docs.sort((a, b) {
-      final aTime = a['createdAt'] as Timestamp?;
-      final bTime = b['createdAt'] as Timestamp?;
-      if (aTime == null && bTime == null) return 0;
-      if (aTime == null) return 1; // nulls at the end
-      if (bTime == null) return -1;
-      return aTime.compareTo(bTime);
-    });
-    
-    return docs;
+      .get();
+      
+  final docs = snapshot.docs.map((doc) {
+    return {'id': doc.id, ...doc.data()};
+  }).toList();
+  
+  // Sort locally by createdAt if available
+  docs.sort((a, b) {
+    final aTime = a['createdAt'] as Timestamp?;
+    final bTime = b['createdAt'] as Timestamp?;
+    if (aTime == null && bTime == null) return 0;
+    if (aTime == null) return 1; // nulls at the end
+    if (bTime == null) return -1;
+    return aTime.compareTo(bTime);
   });
+  
+  return docs;
 });
 
 // 4. Update Chapter Status

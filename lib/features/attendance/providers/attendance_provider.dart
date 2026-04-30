@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:teacher_mobile_app/features/auth/auth_provider.dart';
 import 'package:teacher_mobile_app/core/providers/user_data_provider.dart';
+import 'package:teacher_mobile_app/core/services/local_db_service.dart';
 
 // 1. Fetch assigned class for the logged-in teacher
 final classSearchQueryProvider = StateProvider.autoDispose<String>((ref) => '');
@@ -39,8 +40,8 @@ final assignedClassProvider = StreamProvider<Map<String, dynamic>?>((ref) {
   });
 });
 
-// 2. Fetch students for the assigned class
-final classStudentsProvider = StreamProvider<List<Map<String, dynamic>>>((ref) {
+// 2. Fetch students for the assigned class with Hive Caching
+final classStudentsProvider = StreamProvider<List<Map<String, dynamic>>>((ref) async* {
   final teacherDataAsync = ref.watch(teacherDataProvider);
   final assignedClassAsync = ref.watch(assignedClassProvider);
 
@@ -48,27 +49,43 @@ final classStudentsProvider = StreamProvider<List<Map<String, dynamic>>>((ref) {
   final assignedClass = assignedClassAsync.value;
 
   if (teacherData == null || assignedClass == null) {
-      return Stream.value([]);
+      yield [];
+      return;
   }
 
   final schoolId = teacherData['schoolId'] as String;
   final classId = assignedClass['id'] as String;
+  final cacheKey = 'students_$classId';
 
-  return FirebaseFirestore.instance
+  // 1. Yield cached data immediately
+  final cachedData = LocalDbService.getCache(cacheKey);
+  if (cachedData != null && cachedData is List) {
+    print("📦 [Hive] Loaded ${cachedData.length} students from local cache.");
+    yield List<Map<String, dynamic>>.from(cachedData.map((e) => Map<String, dynamic>.from(e)));
+  }
+
+  // 2. Listen to Firestore silently
+  final studentsStream = FirebaseFirestore.instance
       .collection('schools')
       .doc(schoolId)
       .collection('classes')
       .doc(classId)
       .collection('students')
       .orderBy('rollNo')
-      .snapshots()
-      .map((studentsQuery) {
-    return studentsQuery.docs.map((doc) {
+      .snapshots();
+
+  await for (final snapshot in studentsStream) {
+    final freshData = snapshot.docs.map((doc) {
       final data = doc.data();
       data['id'] = doc.id;
       return data;
     }).toList();
-  });
+    
+    // Save fresh data to Hive
+    await LocalDbService.saveCache(cacheKey, freshData);
+    
+    yield freshData;
+  }
 });
 
 // 3. Attendance State Manager (stores local 'present'/'absent' Map)

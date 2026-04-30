@@ -29,6 +29,28 @@ class _NewsFeedScreenState extends ConsumerState<NewsFeedScreen> {
     _fetchSchoolInfo();
   }
 
+  Future<QuerySnapshot>? _postsFuture;
+
+  void _refreshPosts() {
+    if (schoolId != null) {
+      setState(() {
+        _postsFuture = FirebaseFirestore.instance
+            .collection('schools')
+            .doc(schoolId)
+            .collection('posts')
+            .orderBy('timestamp', descending: true)
+            .get();
+      });
+    }
+  }
+
+  Future<void> _handleRefresh() async {
+    _refreshPosts();
+    if (_postsFuture != null) {
+      await _postsFuture;
+    }
+  }
+
   Future<void> _fetchSchoolInfo() async {
     try {
       final user = ref.read(currentUserProvider);
@@ -72,6 +94,7 @@ class _NewsFeedScreenState extends ConsumerState<NewsFeedScreen> {
           _errorMessage = null;
         });
         print("✅ [NewsFeed] Found school: ${schoolDoc.id}");
+        _refreshPosts();
         _markFeedAsRead(); // Mark feed as read right after getting school info
       } else {
         setState(() {
@@ -181,67 +204,67 @@ class _NewsFeedScreenState extends ConsumerState<NewsFeedScreen> {
                       ],
                     ),
                   )
-                : StreamBuilder<QuerySnapshot>(
-                stream: FirebaseFirestore.instance
-                    .collection('schools')
-                    .doc(schoolId)
-                    .collection('posts')
-                    .orderBy('timestamp', descending: true)
-                    .snapshots(),
-                builder: (context, snapshot) {
-                  if (snapshot.hasError) {
-                    return Center(child: Text('Error: ${snapshot.error}', style: Theme.of(context).textTheme.bodyMedium));
-                  }
-
-                  if (snapshot.connectionState == ConnectionState.waiting) {
-                    return const Center(child: CircularProgressIndicator());
-                  }
-
-                  final docs = snapshot.data?.docs ?? [];
-
-                  if (docs.isEmpty) {
-                    return Column(
-                      children: [
-                        _buildCreatePostTrigger(context),
-                        Expanded(
-                          child: Center(
-                            child: Column(
-                              mainAxisAlignment: MainAxisAlignment.center,
-                              children: [
-                                Icon(Icons.feed_outlined, size: 64, color: Theme.of(context).iconTheme.color?.withOpacity(0.5)),
-                                const SizedBox(height: 16),
-                                Text(
-                                  "No posts yet",
-                                  style: Theme.of(context).textTheme.bodyMedium?.copyWith(
-                                        color: Theme.of(context).textTheme.bodyMedium?.color?.withOpacity(0.5),
-                                      ),
-                                ),
-                              ],
-                            ),
-                          ),
-                        ),
-                      ],
-                    );
-                  }
-
-                  return ListView.builder(
-                    padding: const EdgeInsets.only(bottom: 20),
-                    itemCount: docs.length + 1, // +1 for Create Post
-                    itemBuilder: (context, index) {
-                      if (index == 0) {
-                        return _buildCreatePostTrigger(context);
+                : RefreshIndicator(
+                    onRefresh: _handleRefresh,
+                    child: FutureBuilder<QuerySnapshot>(
+                    future: _postsFuture,
+                    builder: (context, snapshot) {
+                      if (snapshot.hasError) {
+                        return Center(child: Text('Error: ${snapshot.error}', style: Theme.of(context).textTheme.bodyMedium));
                       }
-                      final data = docs[index - 1].data() as Map<String, dynamic>;
-                      final id = docs[index - 1].id;
-                      return NewsPostCard(
-                        id: id,
-                        data: data,
-                        schoolId: schoolId!,
+
+                      if (snapshot.connectionState == ConnectionState.waiting) {
+                        return const Center(child: CircularProgressIndicator());
+                      }
+
+                      final docs = snapshot.data?.docs ?? [];
+
+                      if (docs.isEmpty) {
+                        return ListView(
+                          children: [
+                            _buildCreatePostTrigger(context),
+                            SizedBox(
+                              height: 300,
+                              child: Center(
+                                child: Column(
+                                  mainAxisAlignment: MainAxisAlignment.center,
+                                  children: [
+                                    Icon(Icons.feed_outlined, size: 64, color: Theme.of(context).iconTheme.color?.withOpacity(0.5)),
+                                    const SizedBox(height: 16),
+                                    Text(
+                                      "No posts yet",
+                                      style: Theme.of(context).textTheme.bodyMedium?.copyWith(
+                                            color: Theme.of(context).textTheme.bodyMedium?.color?.withOpacity(0.5),
+                                          ),
+                                    ),
+                                  ],
+                                ),
+                              ),
+                            ),
+                          ],
+                        );
+                      }
+
+                      return ListView.builder(
+                        physics: const AlwaysScrollableScrollPhysics(),
+                        padding: const EdgeInsets.only(bottom: 20),
+                        itemCount: docs.length + 1, // +1 for Create Post
+                        itemBuilder: (context, index) {
+                          if (index == 0) {
+                            return _buildCreatePostTrigger(context);
+                          }
+                          final data = docs[index - 1].data() as Map<String, dynamic>;
+                          final id = docs[index - 1].id;
+                          return NewsPostCard(
+                            id: id,
+                            data: data,
+                            schoolId: schoolId!,
+                          );
+                        },
                       );
                     },
-                  );
-                },
-              ),
+                  ),
+                ),
       ),
     );
   }

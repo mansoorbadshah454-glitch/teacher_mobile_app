@@ -46,10 +46,11 @@ class _AttendanceReportScreenState extends ConsumerState<AttendanceReportScreen>
       final className = assignedClass['name'] as String;
       final teacherName = teacherData['name'] as String;
 
-      // 1. Map students to keep track of absences
+      // 1. Map students to keep track of absences and leaves
       final List<Map<String, dynamic>> studentsTrack = students.map((s) => {
         ...s,
-        'absentCount': 0
+        'absentCount': 0,
+        'leaveCount': 0
       }).toList();
 
       // 2. Fetch Attendance
@@ -72,11 +73,13 @@ class _AttendanceReportScreenState extends ConsumerState<AttendanceReportScreen>
         if (date.startsWith(targetPrefix)) {
           final records = data['records'] as List<dynamic>? ?? [];
           for (var r in records) {
-             if (r['status'] == 'absent') {
-                final studentMap = studentsTrack.firstWhere((s) => s['id'] == r['id'], orElse: () { return <String, dynamic>{}; });
-                if (studentMap.isNotEmpty) {
+             final studentMap = studentsTrack.firstWhere((s) => s['id'] == r['id'], orElse: () { return <String, dynamic>{}; });
+             if (studentMap.isNotEmpty) {
+                 if (r['status'] == 'absent') {
                     studentMap['absentCount'] = (studentMap['absentCount'] as int) + 1;
-                }
+                 } else if (r['status'] == 'leave_granted') {
+                    studentMap['leaveCount'] = (studentMap['leaveCount'] as int) + 1;
+                 }
              }
           }
         }
@@ -133,11 +136,12 @@ class _AttendanceReportScreenState extends ConsumerState<AttendanceReportScreen>
 
               // Table
               pw.TableHelper.fromTextArray(
-                headers: ['Roll No', 'Student Name', 'Total Absent Days'],
+                headers: ['Roll No', 'Student Name', 'Total Absent Days', 'Total Leaves'],
                 data: studentsTrack.map((s) => [
                   s['rollNo']?.toString() ?? s['roll']?.toString() ?? '-',
                   s['name'] ?? 'Unknown',
-                  s['absentCount'].toString()
+                  s['absentCount'].toString(),
+                  s['leaveCount'].toString()
                 ]).toList(),
                 border: pw.TableBorder.all(color: PdfColors.grey300),
                 headerStyle: pw.TextStyle(color: PdfColors.white, fontWeight: pw.FontWeight.bold),

@@ -11,6 +11,7 @@ import 'package:firebase_messaging/firebase_messaging.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:teacher_mobile_app/services/push_notification_service.dart';
+import 'package:teacher_mobile_app/core/services/local_db_service.dart';
 
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
@@ -78,10 +79,13 @@ void main() async {
         print("🔥 [Main] Firebase already initialized");
       }
 
-      // Enable aggressive offline persistence
+      await LocalDbService.init();
+      print("💽 [Main] Hive Local DB Initialized");
+
+      // Enable bounded offline persistence to prevent storage bloat
       FirebaseFirestore.instance.settings = const Settings(
         persistenceEnabled: true,
-        cacheSizeBytes: Settings.CACHE_SIZE_UNLIMITED,
+        cacheSizeBytes: 100 * 1024 * 1024, // Enterprise Scalability: Cap at 100MB
       );
       print("💽 [Main] Firestore Offline Persistence Enabled");
       FirebaseMessaging.onBackgroundMessage(_firebaseMessagingBackgroundHandler);

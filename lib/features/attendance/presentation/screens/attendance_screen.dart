@@ -8,6 +8,8 @@ import 'package:cached_network_image/cached_network_image.dart';
 import 'package:teacher_mobile_app/features/attendance/providers/attendance_provider.dart';
 import 'package:teacher_mobile_app/core/providers/user_data_provider.dart';
 import 'package:intl/intl.dart';
+import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:teacher_mobile_app/features/attendance/screens/leave_letter_screen.dart';
 
 class StudentAvatar extends StatefulWidget {
   final String studentId;
@@ -451,31 +453,98 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
                                               ],
                                             ),
                                           ),
-                                          GestureDetector(
-                                            onTap: () {
-                                              ref.read(attendanceProvider.notifier).toggleStatus(sId);
-                                            },
-                                            child: AnimatedContainer(
-                                              duration: const Duration(milliseconds: 200),
-                                              width: 90,
-                                              padding: const EdgeInsets.symmetric(vertical: 12),
-                                              decoration: BoxDecoration(
-                                                color: isPresent ? const Color(0xFF6366f1) : (isDark ? Colors.white.withOpacity(0.03) : Colors.black.withOpacity(0.03)),
-                                                borderRadius: BorderRadius.circular(14),
-                                                border: Border.all(color: isPresent ? Colors.transparent : (isDark ? Colors.white.withOpacity(0.05) : Colors.black.withOpacity(0.05))),
-                                                boxShadow: isPresent ? [BoxShadow(color: const Color(0xFF6366f1).withOpacity(isDark ? 0.4 : 0.3), blurRadius: 8, offset: const Offset(0, 4))] : [],
-                                              ),
-                                              alignment: Alignment.center,
-                                              child: Text(
-                                                isPresent ? "PRESENT" : "MARK",
-                                                style: TextStyle(
-                                                  color: isPresent ? Colors.white : Colors.grey,
-                                                  fontWeight: FontWeight.bold,
-                                                  fontSize: 12,
+                                          Builder(builder: (context) {
+                                            final activeLeave = student['activeLeave'];
+                                            bool hasPendingLeaveToday = false;
+
+                                            if (activeLeave != null && activeLeave['status'] == 'pending') {
+                                              final start = DateTime.tryParse(activeLeave['startDate'].toString());
+                                              final end = DateTime.tryParse(activeLeave['endDate'].toString());
+                                              final today = DateTime.now();
+                                              final todayOnly = DateTime(today.year, today.month, today.day);
+
+                                              if (start != null && end != null) {
+                                                if (!todayOnly.isBefore(start) && !todayOnly.isAfter(end)) {
+                                                  hasPendingLeaveToday = true;
+                                                }
+                                              }
+                                            }
+
+                                            if (hasPendingLeaveToday) {
+                                              return Row(
+                                                mainAxisSize: MainAxisSize.min,
+                                                children: [
+                                                  IconButton(
+                                                    icon: const Icon(Icons.picture_as_pdf, color: Colors.blueAccent),
+                                                    onPressed: () {
+                                                      Navigator.push(context, MaterialPageRoute(
+                                                        builder: (_) => LeaveLetterScreen(
+                                                          studentData: student,
+                                                          schoolName: teacherData['schoolName'] ?? 'School',
+                                                        )
+                                                      ));
+                                                    },
+                                                  ),
+                                                  IconButton(
+                                                    icon: const Icon(Icons.check_circle, color: Colors.green),
+                                                    onPressed: () async {
+                                                      // Grant
+                                                      final todayStr = DateFormat('yyyy-MM-dd').format(DateTime.now());
+                                                      await FirebaseFirestore.instance
+                                                        .collection('schools').doc(schoolId)
+                                                        .collection('classes').doc(assignedClass['id'])
+                                                        .collection('students').doc(sId)
+                                                        .update({
+                                                          'activeLeave.status': 'granted',
+                                                          'attendanceHistory.$todayStr': 'leave_granted'
+                                                        });
+                                                    },
+                                                  ),
+                                                  IconButton(
+                                                    icon: const Icon(Icons.cancel, color: Colors.redAccent),
+                                                    onPressed: () async {
+                                                      // Reject
+                                                      final todayStr = DateFormat('yyyy-MM-dd').format(DateTime.now());
+                                                      await FirebaseFirestore.instance
+                                                        .collection('schools').doc(schoolId)
+                                                        .collection('classes').doc(assignedClass['id'])
+                                                        .collection('students').doc(sId)
+                                                        .update({
+                                                          'activeLeave.status': 'rejected',
+                                                          'attendanceHistory.$todayStr': 'absent'
+                                                        });
+                                                    },
+                                                  ),
+                                                ],
+                                              );
+                                            }
+
+                                            return GestureDetector(
+                                              onTap: () {
+                                                ref.read(attendanceProvider.notifier).toggleStatus(sId);
+                                              },
+                                              child: AnimatedContainer(
+                                                duration: const Duration(milliseconds: 200),
+                                                width: 90,
+                                                padding: const EdgeInsets.symmetric(vertical: 12),
+                                                decoration: BoxDecoration(
+                                                  color: isPresent ? const Color(0xFF6366f1) : (isDark ? Colors.white.withOpacity(0.03) : Colors.black.withOpacity(0.03)),
+                                                  borderRadius: BorderRadius.circular(14),
+                                                  border: Border.all(color: isPresent ? Colors.transparent : (isDark ? Colors.white.withOpacity(0.05) : Colors.black.withOpacity(0.05))),
+                                                  boxShadow: isPresent ? [BoxShadow(color: const Color(0xFF6366f1).withOpacity(isDark ? 0.4 : 0.3), blurRadius: 8, offset: const Offset(0, 4))] : [],
+                                                ),
+                                                alignment: Alignment.center,
+                                                child: Text(
+                                                  isPresent ? "PRESENT" : "MARK",
+                                                  style: TextStyle(
+                                                    color: isPresent ? Colors.white : Colors.grey,
+                                                    fontWeight: FontWeight.bold,
+                                                    fontSize: 12,
+                                                  ),
                                                 ),
                                               ),
-                                            ),
-                                          ),
+                                            );
+                                          }),
                                         ],
                                       ),
                                     );

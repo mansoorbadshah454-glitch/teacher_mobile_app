@@ -137,8 +137,13 @@ class SyllabusDetailScreen extends ConsumerWidget {
                   );
                 }
 
-                return ListView.builder(
-                  padding: const EdgeInsets.all(16),
+                return RefreshIndicator(
+                  onRefresh: () async {
+                    ref.invalidate(syllabusChaptersProvider(assignment));
+                  },
+                  child: ListView.builder(
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: const EdgeInsets.all(16),
                   itemCount: chapters.length,
                   itemBuilder: (context, index) {
                     final chapter = chapters[index];
@@ -236,8 +241,9 @@ class SyllabusDetailScreen extends ConsumerWidget {
                       ),
                     );
                   },
-                );
-              },
+                ),
+              );
+            },
             ),
           ),
         ],

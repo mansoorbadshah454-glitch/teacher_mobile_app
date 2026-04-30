@@ -63,6 +63,9 @@ dependencies:
   mobile_scanner: ^5.2.3
   local_auth: ^2.1.8
   flutter_secure_storage: ^9.0.0
+  hive: ^2.2.3
+  hive_flutter: ^1.1.0
+  printing: ^3.11.1
 dev_dependencies:
   flutter_test:
     sdk: flutter
