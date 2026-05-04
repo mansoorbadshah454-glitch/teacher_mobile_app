@@ -141,7 +141,10 @@ class StudentPerformanceNotifier extends StateNotifier<AsyncValue<StudentPerform
 
     final String schoolId = teacherData['schoolId'];
     final String classId = assignedClass['id'];
-    final student = studentsData.firstWhere((s) => s['id'] == studentId);
+    final student = studentsData.firstWhere(
+        (s) => s['id'] == studentId,
+        orElse: () => <String, dynamic>{},
+    );
 
     final academicScoresList = data.academicScores.entries.map((e) => {'subject': e.key, 'score': e.value}).toList();
     final homeworkScoresList = data.homeworkScores.entries.map((e) => {'subject': e.key, 'score': e.value}).toList();

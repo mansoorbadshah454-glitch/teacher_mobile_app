@@ -4,7 +4,33 @@ import 'package:intl/intl.dart';
 import 'package:pdf/pdf.dart';
 import 'package:pdf/widgets.dart' as pw;
 import 'package:printing/printing.dart';
-import 'package:teacher_mobile_app/core/theme/theme_colors.dart';
+import 'package:teacher_mobile_app/core/theme/app_theme.dart';
+
+String _getSubjectText(String template) {
+  final lower = template.toLowerCase();
+  if (lower == 'sick leave' || lower == 'urgent work' || lower == 'medical checkup' || lower == 'family event') {
+    return 'Application for $template';
+  }
+  return 'Application for Leave';
+}
+
+String _getLeaveBodyText(String template, String name, String rollNo, String startDate, String endDate, String schoolName) {
+  String baseIntro = 'With due respect, this is to inform you that my child, $name (Roll No: $rollNo), studying in your class at $schoolName,';
+  final lower = template.toLowerCase();
+  
+  if (lower == 'sick leave') {
+    return '$baseIntro is unwell and will not be able to attend school from $startDate to $endDate.';
+  } else if (lower == 'urgent work') {
+    return '$baseIntro has an urgent piece of work at home and will not be able to attend school from $startDate to $endDate.';
+  } else if (lower == 'medical checkup') {
+    return '$baseIntro has a scheduled medical appointment and will not be able to attend school from $startDate to $endDate.';
+  } else if (lower == 'family event') {
+    return '$baseIntro needs to attend an important family event and will not be able to attend school from $startDate to $endDate.';
+  } else {
+    // Custom reason ("Other")
+    return '$baseIntro will not be able to attend school from $startDate to $endDate due to the following reason: $template.';
+  }
+}
 
 class LeaveLetterScreen extends StatelessWidget {
   final Map<String, dynamic> studentData;
@@ -19,6 +45,20 @@ class LeaveLetterScreen extends StatelessWidget {
   Future<void> _generatePdf(BuildContext context) async {
     final leave = studentData['activeLeave'] as Map<String, dynamic>;
     final pdf = pw.Document();
+
+    String formatDate(String? dateStr) {
+      if (dateStr == null) return '';
+      try {
+        final DateTime d = DateTime.parse(dateStr);
+        return DateFormat('dd/MM/yyyy').format(d);
+      } catch (e) {
+        return dateStr.split('T')[0];
+      }
+    }
+
+    final String startDateStr = formatDate(leave['startDate']?.toString());
+    final String endDateStr = formatDate(leave['endDate']?.toString());
+    final parentName = studentData['parentDetails']?['parentName'] ?? studentData['parentDetails']?['name'] ?? 'Parent/Guardian';
 
     pdf.addPage(
       pw.Page(
@@ -57,7 +97,7 @@ class LeaveLetterScreen extends StatelessWidget {
 
               // Subject
               pw.Text(
-                'Subject: Application for ${leave['template']}',
+                'Subject: ${_getSubjectText(leave['template'] ?? '')}',
                 style: pw.TextStyle(fontWeight: pw.FontWeight.bold),
               ),
               pw.SizedBox(height: 30),
@@ -68,9 +108,14 @@ class LeaveLetterScreen extends StatelessWidget {
 
               // Body
               pw.Paragraph(
-                text: 'With due respect, this is to inform you that my child, ${studentData['name']} '
-                    '(Roll No: ${studentData['rollNo']}), studying in your class, will not be able to attend school '
-                    'from ${leave['startDate']} to ${leave['endDate']} due to ${leave['template']}.',
+                text: _getLeaveBodyText(
+                  leave['template'] ?? '',
+                  studentData['name'] ?? '',
+                  studentData['rollNo']?.toString() ?? '',
+                  startDateStr,
+                  endDateStr,
+                  schoolName,
+                ),
               ),
               pw.Paragraph(
                 text: 'I kindly request you to grant leave for the mentioned dates. I will ensure that the missed '
@@ -82,10 +127,10 @@ class LeaveLetterScreen extends StatelessWidget {
               pw.Text('Thank you for your understanding.'),
               pw.SizedBox(height: 40),
 
-              // Sign-off
               pw.Text('Yours Sincerely,'),
               pw.SizedBox(height: 5),
-              pw.Text('Parent/Guardian of ${studentData['name']}'),
+              pw.Text(parentName, style: pw.TextStyle(fontWeight: pw.FontWeight.bold)),
+              pw.Text('(Parent of ${studentData['name']})', style: pw.TextStyle(fontSize: 10, color: PdfColors.grey700)),
             ],
           );
         },
@@ -101,7 +146,21 @@ class LeaveLetterScreen extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     final leave = studentData['activeLeave'] as Map<String, dynamic>?;
-    
+
+    String formatDate(String? dateStr) {
+      if (dateStr == null) return '';
+      try {
+        final DateTime d = DateTime.parse(dateStr);
+        return DateFormat('dd/MM/yyyy').format(d);
+      } catch (e) {
+        return dateStr.split('T')[0];
+      }
+    }
+
+    final String startDateStr = leave != null ? formatDate(leave['startDate']?.toString()) : '';
+    final String endDateStr = leave != null ? formatDate(leave['endDate']?.toString()) : '';
+    final parentName = studentData['parentDetails']?['parentName'] ?? studentData['parentDetails']?['name'] ?? 'Parent/Guardian';
+
     if (leave == null) {
       return Scaffold(
         appBar: AppBar(title: const Text('Leave Letter')),
@@ -113,7 +172,7 @@ class LeaveLetterScreen extends StatelessWidget {
       backgroundColor: Colors.grey[100],
       appBar: AppBar(
         title: const Text('Leave Details', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-        backgroundColor: ThemeColors.primaryPurple,
+        backgroundColor: AppTheme.primary,
         iconTheme: const IconThemeData(color: Colors.white),
       ),
       body: SingleChildScrollView(
@@ -163,16 +222,21 @@ class LeaveLetterScreen extends StatelessWidget {
                   Text(schoolName),
                   const SizedBox(height: 24),
                   Text(
-                    'Subject: Application for ${leave['template']}',
+                    'Subject: ${_getSubjectText(leave['template'] ?? '')}',
                     style: const TextStyle(fontWeight: FontWeight.bold, decoration: TextDecoration.underline),
                   ),
                   const SizedBox(height: 24),
                   const Text('Respected Sir/Madam,'),
                   const SizedBox(height: 16),
                   Text(
-                    'With due respect, this is to inform you that my child, ${studentData['name']} (Roll No: ${studentData['rollNo']}), '
-                    'studying in your class, will not be able to attend school from ${leave['startDate']} to ${leave['endDate']} '
-                    'due to ${leave['template']}.',
+                    _getLeaveBodyText(
+                      leave['template'] ?? '',
+                      studentData['name'] ?? '',
+                      studentData['rollNo']?.toString() ?? '',
+                      startDateStr,
+                      endDateStr,
+                      schoolName,
+                    ),
                     style: const TextStyle(height: 1.5),
                   ),
                   const SizedBox(height: 16),
@@ -185,7 +249,8 @@ class LeaveLetterScreen extends StatelessWidget {
                   const SizedBox(height: 40),
                   const Text('Yours Sincerely,'),
                   const SizedBox(height: 4),
-                  Text('Parent/Guardian of ${studentData['name']}', style: const TextStyle(fontWeight: FontWeight.bold)),
+                  Text(parentName, style: const TextStyle(fontWeight: FontWeight.bold)),
+                  Text('(Parent of ${studentData['name']})', style: TextStyle(fontSize: 12, color: Colors.grey[600])),
                 ],
               ),
             ),
@@ -194,7 +259,7 @@ class LeaveLetterScreen extends StatelessWidget {
       ),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => _generatePdf(context),
-        backgroundColor: ThemeColors.primaryPurple,
+        backgroundColor: AppTheme.primary,
         icon: const Icon(Icons.picture_as_pdf, color: Colors.white),
         label: const Text('Download PDF', style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
       ),

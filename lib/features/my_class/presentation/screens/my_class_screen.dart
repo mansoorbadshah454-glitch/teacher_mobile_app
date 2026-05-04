@@ -123,25 +123,7 @@ class MyClassScreen extends ConsumerWidget {
                                 ],
                               ),
                             ),
-                            const SizedBox(width: 8),
-                            GestureDetector(
-                              onTap: () => context.push('/my-class/syllabus'),
-                              child: Container(
-                                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                                decoration: BoxDecoration(
-                                  color: Colors.white.withOpacity(0.2),
-                                  borderRadius: BorderRadius.circular(14),
-                                  border: Border.all(color: Colors.white.withOpacity(0.3)),
-                                ),
-                                child: const Row(
-                                  children: [
-                                    Text("Syllabus", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold)),
-                                    SizedBox(width: 4),
-                                    Icon(Icons.arrow_forward_ios, color: Colors.white, size: 14),
-                                  ],
-                                ),
-                              ),
-                            ),
+
                           ],
                         ),
                       ),

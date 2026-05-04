@@ -99,13 +99,22 @@ class AttendanceNotifier extends StateNotifier<AsyncValue<Map<String, String>>> 
   Future<void> _initializeAttendance() async {
     try {
       final students = await ref.read(classStudentsProvider.future);
-      final today = DateTime.now().toIso8601String().split('T')[0];
+      final todayStr = DateTime.now().toIso8601String().split('T')[0];
       
       final Map<String, String> initialAttendance = {};
       
       for (var s in students) {
-        if (s['lastAttendanceDate'] == today) {
+        if (s['lastAttendanceDate'] == todayStr) {
            initialAttendance[s['id']] = s['status'] ?? 'absent';
+        } else {
+           final activeLeave = s['activeLeave'];
+           if (activeLeave != null && activeLeave['status'] == 'granted') {
+              final startStr = activeLeave['startDate'].toString().split('T')[0];
+              final endStr = activeLeave['endDate'].toString().split('T')[0];
+              if (todayStr.compareTo(startStr) >= 0 && todayStr.compareTo(endStr) <= 0) {
+                  initialAttendance[s['id']] = 'leave_granted';
+              }
+           }
         }
       }
       
@@ -124,14 +133,33 @@ class AttendanceNotifier extends StateNotifier<AsyncValue<Map<String, String>>> 
     }
   }
 
+  void setStatus(String studentId, String status) {
+    if (state is AsyncData) {
+      final currentMap = Map<String, String>.from(state.value!);
+      currentMap[studentId] = status;
+      state = AsyncValue.data(currentMap);
+    }
+  }
+
   void refreshFromSaved(String today) async {
       try {
            final students = await ref.read(classStudentsProvider.future);
            final Map<String, String> currentMap = Map<String, String>.from(state.value ?? {});
+           final todayStr = DateTime.now().toIso8601String().split('T')[0];
+
            for (var s in students) {
                if(currentMap.containsKey(s['id'])) continue;
                if (s['lastAttendanceDate'] == today) {
                    currentMap[s['id']] = s['status'] ?? 'absent';
+               } else {
+                   final activeLeave = s['activeLeave'];
+                   if (activeLeave != null && activeLeave['status'] == 'granted') {
+                      final startStr = activeLeave['startDate'].toString().split('T')[0];
+                      final endStr = activeLeave['endDate'].toString().split('T')[0];
+                      if (todayStr.compareTo(startStr) >= 0 && todayStr.compareTo(endStr) <= 0) {
+                          currentMap[s['id']] = 'leave_granted';
+                      }
+                   }
                }
            }
            state = AsyncValue.data(currentMap);
@@ -247,7 +275,9 @@ class AttendanceNotifier extends StateNotifier<AsyncValue<Map<String, String>>> 
                   'status': status,
                   'className': className,
                   'date': today,
-                  'message': '$studentName is marked $status in School today, $today.',
+                  'message': status == 'leave_granted' 
+                      ? '$studentName is on leave today, $today.' 
+                      : '$studentName is marked $status in School today, $today.',
                   'read': false,
                   'createdAt': FieldValue.serverTimestamp(),
                 });

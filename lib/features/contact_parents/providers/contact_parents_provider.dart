@@ -401,7 +401,12 @@ class ContactParentsNotifier extends StateNotifier<ContactParentsState> {
 
       for (var parentId in uniqueParents) {
         // Find one student doc to associate (for notification consistency)
-        final studentDoc = state.parentMap.entries.firstWhere((e) => e.value['id'] == parentId).key;
+        final studentDocEntry = state.parentMap.entries.firstWhere(
+            (e) => e.value['id'] == parentId,
+            orElse: () => const MapEntry<String, dynamic>('', {}),
+        );
+        if (studentDocEntry.key.isEmpty) continue;
+        final studentDoc = studentDocEntry.key;
         final studentInfo = state.students.firstWhere((s) => s['id'] == studentDoc, orElse: () { return <String, dynamic>{'name': 'Student', 'id': studentDoc}; });
 
         // Add Direct Message to Parent

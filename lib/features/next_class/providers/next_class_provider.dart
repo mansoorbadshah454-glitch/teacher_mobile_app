@@ -372,6 +372,7 @@ class NextClassNotifier extends StateNotifier<NextClassState> {
   }
 
   Future<void> saveScheduledTest() async {
+    if (state.isSaving) return;
     if (schoolId == null || state.selectedClass == null || state.selectedSubject == null) return;
     
     state = state.copyWith(isSaving: true);
@@ -431,12 +432,14 @@ class NextClassNotifier extends StateNotifier<NextClassState> {
       testRef.set(testData).then((_) {
         try {
           final batch = FirebaseFirestore.instance.batch();
+          final processedParents = <String>{};
           for (var student in state.students) {
             String? parentId;
             if (student['parentDetails'] != null && student['parentDetails']['parentId'] != null) {
               parentId = student['parentDetails']['parentId'];
             }
-            if (parentId != null) {
+            if (parentId != null && !processedParents.contains(parentId)) {
+              processedParents.add(parentId);
               final alertRef = FirebaseFirestore.instance
                   .collection('schools')
                   .doc(schoolId)
@@ -470,6 +473,7 @@ class NextClassNotifier extends StateNotifier<NextClassState> {
   }
 
   Future<void> cancelScheduledTest() async {
+    if (state.isSaving) return;
     if (schoolId == null || state.selectedClass == null || state.activeScheduledTest == null || state.activeScheduledTest!.isEmpty) return;
     
     final classId = state.selectedClass!['id'];
@@ -496,12 +500,14 @@ class NextClassNotifier extends StateNotifier<NextClassState> {
       // Run alerts in a separate background try-catch to prevent permission failures
       try {
         final batch = FirebaseFirestore.instance.batch();
+        final processedParents = <String>{};
         for (var student in state.students) {
           String? parentId;
           if (student['parentDetails'] != null && student['parentDetails']['parentId'] != null) {
             parentId = student['parentDetails']['parentId'];
           }
-          if (parentId != null) {
+          if (parentId != null && !processedParents.contains(parentId)) {
+            processedParents.add(parentId);
             final alertRef = FirebaseFirestore.instance
                 .collection('schools')
                 .doc(schoolId)
@@ -531,6 +537,7 @@ class NextClassNotifier extends StateNotifier<NextClassState> {
   }
 
   Future<void> completeScheduledTest() async {
+    if (state.isSaving) return;
     if (schoolId == null || state.selectedClass == null || state.activeScheduledTest == null || state.activeScheduledTest!.isEmpty) return;
     
     final classId = state.selectedClass!['id'];
@@ -555,6 +562,7 @@ class NextClassNotifier extends StateNotifier<NextClassState> {
   }
 
   Future<void> saveActiveTestScores(String message) async {
+    if (state.isSaving) return;
     if (schoolId == null || state.selectedClass == null || state.activeScheduledTest == null || state.activeScheduledTest!.isEmpty) return;
     
     state = state.copyWith(isSaving: true);
@@ -566,6 +574,8 @@ class NextClassNotifier extends StateNotifier<NextClassState> {
 
       final testMessage = message.isNotEmpty ? message : 'The scores for the ${state.activeScheduledTest!['testType']} test in ${state.selectedSubject} have been published.';
 
+      final processedParents = <String>{};
+
       for (var student in state.students) {
         final studentId = student['id'];
 
@@ -574,7 +584,8 @@ class NextClassNotifier extends StateNotifier<NextClassState> {
           parentId = student['parentDetails']['parentId'];
         }
 
-        if (parentId != null) {
+        if (parentId != null && !processedParents.contains(parentId)) {
+          processedParents.add(parentId);
           final alertRef = FirebaseFirestore.instance
               .collection('schools')
               .doc(schoolId)
@@ -669,6 +680,7 @@ class NextClassNotifier extends StateNotifier<NextClassState> {
   }
 
   Future<void> saveAllScores() async {
+    if (state.isSaving) return;
     if (state.scoreUpdates.isEmpty) return;
     
     if (schoolId == null || state.selectedClass == null) return;

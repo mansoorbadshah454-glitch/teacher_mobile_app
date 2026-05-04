@@ -353,7 +353,10 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
                         setState(() {
                           _selectedAudience = val!;
                           if (val != 'all') {
-                             final selectedClass = _classes.firstWhere((c) => c['id'] == val);
+                             final selectedClass = _classes.firstWhere(
+                                 (c) => c['id'] == val,
+                                 orElse: () => <String, dynamic>{},
+                             );
                              _selectedClassName = selectedClass['name'];
                           } else {
                             _selectedClassName = null;

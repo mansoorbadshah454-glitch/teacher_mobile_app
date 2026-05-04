@@ -11,6 +11,9 @@ import 'package:teacher_mobile_app/features/notebook/models/note_model.dart';
 
 final goRouterProvider = Provider<GoRouter>((ref) {
 
+  // Watch the user access status to keep the subscription alive
+  ref.watch(userAccessStatusProvider);
+
   return GoRouter(
     initialLocation: '/',
     debugLogDiagnostics: true,

@@ -725,20 +725,25 @@ class _StudentContactCardState extends State<StudentContactCard> {
               Expanded(
                 flex: 2,
                 child: GestureDetector(
-                  onLongPressStart: (_) => _startRecording(),
-                  onLongPressMoveUpdate: (details) {
-                    if (_isRecording && details.localOffsetFromOrigin.dx < -50) {
+                  onTapDown: (_) {
+                    if (!widget.state.isSending) _startRecording();
+                  },
+                  onTapUp: (_) => _stopRecordingSafely(),
+                  onTapCancel: () => _cancelRecording(),
+                  onPanUpdate: (details) {
+                    if (_isRecording && details.delta.dx < -2) {
                       _cancelRecording();
                     }
                   },
-                  onLongPressEnd: (_) => _stopRecordingSafely(),
-                  child: ElevatedButton(
-                    onPressed: widget.state.isSending ? null : () {},
-                    style: ElevatedButton.styleFrom(
-                      padding: const EdgeInsets.symmetric(vertical: 14),
-                      backgroundColor: _isRecording ? Colors.red : const Color(0xFFec4899),
-                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    decoration: BoxDecoration(
+                      color: widget.state.isSending
+                          ? Colors.grey
+                          : (_isRecording ? Colors.red : const Color(0xFFec4899)),
+                      borderRadius: BorderRadius.circular(12),
                     ),
+                    alignment: Alignment.center,
                     child: widget.state.isSending
                       ? const SizedBox(
                           height: 20, 
@@ -751,7 +756,7 @@ class _StudentContactCardState extends State<StudentContactCard> {
                             Icon(_isRecording ? Icons.mic : Icons.mic_none, color: Colors.white, size: 18),
                             const SizedBox(width: 8),
                             Text(
-                              _isRecording ? "Release to Finish" : "Hold to Record", 
+                              _isRecording ? "Release to Finish" : "Press to Record", 
                               style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold)
                             ),
                           ],

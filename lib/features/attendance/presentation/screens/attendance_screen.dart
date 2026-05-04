@@ -248,7 +248,7 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
 
                   final status = attendanceMap[s['id']] ?? 'absent';
                   if (statsFilter == 'present') return searchMatch && status == 'present';
-                  if (statsFilter == 'absent') return searchMatch && status == 'absent';
+                  if (statsFilter == 'absent') return searchMatch && (status == 'absent' || status == 'leave_granted');
                   return searchMatch;
                 }).toList();
 
@@ -302,18 +302,22 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
                                   ),
                                 ],
                               ),
-                              GestureDetector(
-                                onTap: () => context.push('/attendance-report'),
-                                child: Container(
-                                  width: 44,
-                                  height: 44,
-                                  decoration: BoxDecoration(
-                                    color: Colors.white.withOpacity(0.2),
-                                    borderRadius: BorderRadius.circular(14),
-                                    border: Border.all(color: Colors.white.withOpacity(0.3)),
+                              Row(
+                                children: [
+                                  GestureDetector(
+                                    onTap: () => context.push('/attendance-report'),
+                                    child: Container(
+                                      width: 44,
+                                      height: 44,
+                                      decoration: BoxDecoration(
+                                        color: Colors.white.withOpacity(0.2),
+                                        borderRadius: BorderRadius.circular(14),
+                                        border: Border.all(color: Colors.white.withOpacity(0.3)),
+                                      ),
+                                      child: const Icon(Icons.chevron_right, color: Colors.white),
+                                    ),
                                   ),
-                                  child: const Icon(Icons.chevron_right, color: Colors.white),
-                                ),
+                                ],
                               ),
                             ],
                           ),
@@ -456,17 +460,15 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
                                           Builder(builder: (context) {
                                             final activeLeave = student['activeLeave'];
                                             bool hasPendingLeaveToday = false;
+                                            bool isLeaveGranted = status == 'leave_granted';
 
-                                            if (activeLeave != null && activeLeave['status'] == 'pending') {
-                                              final start = DateTime.tryParse(activeLeave['startDate'].toString());
-                                              final end = DateTime.tryParse(activeLeave['endDate'].toString());
-                                              final today = DateTime.now();
-                                              final todayOnly = DateTime(today.year, today.month, today.day);
+                                            if (!isLeaveGranted && activeLeave != null && activeLeave['status'] == 'pending') {
+                                              final startStr = activeLeave['startDate'].toString().split('T')[0];
+                                              final endStr = activeLeave['endDate'].toString().split('T')[0];
+                                              final todayStr = DateFormat('yyyy-MM-dd').format(DateTime.now());
 
-                                              if (start != null && end != null) {
-                                                if (!todayOnly.isBefore(start) && !todayOnly.isAfter(end)) {
-                                                  hasPendingLeaveToday = true;
-                                                }
+                                              if (todayStr.compareTo(startStr) >= 0 && todayStr.compareTo(endStr) <= 0) {
+                                                hasPendingLeaveToday = true;
                                               }
                                             }
 
@@ -489,6 +491,7 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
                                                     icon: const Icon(Icons.check_circle, color: Colors.green),
                                                     onPressed: () async {
                                                       // Grant
+                                                      ref.read(attendanceProvider.notifier).setStatus(sId, 'leave_granted');
                                                       final todayStr = DateFormat('yyyy-MM-dd').format(DateTime.now());
                                                       await FirebaseFirestore.instance
                                                         .collection('schools').doc(schoolId)
@@ -504,6 +507,7 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
                                                     icon: const Icon(Icons.cancel, color: Colors.redAccent),
                                                     onPressed: () async {
                                                       // Reject
+                                                      ref.read(attendanceProvider.notifier).setStatus(sId, 'absent');
                                                       final todayStr = DateFormat('yyyy-MM-dd').format(DateTime.now());
                                                       await FirebaseFirestore.instance
                                                         .collection('schools').doc(schoolId)
@@ -516,6 +520,20 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
                                                     },
                                                   ),
                                                 ],
+                                              );
+                                            }
+
+                                            if (isLeaveGranted) {
+                                              return Container(
+                                                width: 90,
+                                                padding: const EdgeInsets.symmetric(vertical: 12),
+                                                decoration: BoxDecoration(
+                                                  color: Colors.orangeAccent.withOpacity(0.1),
+                                                  borderRadius: BorderRadius.circular(14),
+                                                  border: Border.all(color: Colors.orangeAccent),
+                                                ),
+                                                alignment: Alignment.center,
+                                                child: const Text("ON LEAVE", style: TextStyle(color: Colors.orangeAccent, fontWeight: FontWeight.bold, fontSize: 12)),
                                               );
                                             }
 
