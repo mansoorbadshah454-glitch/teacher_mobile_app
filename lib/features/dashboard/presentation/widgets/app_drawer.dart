@@ -125,6 +125,14 @@ class AppDrawer extends ConsumerWidget {
             },
           ),
           _DrawerItem(
+            icon: Icons.assignment_turned_in_outlined,
+            title: 'Exam',
+            onTap: () {
+              Navigator.pop(context);
+              context.push('/teacher-exams');
+            },
+          ),
+          _DrawerItem(
             icon: Icons.settings_outlined,
             title: 'Settings',
             onTap: () {

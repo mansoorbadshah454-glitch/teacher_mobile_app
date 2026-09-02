@@ -11,7 +11,7 @@ import java.util.Properties
 android {
     namespace = "com.schoolv5.teacher"
     compileSdk = flutter.compileSdkVersion
-    ndkVersion = flutter.ndkVersion
+    ndkVersion = "27.0.12077973"
 
     val keystorePropertiesFile = rootProject.file("key.properties")
     val keystoreProperties = Properties()

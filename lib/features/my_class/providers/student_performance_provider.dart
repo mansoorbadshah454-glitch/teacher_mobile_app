@@ -36,7 +36,6 @@ class StudentPerformanceData {
 class StudentPerformanceNotifier extends StateNotifier<AsyncValue<StudentPerformanceData?>> {
   final Ref ref;
   final String studentId;
-  bool _academicModified = false;
   bool _wellnessModified = false;
 
   StudentPerformanceNotifier(this.ref, this.studentId) : super(const AsyncValue.loading()) {
@@ -102,7 +101,6 @@ class StudentPerformanceNotifier extends StateNotifier<AsyncValue<StudentPerform
 
   void updateAcademicScore(String subject, int score) {
     if (state.value == null) return;
-    _academicModified = true;
     final newScores = Map<String, int>.from(state.value!.academicScores);
     newScores[subject] = score;
     state = AsyncValue.data(state.value!.copyWith(academicScores: newScores));
@@ -110,7 +108,6 @@ class StudentPerformanceNotifier extends StateNotifier<AsyncValue<StudentPerform
 
   void updateHomeworkScore(String subject, int score) {
     if (state.value == null) return;
-    _academicModified = true;
     final newScores = Map<String, int>.from(state.value!.homeworkScores);
     newScores[subject] = score;
     state = AsyncValue.data(state.value!.copyWith(homeworkScores: newScores));
@@ -146,9 +143,6 @@ class StudentPerformanceNotifier extends StateNotifier<AsyncValue<StudentPerform
         orElse: () => <String, dynamic>{},
     );
 
-    final academicScoresList = data.academicScores.entries.map((e) => {'subject': e.key, 'score': e.value}).toList();
-    final homeworkScoresList = data.homeworkScores.entries.map((e) => {'subject': e.key, 'score': e.value}).toList();
-
     final studentRef = FirebaseFirestore.instance
         .collection('schools')
         .doc(schoolId)
@@ -157,21 +151,17 @@ class StudentPerformanceNotifier extends StateNotifier<AsyncValue<StudentPerform
         .collection('students')
         .doc(studentId);
 
-    final updateData = {
-      'academicScores': academicScoresList,
-      'homeworkScores': homeworkScoresList,
+    final updateData = <String, dynamic>{
       'wellness': data.wellness,
-      'attendance': data.attendance,
       'classId': classId,
       'className': assignedClass['name'] ?? 'Unknown',
       'updatedAt': FieldValue.serverTimestamp(),
     };
 
-    await studentRef.update(updateData);
+    await studentRef.set(updateData, SetOptions(merge: true));
 
-    // Handle Notifications
+    // Handle Wellness Notification to Parent
     try {
-        final bool academicChanged = _academicModified;
         final bool wellnessChanged = _wellnessModified;
 
         String? parentId;
@@ -180,54 +170,6 @@ class StudentPerformanceNotifier extends StateNotifier<AsyncValue<StudentPerform
         }
 
         if (parentId != null) {
-            if (academicChanged) {
-                final highScores = [
-                    ...data.academicScores.entries.where((e) => e.value >= 80).map((e) => e.key),
-                    ...data.homeworkScores.entries.where((e) => e.value >= 80).map((e) => e.key),
-                ].toSet().toList(); // Make unique
-
-                 final lowScores = [
-                    ...data.academicScores.entries.where((e) => e.value < 50).map((e) => e.key),
-                    ...data.homeworkScores.entries.where((e) => e.value < 50).map((e) => e.key),
-                ].toSet().toList(); // Make unique
-
-                String title = "Performance Update";
-                String message = "";
-                String type = "info";
-
-                if (highScores.isNotEmpty && lowScores.isEmpty) {
-                    title = "🌟 Excellent Progress!";
-                    message = "Great news! ${student['name']} is excelling in ${highScores.join(', ')}. Keep up the fantastic work!";
-                    type = "celebration";
-                } else if (lowScores.isNotEmpty && highScores.isEmpty) {
-                    title = "🌱 Growth Opportunity";
-                    message = "We noticed ${student['name']} is finding ${lowScores.join(', ')} a bit challenging. Let's work together to support their improvement.";
-                    type = "alert";
-                } else if (highScores.isNotEmpty && lowScores.isNotEmpty) {
-                    title = "📊 Performance Update";
-                    message = "${student['name']} is doing great in ${highScores.join(', ')}, but could use some extra support in ${lowScores.join(', ')}.";
-                    type = "info";
-                } else {
-                    title = "📝 Just Updated";
-                    message = "A new performance report is available for ${student['name']}. Please check the app for the latest details.";
-                }
-
-                await FirebaseFirestore.instance
-                     .collection('schools')
-                     .doc(schoolId)
-                     .collection('notifications')
-                     .add({
-                         'parentId': parentId,
-                         'studentId': studentId,
-                         'studentName': student['name'],
-                         'title': title,
-                         'message': message,
-                         'type': type,
-                         'read': false,
-                         'createdAt': FieldValue.serverTimestamp(),
-                     });
-                print("Academic Notification sent to parent: $parentId");
-            }
 
             if (wellnessChanged) {
                 // Wellness Notification
@@ -288,8 +230,7 @@ class StudentPerformanceNotifier extends StateNotifier<AsyncValue<StudentPerform
             }
         }
             
-        // Reset flags so we don't spam if they hit save multiple times
-        _academicModified = false;
+        // Reset flag so we don't spam if they hit save multiple times
         _wellnessModified = false;
 
     } catch(e) {

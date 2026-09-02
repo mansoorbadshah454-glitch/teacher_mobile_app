@@ -1,4 +1,5 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:flutter/foundation.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:teacher_mobile_app/core/providers/user_data_provider.dart';
 import 'package:teacher_mobile_app/features/timetable/providers/timetable_provider.dart';
@@ -54,31 +55,56 @@ final mySyllabusesProvider = Provider<AsyncValue<List<SyllabusAssignment>>>((ref
 });
 
 
-// 3. Fetch Syllabus Chapters for a specific Class and Subject
-final syllabusChaptersProvider = FutureProvider.family<List<Map<String, dynamic>>, SyllabusAssignment>((ref, assignment) async {
+// 3. Fetch Syllabus Chapters for a specific Class and Subject (REAL-TIME STREAM)
+final syllabusChaptersProvider = StreamProvider.family<List<Map<String, dynamic>>, SyllabusAssignment>((ref, assignment) async* {
   final teacherDataAsync = ref.watch(teacherDataProvider);
   final teacherData = teacherDataAsync.value;
 
   if (teacherData == null || !teacherData.containsKey('schoolId')) {
-    return [];
+    yield [];
+    return;
   }
 
   final schoolId = teacherData['schoolId'] as String;
-  final classSnapshot = await FirebaseFirestore.instance
-      .collection('schools')
-      .doc(schoolId)
-      .collection('classes')
-      .where('name', isEqualTo: assignment.className)
-      .limit(1)
-      .get();
 
-  if (classSnapshot.docs.isEmpty) {
-    return [];
+  String classId = '';
+  try {
+    final classSnapshot = await FirebaseFirestore.instance
+        .collection('schools')
+        .doc(schoolId)
+        .collection('classes')
+        .where('name', isEqualTo: assignment.className)
+        .limit(1)
+        .get();
+
+    if (classSnapshot.docs.isNotEmpty) {
+      classId = classSnapshot.docs.first.id;
+    } else {
+      final allClasses = await FirebaseFirestore.instance
+          .collection('schools')
+          .doc(schoolId)
+          .collection('classes')
+          .get();
+
+      final cleanAssignName = assignment.className.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '').toLowerCase();
+      for (var cDoc in allClasses.docs) {
+        final cName = (cDoc.data()['name'] ?? '').toString().replaceAll(RegExp(r'[^a-zA-Z0-9]'), '').toLowerCase();
+        if (cName == cleanAssignName || cDoc.id.toLowerCase() == cleanAssignName) {
+          classId = cDoc.id;
+          break;
+        }
+      }
+    }
+  } catch (e) {
+    debugPrint('Error finding class for syllabus: $e');
   }
 
-  final classId = classSnapshot.docs.first.id;
+  if (classId.isEmpty) {
+    yield [];
+    return;
+  }
 
-  final snapshot = await FirebaseFirestore.instance
+  final chaptersStream = FirebaseFirestore.instance
       .collection('schools')
       .doc(schoolId)
       .collection('classes')
@@ -86,23 +112,25 @@ final syllabusChaptersProvider = FutureProvider.family<List<Map<String, dynamic>
       .collection('syllabus')
       .doc(assignment.subject)
       .collection('chapters')
-      .get();
-      
-  final docs = snapshot.docs.map((doc) {
-    return {'id': doc.id, ...doc.data()};
-  }).toList();
-  
-  // Sort locally by createdAt if available
-  docs.sort((a, b) {
-    final aTime = a['createdAt'] as Timestamp?;
-    final bTime = b['createdAt'] as Timestamp?;
-    if (aTime == null && bTime == null) return 0;
-    if (aTime == null) return 1; // nulls at the end
-    if (bTime == null) return -1;
-    return aTime.compareTo(bTime);
-  });
-  
-  return docs;
+      .snapshots();
+
+  await for (final snapshot in chaptersStream) {
+    final docs = snapshot.docs.map((doc) {
+      return {'id': doc.id, ...doc.data()};
+    }).toList();
+
+    // Sort locally by createdAt if available
+    docs.sort((a, b) {
+      final aTime = a['createdAt'] as Timestamp?;
+      final bTime = b['createdAt'] as Timestamp?;
+      if (aTime == null && bTime == null) return 0;
+      if (aTime == null) return 1;
+      if (bTime == null) return -1;
+      return aTime.compareTo(bTime);
+    });
+
+    yield docs;
+  }
 });
 
 // 4. Update Chapter Status
@@ -115,17 +143,40 @@ class SyllabusService {
     if (teacherData == null || !teacherData.containsKey('schoolId')) return;
 
     final schoolId = teacherData['schoolId'] as String;
-    final classSnapshot = await FirebaseFirestore.instance
-        .collection('schools')
-        .doc(schoolId)
-        .collection('classes')
-        .where('name', isEqualTo: assignment.className)
-        .limit(1)
-        .get();
+    String classId = '';
 
-    if (classSnapshot.docs.isEmpty) return;
-    
-    final classId = classSnapshot.docs.first.id;
+    try {
+      final classSnapshot = await FirebaseFirestore.instance
+          .collection('schools')
+          .doc(schoolId)
+          .collection('classes')
+          .where('name', isEqualTo: assignment.className)
+          .limit(1)
+          .get();
+
+      if (classSnapshot.docs.isNotEmpty) {
+        classId = classSnapshot.docs.first.id;
+      } else {
+        final allClasses = await FirebaseFirestore.instance
+            .collection('schools')
+            .doc(schoolId)
+            .collection('classes')
+            .get();
+
+        final cleanAssignName = assignment.className.replaceAll(RegExp(r'[^a-zA-Z0-9]'), '').toLowerCase();
+        for (var cDoc in allClasses.docs) {
+          final cName = (cDoc.data()['name'] ?? '').toString().replaceAll(RegExp(r'[^a-zA-Z0-9]'), '').toLowerCase();
+          if (cName == cleanAssignName || cDoc.id.toLowerCase() == cleanAssignName) {
+            classId = cDoc.id;
+            break;
+          }
+        }
+      }
+    } catch (e) {
+      debugPrint('Error finding class for toggleChapterStatus: $e');
+    }
+
+    if (classId.isEmpty) return;
 
     String newStatus;
     if (currentStatus == 'Pending') {

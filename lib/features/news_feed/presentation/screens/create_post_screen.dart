@@ -92,7 +92,7 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
       }
 
       // Initialize Audience
-      if (data['targetAudience'] == 'class') {
+      if (data['audience'] == 'class' || data['targetAudience'] == 'class') {
          _selectedAudience = data['targetClassId'] ?? 'all';
          _selectedClassName = data['targetClassName'];
       }
@@ -199,7 +199,8 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
         'likes': [],
         'comments': [],
         'schoolId': widget.schoolId,
-        'targetAudience': _selectedAudience == 'all' ? 'all' : 'class',
+        'audience': _selectedAudience == 'all' ? 'all' : 'class',
+        'targetAudience': _selectedAudience == 'all' ? 'all' : 'class', // Keep for backward compatibility
       };
 
       if (finalMediaList.isNotEmpty) {

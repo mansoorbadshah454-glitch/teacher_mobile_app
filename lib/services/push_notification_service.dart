@@ -24,6 +24,8 @@ class PushNotificationService {
       case 'news_feed': return '/news-feed';
       case 'admin_msg': return '/inbox';
       case 'chat_message': return '/inbox';
+      case 'new_message': return '/inbox';
+      case 'message': return '/inbox';
       case 'notebook_alert': return '/notebook';
       default: return null;
     }
@@ -115,48 +117,63 @@ class PushNotificationService {
 
       // Foreground message handler
       FirebaseMessaging.onMessage.listen((RemoteMessage message) async {
-        print('Got a message whilst in the foreground!');
+        print('Got a message whilst in the foreground: ${message.data}');
 
-        if (message.notification != null) {
-          final title = message.notification?.title ?? 'Notification';
-          final body = message.notification?.body ?? '';
-          final type = message.data['type'] ?? '';
-          
-          if (onMessageAlert != null) {
-            onMessageAlert(type, title, body);
-          } else {
-            // Fallback: Write directly to disk and show alert if callback fails
-            bool isEmergency = false;
-            if (type == 'timetable_update' && title.toString().toLowerCase().contains('urgent') == true) {
-              isEmergency = true;
-              final prefs = await SharedPreferences.getInstance();
-              await prefs.setString('timetable_emergency_message', body.isEmpty ? 'Emergency Timetable update received.' : body);
-              await prefs.setString('timetable_emergency_date', DateTime.now().toIso8601String());
-            }
-
-            final route = getRouteFromType(type);
-            showGlobalAlert(title, body, route, isEmergency: isEmergency);
+        final title = message.notification?.title ?? message.data['title'] ?? 'New Message';
+        final body = message.notification?.body ?? message.data['body'] ?? '';
+        final type = message.data['type'] ?? (message.notification != null ? 'new_message' : '');
+        
+        if (onMessageAlert != null) {
+          onMessageAlert(type, title, body);
+        } else {
+          bool isEmergency = false;
+          if (type == 'timetable_update' && title.toString().toLowerCase().contains('urgent') == true) {
+            isEmergency = true;
+            final prefs = await SharedPreferences.getInstance();
+            await prefs.setString('timetable_emergency_message', body.isEmpty ? 'Emergency Timetable update received.' : body);
+            await prefs.setString('timetable_emergency_date', DateTime.now().toIso8601String());
           }
+
+          final route = getRouteFromType(type) ?? (type.contains('message') || type.contains('msg') ? '/inbox' : null);
+          showGlobalAlert(title, body, route, isEmergency: isEmergency);
+        }
+
+        // Also trigger local notification for sound/alert
+        try {
+          const androidDetails = AndroidNotificationDetails(
+            'high_importance_channel',
+            'High Importance Notifications',
+            importance: Importance.high,
+            priority: Priority.high,
+            showWhen: true,
+          );
+          const notifDetails = NotificationDetails(android: androidDetails);
+          await _localNotificationsPlugin.show(
+            DateTime.now().millisecond,
+            title,
+            body,
+            notifDetails,
+            payload: type,
+          );
+        } catch (e) {
+          debugPrint('Local notification display error: $e');
         }
       });
       
       // Background message tap handler
       FirebaseMessaging.onMessageOpenedApp.listen((RemoteMessage message) {
-         final type = message.data['type'];
-         final route = getRouteFromType(type);
-         
-         // Trigger the callback if it was an emergency timetable
-         if (onMessageAlert != null && message.notification != null) {
-            final title = message.notification?.title ?? '';
-            final body = message.notification?.body ?? '';
-            if (type == 'timetable_update' && title.toString().toLowerCase().contains('urgent')) {
-               onMessageAlert(type!, title, body);
-            }
-         }
+        final type = message.data['type'] ?? 'new_message';
+        final route = getRouteFromType(type) ?? '/inbox';
 
-         if (route != null) {
-            appRouter.push(route);
-         }
+        if (onMessageAlert != null && message.notification != null) {
+          final title = message.notification?.title ?? '';
+          final body = message.notification?.body ?? '';
+          if (type == 'timetable_update' && title.toLowerCase().contains('urgent')) {
+            onMessageAlert(type, title, body);
+          }
+        }
+
+        appRouter.push(route);
       });
       
       _isInitialized = true;

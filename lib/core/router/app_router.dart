@@ -24,6 +24,9 @@ import 'package:teacher_mobile_app/features/timetable/presentation/screens/timet
 import 'package:teacher_mobile_app/features/syllabus/presentation/screens/my_syllabuses_screen.dart';
 import 'package:teacher_mobile_app/features/syllabus/presentation/screens/syllabus_detail_screen.dart';
 import 'package:teacher_mobile_app/features/syllabus/providers/syllabus_provider.dart';
+import 'package:teacher_mobile_app/features/exam/presentation/screens/exam_classes_screen.dart';
+import 'package:teacher_mobile_app/features/exam/presentation/screens/marks_entry_screen.dart';
+import 'package:teacher_mobile_app/features/exam/models/exam_model.dart';
 final GlobalKey<ScaffoldMessengerState> rootScaffoldMessengerKey = GlobalKey<ScaffoldMessengerState>();
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
@@ -151,6 +154,17 @@ final appRouter = GoRouter(
       builder: (context, state) {
         final assignment = state.extra as SyllabusAssignment;
         return SyllabusDetailScreen(assignment: assignment);
+      },
+    ),
+    GoRoute(
+      path: '/teacher-exams',
+      builder: (context, state) => const ExamClassesScreen(),
+    ),
+    GoRoute(
+      path: '/teacher-exams/entry',
+      builder: (context, state) {
+        final classItem = state.extra as ExamClassSubject;
+        return MarksEntryScreen(classItem: classItem);
       },
     ),
   ],

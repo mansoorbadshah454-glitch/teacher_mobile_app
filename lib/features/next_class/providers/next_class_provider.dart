@@ -5,7 +5,7 @@ import 'package:teacher_mobile_app/core/providers/user_data_provider.dart';
 import 'package:flutter/material.dart';
 import 'dart:async';
 
-enum NextClassViewMode { classes, subjects, students, scheduleTest, test, activeTestScore }
+enum NextClassViewMode { classes, subjects, students, scheduleTest, test, activeTestScore, homework }
 
 class ScheduleTestDraft {
   final DateTime? date;
@@ -45,6 +45,35 @@ class ScheduleTestDraft {
   }
 }
 
+class HomeworkDraft {
+  final String chapter;
+  final String topic;
+  final String description;
+  final DateTime? dueDate;
+
+  HomeworkDraft({
+    this.chapter = '',
+    this.topic = '',
+    this.description = '',
+    this.dueDate,
+  });
+
+  HomeworkDraft copyWith({
+    String? chapter,
+    String? topic,
+    String? description,
+    DateTime? dueDate,
+    bool clearDueDate = false,
+  }) {
+    return HomeworkDraft(
+      chapter: chapter ?? this.chapter,
+      topic: topic ?? this.topic,
+      description: description ?? this.description,
+      dueDate: clearDueDate ? null : (dueDate ?? this.dueDate),
+    );
+  }
+}
+
 class NextClassState {
   final NextClassViewMode viewMode;
   final Map<String, dynamic>? selectedClass;
@@ -64,6 +93,9 @@ class NextClassState {
   // Schedule Test Drafts per subject
   final Map<String, ScheduleTestDraft> scheduleDrafts;
 
+  // Homework Drafts per subject
+  final Map<String, HomeworkDraft> homeworkDrafts;
+
   // Getters for UI backward compatibility
   DateTime? get scheduleDate => selectedSubject != null ? scheduleDrafts[selectedSubject!]?.date : null;
   TimeOfDay? get scheduleTime => selectedSubject != null ? scheduleDrafts[selectedSubject!]?.time : null;
@@ -72,8 +104,18 @@ class NextClassState {
   int get maxMarks => selectedSubject != null ? (scheduleDrafts[selectedSubject!]?.maxMarks ?? 10) : 10;
   String get testChapter => selectedSubject != null ? (scheduleDrafts[selectedSubject!]?.chapter ?? '') : '';
 
+  // Homework getters
+  String get homeworkChapter => selectedSubject != null ? (homeworkDrafts[selectedSubject!]?.chapter ?? '') : '';
+  String get homeworkTopic => selectedSubject != null ? (homeworkDrafts[selectedSubject!]?.topic ?? '') : '';
+  String get homeworkDescription => selectedSubject != null ? (homeworkDrafts[selectedSubject!]?.description ?? '') : '';
+  DateTime? get homeworkDueDate => selectedSubject != null ? homeworkDrafts[selectedSubject!]?.dueDate : null;
+
   final Map<String, dynamic>? activeScheduledTest;
   final bool isFetchingTest;
+
+  final Map<String, dynamic>? activeHomework;
+  final List<Map<String, dynamic>> homeworkList;
+  final bool isFetchingHomework;
 
   NextClassState({
     this.viewMode = NextClassViewMode.classes,
@@ -87,8 +129,12 @@ class NextClassState {
     this.scoreUpdates = const {},
     this.testScores = const {},
     this.scheduleDrafts = const {},
+    this.homeworkDrafts = const {},
     this.activeScheduledTest,
     this.isFetchingTest = false,
+    this.activeHomework,
+    this.homeworkList = const [],
+    this.isFetchingHomework = false,
   });
 
   NextClassState copyWith({
@@ -103,8 +149,12 @@ class NextClassState {
     Map<String, Map<String, int>>? scoreUpdates,
     Map<String, int>? testScores,
     Map<String, ScheduleTestDraft>? scheduleDrafts,
+    Map<String, HomeworkDraft>? homeworkDrafts,
     Map<String, dynamic>? activeScheduledTest,
     bool? isFetchingTest,
+    Map<String, dynamic>? activeHomework,
+    List<Map<String, dynamic>>? homeworkList,
+    bool? isFetchingHomework,
   }) {
     return NextClassState(
       viewMode: viewMode ?? this.viewMode,
@@ -118,8 +168,12 @@ class NextClassState {
       scoreUpdates: scoreUpdates ?? this.scoreUpdates,
       testScores: testScores ?? this.testScores,
       scheduleDrafts: scheduleDrafts ?? this.scheduleDrafts,
+      homeworkDrafts: homeworkDrafts ?? this.homeworkDrafts,
       activeScheduledTest: activeScheduledTest ?? this.activeScheduledTest,
       isFetchingTest: isFetchingTest ?? this.isFetchingTest,
+      activeHomework: activeHomework ?? this.activeHomework,
+      homeworkList: homeworkList ?? this.homeworkList,
+      isFetchingHomework: isFetchingHomework ?? this.isFetchingHomework,
     );
   }
 }
@@ -131,6 +185,7 @@ class NextClassNotifier extends StateNotifier<NextClassState> {
   StreamSubscription<QuerySnapshot>? _classesSubscription;
   StreamSubscription<QuerySnapshot>? _studentsSubscription;
   StreamSubscription<QuerySnapshot>? _scheduledTestSubscription;
+  StreamSubscription<QuerySnapshot>? _homeworkSubscription;
 
   NextClassNotifier(this.ref, this.schoolId) : super(NextClassState()) {
     if (schoolId != null) {
@@ -143,6 +198,7 @@ class NextClassNotifier extends StateNotifier<NextClassState> {
     _classesSubscription?.cancel();
     _studentsSubscription?.cancel();
     _scheduledTestSubscription?.cancel();
+    _homeworkSubscription?.cancel();
     super.dispose();
   }
 
@@ -204,9 +260,64 @@ class NextClassNotifier extends StateNotifier<NextClassState> {
       scoreUpdates: {},
       testScores: {},
       activeScheduledTest: {},
+      activeHomework: {},
+      homeworkList: [],
     );
     _fetchStudents();
     _fetchScheduledTest();
+    _fetchHomework();
+  }
+
+  void _fetchHomework() {
+    if (schoolId == null || state.selectedClass == null || state.selectedSubject == null) return;
+    final classId = state.selectedClass!['id'];
+    state = state.copyWith(isFetchingHomework: true);
+
+    _homeworkSubscription?.cancel();
+    _homeworkSubscription = FirebaseFirestore.instance
+        .collection('schools')
+        .doc(schoolId)
+        .collection('classes')
+        .doc(classId)
+        .collection('homework')
+        .snapshots()
+        .listen((snapshot) {
+      if (mounted) {
+        final docs = snapshot.docs.map((doc) {
+          final data = Map<String, dynamic>.from(doc.data());
+          data['id'] = doc.id;
+          return data;
+        }).where((data) => data['subject'] == state.selectedSubject).toList();
+
+        // Sort descending by createdAt / updatedAt / assignedDate
+        docs.sort((a, b) {
+          final aTime = a['createdAt'] ?? a['updatedAt'];
+          final bTime = b['createdAt'] ?? b['updatedAt'];
+          if (aTime is Timestamp && bTime is Timestamp) {
+            return bTime.compareTo(aTime);
+          }
+          final aDate = (a['assignedDate'] ?? '').toString();
+          final bDate = (b['assignedDate'] ?? '').toString();
+          return bDate.compareTo(aDate);
+        });
+
+        Map<String, dynamic>? active;
+        final activeMatches = docs.where((h) => h['status'] == 'active').toList();
+        if (activeMatches.isNotEmpty) {
+          active = activeMatches.first;
+        } else if (docs.isNotEmpty) {
+          active = docs.first;
+        }
+
+        state = state.copyWith(
+          homeworkList: docs,
+          activeHomework: active ?? {},
+          isFetchingHomework: false,
+        );
+      }
+    }, onError: (e) {
+      if (mounted) state = state.copyWith(isFetchingHomework: false);
+    });
   }
 
   void _fetchScheduledTest() {
@@ -301,7 +412,7 @@ class NextClassNotifier extends StateNotifier<NextClassState> {
   void goBack() {
     if (state.viewMode == NextClassViewMode.test || state.viewMode == NextClassViewMode.activeTestScore) {
       state = state.copyWith(viewMode: NextClassViewMode.scheduleTest);
-    } else if (state.viewMode == NextClassViewMode.scheduleTest) {
+    } else if (state.viewMode == NextClassViewMode.scheduleTest || state.viewMode == NextClassViewMode.homework) {
       state = state.copyWith(viewMode: NextClassViewMode.students);
     } else if (state.viewMode == NextClassViewMode.students) {
       state = state.copyWith(
@@ -325,6 +436,10 @@ class NextClassNotifier extends StateNotifier<NextClassState> {
     state = state.copyWith(viewMode: NextClassViewMode.scheduleTest);
   }
 
+  void goToHomeworkMode() {
+    state = state.copyWith(viewMode: NextClassViewMode.homework);
+  }
+
   void goToActiveTestScoreMode() {
     state = state.copyWith(
       viewMode: NextClassViewMode.activeTestScore,
@@ -334,6 +449,157 @@ class NextClassNotifier extends StateNotifier<NextClassState> {
 
   void setSearchTerm(String term) {
     state = state.copyWith(searchTerm: term);
+  }
+
+  // --- Homework Draft & Actions ---
+  HomeworkDraft get _currentHomeworkDraft => state.selectedSubject != null
+      ? (state.homeworkDrafts[state.selectedSubject!] ?? HomeworkDraft())
+      : HomeworkDraft();
+
+  void _updateHomeworkDraft(HomeworkDraft newDraft) {
+    if (state.selectedSubject == null) return;
+    final newDrafts = Map<String, HomeworkDraft>.from(state.homeworkDrafts);
+    newDrafts[state.selectedSubject!] = newDraft;
+    state = state.copyWith(homeworkDrafts: newDrafts);
+  }
+
+  void setHomeworkChapter(String chapter) {
+    _updateHomeworkDraft(_currentHomeworkDraft.copyWith(chapter: chapter));
+  }
+
+  void setHomeworkTopic(String topic) {
+    _updateHomeworkDraft(_currentHomeworkDraft.copyWith(topic: topic));
+  }
+
+  void setHomeworkDescription(String description) {
+    _updateHomeworkDraft(_currentHomeworkDraft.copyWith(description: description));
+  }
+
+  void setHomeworkDueDate(DateTime dueDate) {
+    _updateHomeworkDraft(_currentHomeworkDraft.copyWith(dueDate: dueDate));
+  }
+
+  void populateDraftFromExisting(Map<String, dynamic> hw) {
+    DateTime? due;
+    if (hw['dueDateTime'] is Timestamp) {
+      due = (hw['dueDateTime'] as Timestamp).toDate();
+    } else if (hw['dueDate'] != null) {
+      try {
+        due = DateTime.parse(hw['dueDate'].toString());
+      } catch (_) {}
+    }
+
+    _updateHomeworkDraft(HomeworkDraft(
+      chapter: hw['chapter'] ?? '',
+      topic: hw['topic'] ?? '',
+      description: hw['description'] ?? '',
+      dueDate: due,
+    ));
+  }
+
+  Future<void> saveHomework({String? editHomeworkId}) async {
+    if (state.isSaving) return;
+    if (schoolId == null || state.selectedClass == null || state.selectedSubject == null) return;
+
+    final topic = state.homeworkTopic.trim();
+    final chapter = state.homeworkChapter.trim();
+    final description = state.homeworkDescription.trim();
+    final dueDate = state.homeworkDueDate ?? DateTime.now().add(const Duration(days: 1));
+
+    if (topic.isEmpty && chapter.isEmpty) return;
+
+    state = state.copyWith(isSaving: true);
+
+    try {
+      final classId = state.selectedClass!['id'];
+      final className = state.selectedClass?['name'] ?? '';
+      final teacherData = ref.read(teacherDataProvider).value;
+      final teacherName = teacherData?['name'] ?? 'Teacher';
+      final teacherId = teacherData?['id'] ?? teacherData?['uid'] ?? '';
+
+      final dueDateStr = "${dueDate.year}-${dueDate.month.toString().padLeft(2, '0')}-${dueDate.day.toString().padLeft(2, '0')}";
+      final assignedDateStr = "${DateTime.now().year}-${DateTime.now().month.toString().padLeft(2, '0')}-${DateTime.now().day.toString().padLeft(2, '0')}";
+
+      final hwData = <String, dynamic>{
+        'className': className,
+        'subject': state.selectedSubject,
+        'chapter': chapter,
+        'topic': topic,
+        'description': description,
+        'assignedDate': assignedDateStr,
+        'dueDate': dueDateStr,
+        'dueDateTime': Timestamp.fromDate(dueDate),
+        'teacherName': teacherName,
+        'teacherId': teacherId,
+        'status': 'active',
+        'updatedAt': FieldValue.serverTimestamp(),
+      };
+
+      final hwColl = FirebaseFirestore.instance
+          .collection('schools')
+          .doc(schoolId)
+          .collection('classes')
+          .doc(classId)
+          .collection('homework');
+
+      DocumentReference hwRef;
+      if (editHomeworkId != null && editHomeworkId.isNotEmpty) {
+        hwRef = hwColl.doc(editHomeworkId);
+      } else {
+        hwRef = hwColl.doc();
+        hwData['createdAt'] = FieldValue.serverTimestamp();
+      }
+
+      final localHw = Map<String, dynamic>.from(hwData);
+      localHw['id'] = hwRef.id;
+
+      // Clear draft for this subject
+      final newDrafts = Map<String, HomeworkDraft>.from(state.homeworkDrafts);
+      newDrafts.remove(state.selectedSubject);
+
+      // Optimistic state update
+      state = state.copyWith(
+        isSaving: false,
+        activeHomework: localHw,
+        homeworkDrafts: newDrafts,
+      );
+
+      // Save to Firebase (Updated directly without spamming push alerts)
+      await hwRef.set(hwData, SetOptions(merge: true));
+    } catch (e) {
+      print("Error saving homework: $e");
+      state = state.copyWith(isSaving: false);
+      rethrow;
+    }
+  }
+
+  Future<void> deleteHomework(String homeworkId) async {
+    if (schoolId == null || state.selectedClass == null) return;
+    final classId = state.selectedClass!['id'];
+
+    // Optimistic UI update
+    final updatedList = state.homeworkList.where((h) => h['id'] != homeworkId).toList();
+    final newActive = state.activeHomework?['id'] == homeworkId
+        ? (updatedList.isNotEmpty ? updatedList.first : null)
+        : state.activeHomework;
+
+    state = state.copyWith(
+      homeworkList: updatedList,
+      activeHomework: newActive ?? {},
+    );
+
+    try {
+      await FirebaseFirestore.instance
+          .collection('schools')
+          .doc(schoolId)
+          .collection('classes')
+          .doc(classId)
+          .collection('homework')
+          .doc(homeworkId)
+          .delete();
+    } catch (e) {
+      print("Error deleting homework: $e");
+    }
   }
 
   ScheduleTestDraft get _currentDraft => state.selectedSubject != null 

@@ -106,7 +106,7 @@ class NextClassScreen extends ConsumerWidget {
   Widget _buildHeader(BuildContext context, NextClassState state, NextClassNotifier notifier) {
     String title = "All Classes";
     String subtitle = "Select a class to manage";
-    bool showNextBtn = false;
+    bool showActionButtons = false;
 
     if (state.viewMode == NextClassViewMode.subjects) {
       title = state.selectedClass?['name'] ?? "Subjects";
@@ -114,7 +114,10 @@ class NextClassScreen extends ConsumerWidget {
     } else if (state.viewMode == NextClassViewMode.students) {
       title = state.selectedSubject ?? "Students";
       subtitle = "${state.selectedClass?['name']} • ${state.students.length} Students";
-      showNextBtn = true;
+      showActionButtons = true;
+    } else if (state.viewMode == NextClassViewMode.homework) {
+      title = "Homework";
+      subtitle = "${state.selectedSubject} • ${state.selectedClass?['name']}";
     } else if (state.viewMode == NextClassViewMode.scheduleTest) {
       title = "Schedule Test";
       subtitle = state.selectedSubject ?? "Details";
@@ -125,11 +128,10 @@ class NextClassScreen extends ConsumerWidget {
       title = "Record Scores";
       subtitle = "${state.selectedSubject} • ${state.activeScheduledTest?['testType'] ?? ''} Test";
     }
-
     return Container(
       padding: EdgeInsets.only(
-        top: MediaQuery.of(context).padding.top + 16, 
-        bottom: 16, 
+        top: MediaQuery.of(context).padding.top + 12, 
+        bottom: showActionButtons ? 14 : 16, 
         left: 16, 
         right: 16,
       ),
@@ -140,11 +142,11 @@ class NextClassScreen extends ConsumerWidget {
           end: Alignment.bottomRight,
         ),
         boxShadow: [
-          BoxShadow(color: Colors.black.withOpacity(0.3), blurRadius: 4, offset: const Offset(0, 4))
+          BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 6, offset: const Offset(0, 3))
         ],
       ),
-      child: Row(
-        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+      child: Column(
+        mainAxisSize: MainAxisSize.min,
         children: [
           Row(
             children: [
@@ -157,65 +159,110 @@ class NextClassScreen extends ConsumerWidget {
                   }
                 },
                 child: Container(
-                  width: 44,
-                  height: 44,
+                  width: 42,
+                  height: 42,
                   decoration: BoxDecoration(
                     color: Colors.white.withOpacity(0.2), // Transparent white
-                    borderRadius: BorderRadius.circular(14),
+                    borderRadius: BorderRadius.circular(12),
                     border: Border.all(color: Colors.white.withOpacity(0.3)),
                   ),
                   child: const Icon(Icons.chevron_left, color: Colors.white),
                 ),
               ),
-              const SizedBox(width: 16),
-              Column(
-                crossAxisAlignment: CrossAxisAlignment.start,
-                children: [
-                  Text(
-                    title,
-                    style: const TextStyle(
-                      fontSize: 20,
-                      fontWeight: FontWeight.w800,
-                      color: Colors.white,
-                    ),
-                  ),
-                  Text(
-                    subtitle,
-                    style: TextStyle(
-                      fontSize: 12,
-                      fontWeight: FontWeight.w500,
-                      color: Colors.white.withOpacity(0.8),
-                    ),
-                  ),
-                ],
-              ),
-            ],
-          ),
-          if (showNextBtn)
-            GestureDetector(
-              onTap: () => notifier.goToScheduleTestMode(),
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 10),
-                decoration: BoxDecoration(
-                  color: Colors.white.withOpacity(0.2),
-                  borderRadius: BorderRadius.circular(12),
-                  border: Border.all(color: Colors.white.withOpacity(0.3)),
-                ),
-                child: Row(
-                  children: const [
-                     Text(
-                      "Next",
-                      style: TextStyle(
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      title,
+                      style: const TextStyle(
+                        fontSize: 19,
+                        fontWeight: FontWeight.w800,
                         color: Colors.white,
-                        fontWeight: FontWeight.bold,
                       ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
                     ),
-                     SizedBox(width: 4),
-                     Icon(Icons.chevron_right, color: Colors.white, size: 18),
+                    Text(
+                      subtitle,
+                      style: TextStyle(
+                        fontSize: 12,
+                        fontWeight: FontWeight.w500,
+                        color: Colors.white.withOpacity(0.85),
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
                   ],
                 ),
               ),
+            ],
+          ),
+          if (showActionButtons) ...[
+            const SizedBox(height: 14),
+            Row(
+              children: [
+                Expanded(
+                  child: GestureDetector(
+                    onTap: () => notifier.goToHomeworkMode(),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.22),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.white.withOpacity(0.35)),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: const [
+                          Icon(Icons.assignment_outlined, color: Colors.white, size: 18),
+                          SizedBox(width: 6),
+                          Text(
+                            "Homework",
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 13,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 10),
+                Expanded(
+                  child: GestureDetector(
+                    onTap: () => notifier.goToScheduleTestMode(),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.22),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.white.withOpacity(0.35)),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: const [
+                          Icon(Icons.quiz_outlined, color: Colors.white, size: 18),
+                          SizedBox(width: 6),
+                          Text(
+                            "Test",
+                            style: TextStyle(
+                              color: Colors.white,
+                              fontWeight: FontWeight.bold,
+                              fontSize: 13,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+              ],
             ),
+          ],
         ],
       ),
     );
@@ -227,7 +274,6 @@ class NextClassScreen extends ConsumerWidget {
         child: CircularProgressIndicator(color: AppTheme.primary),
       );
     }
-
     switch (state.viewMode) {
       case NextClassViewMode.classes:
         return _buildClassesView(context, state, notifier);
@@ -235,6 +281,8 @@ class NextClassScreen extends ConsumerWidget {
         return _buildSubjectsView(context, state, notifier, timetableSlots);
       case NextClassViewMode.students:
         return _buildStudentsView(context, state, notifier);
+      case NextClassViewMode.homework:
+        return _buildHomeworkView(context, state, notifier, teacherData, schoolData);
       case NextClassViewMode.scheduleTest:
         return _buildScheduleTestView(context, state, notifier);
       case NextClassViewMode.test:
@@ -1295,6 +1343,493 @@ class NextClassScreen extends ConsumerWidget {
             ),
           ),
           const SizedBox(height: 100),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildHomeworkView(BuildContext context, NextClassState state, NextClassNotifier notifier, Map<String, dynamic>? teacherData, Map<String, dynamic>? schoolData) {
+    if (state.isFetchingHomework && state.homeworkList.isEmpty) {
+      return const Center(child: CircularProgressIndicator(color: AppTheme.primary));
+    }
+
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final activeHw = state.activeHomework;
+    final hasActiveHw = activeHw != null && activeHw.isNotEmpty;
+    final defaultDueDate = DateTime.now().add(const Duration(days: 1));
+    final currentDueDate = state.homeworkDueDate ?? defaultDueDate;
+
+    return SingleChildScrollView(
+      padding: const EdgeInsets.all(20),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // 1. ACTIVE HOMEWORK SECTION (IF EXISTS)
+          if (hasActiveHw) ...[
+            Container(
+              width: double.infinity,
+              padding: const EdgeInsets.all(20),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [Color(0xFFF59E0B), Color(0xFFD97706)], // Warm Amber Gradient
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.circular(20),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFFF59E0B).withOpacity(0.35),
+                    blurRadius: 16,
+                    offset: const Offset(0, 8),
+                  ),
+                ],
+              ),
+              child: Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.25),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Row(
+                          children: const [
+                            Icon(Icons.push_pin, color: Colors.white, size: 14),
+                            SizedBox(width: 4),
+                            Text(
+                              "Active Homework",
+                              style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
+                            ),
+                          ],
+                        ),
+                      ),
+                      Row(
+                        children: [
+                          GestureDetector(
+                            onTap: () {
+                              notifier.populateDraftFromExisting(activeHw);
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                const SnackBar(content: Text("Homework details loaded into form below for editing.")),
+                              );
+                            },
+                            child: Container(
+                              padding: const EdgeInsets.all(6),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withOpacity(0.2),
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(Icons.edit, color: Colors.white, size: 16),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          GestureDetector(
+                            onTap: () => _showDeleteHomeworkDialog(context, notifier, activeHw['id']),
+                            child: Container(
+                              padding: const EdgeInsets.all(6),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withOpacity(0.2),
+                                shape: BoxShape.circle,
+                              ),
+                              child: const Icon(Icons.delete_outline, color: Colors.white, size: 16),
+                            ),
+                          ),
+                        ],
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 14),
+                  if ((activeHw['chapter'] ?? '').isNotEmpty)
+                    Text(
+                      activeHw['chapter'] ?? '',
+                      style: TextStyle(
+                        color: Colors.white.withOpacity(0.9),
+                        fontSize: 13,
+                        fontWeight: FontWeight.w600,
+                      ),
+                    ),
+                  Text(
+                    activeHw['topic'] ?? 'Homework Assigned',
+                    style: const TextStyle(
+                      color: Colors.white,
+                      fontSize: 20,
+                      fontWeight: FontWeight.w800,
+                    ),
+                  ),
+                  if ((activeHw['description'] ?? '').isNotEmpty) ...[
+                    const SizedBox(height: 8),
+                    Text(
+                      activeHw['description'] ?? '',
+                      style: TextStyle(
+                        color: Colors.white.withOpacity(0.9),
+                        fontSize: 14,
+                        height: 1.3,
+                      ),
+                    ),
+                  ],
+                  const SizedBox(height: 16),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8),
+                    decoration: BoxDecoration(
+                      color: Colors.black.withOpacity(0.15),
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Expanded(
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.today, color: Colors.white70, size: 14),
+                              const SizedBox(width: 4),
+                              Flexible(
+                                child: Text(
+                                  "Assigned: ${activeHw['assignedDate'] ?? 'Today'}",
+                                  style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w500),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        Expanded(
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            mainAxisAlignment: MainAxisAlignment.end,
+                            children: [
+                              const Icon(Icons.event_available, color: Colors.white, size: 14),
+                              const SizedBox(width: 4),
+                              Flexible(
+                                child: Text(
+                                  "Due: ${activeHw['dueDate'] ?? 'Tomorrow'}",
+                                  style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+            const SizedBox(height: 28),
+          ],
+
+          // 2. ASSIGN NEW HOMEWORK FORM SECTION
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(8),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF6366f1).withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Icon(Icons.edit_note, color: Color(0xFF6366f1), size: 22),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Text(
+                  hasActiveHw ? "Assign New / Update Homework" : "Assign Homework",
+                  style: TextStyle(
+                    fontSize: 17,
+                    fontWeight: FontWeight.w800,
+                    color: isDark ? Colors.white : Colors.indigo[900],
+                  ),
+                  maxLines: 1,
+                  overflow: TextOverflow.ellipsis,
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+
+          // Chapter Input (Optional)
+          _buildInputSection(
+            context,
+            title: "Chapter / Unit (Optional)",
+            hint: "e.g., Chapter 4: Photosynthesis",
+            icon: Icons.menu_book,
+            onChanged: notifier.setHomeworkChapter,
+            initialValue: state.homeworkChapter,
+          ),
+          const SizedBox(height: 16),
+
+          // Topic / Task Title (Required)
+          _buildInputSection(
+            context,
+            title: "Homework Task / Topic *",
+            hint: "e.g., Book Page 45, Exercise 3.2 (Q1 to Q5)",
+            icon: Icons.assignment,
+            onChanged: notifier.setHomeworkTopic,
+            initialValue: state.homeworkTopic,
+          ),
+          const SizedBox(height: 16),
+
+          // Detailed Instructions
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                "Instructions / Details",
+                style: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  fontSize: 14,
+                  color: isDark ? Colors.white70 : Colors.grey[700],
+                ),
+              ),
+              const SizedBox(height: 8),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                decoration: BoxDecoration(
+                  color: isDark ? Colors.white.withOpacity(0.05) : Colors.grey[50],
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: isDark ? Colors.transparent : Colors.grey[200]!),
+                ),
+                child: TextFormField(
+                  initialValue: state.homeworkDescription,
+                  onChanged: notifier.setHomeworkDescription,
+                  maxLines: 3,
+                  style: TextStyle(color: isDark ? Colors.white : Colors.black),
+                  decoration: InputDecoration(
+                    icon: const Icon(Icons.description_outlined, color: Color(0xFF6366f1), size: 20),
+                    border: InputBorder.none,
+                    hintText: "e.g., Solve questions on homework notebook and draw clean diagrams.",
+                    hintStyle: TextStyle(color: isDark ? Colors.grey[600] : Colors.grey[400], fontSize: 13),
+                  ),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 16),
+
+          // Due Date Picker
+          GestureDetector(
+            onTap: () async {
+              final picked = await showDatePicker(
+                context: context,
+                initialDate: currentDueDate,
+                firstDate: DateTime.now(),
+                lastDate: DateTime.now().add(const Duration(days: 365)),
+              );
+              if (picked != null) {
+                notifier.setHomeworkDueDate(picked);
+              }
+            },
+            child: _buildDateTimeWidget(
+              context,
+              title: "Due Date (Submission)",
+              value: "${currentDueDate.day}/${currentDueDate.month}/${currentDueDate.year}",
+              icon: Icons.calendar_today,
+              isSelected: state.homeworkDueDate != null,
+            ),
+          ),
+          const SizedBox(height: 28),
+
+          // Save & Notify Button
+          GestureDetector(
+            onTap: state.isSaving ? null : () async {
+              final topic = state.homeworkTopic.trim();
+              final chapter = state.homeworkChapter.trim();
+              if (topic.isEmpty && chapter.isEmpty) {
+                ScaffoldMessenger.of(context).showSnackBar(
+                  const SnackBar(content: Text("Please provide a Task/Topic or Chapter for the homework.")),
+                );
+                return;
+              }
+
+              try {
+                await notifier.saveHomework();
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text("Homework saved successfully for ${state.selectedClass?['name']}!"),
+                      backgroundColor: const Color(0xFF10B981),
+                    ),
+                  );
+                }
+              } catch (e) {
+                if (context.mounted) {
+                  ScaffoldMessenger.of(context).showSnackBar(
+                    SnackBar(
+                      content: Text("Failed to save: $e"),
+                      backgroundColor: Colors.red,
+                    ),
+                  );
+                }
+              }
+            },
+            child: Container(
+              width: double.infinity,
+              padding: const EdgeInsets.symmetric(vertical: 16),
+              decoration: BoxDecoration(
+                gradient: const LinearGradient(
+                  colors: [Color(0xFF6366f1), Color(0xFF4f46e5)],
+                  begin: Alignment.topLeft,
+                  end: Alignment.bottomRight,
+                ),
+                borderRadius: BorderRadius.circular(16),
+                boxShadow: [
+                  BoxShadow(
+                    color: const Color(0xFF6366f1).withOpacity(0.4),
+                    blurRadius: 16,
+                    offset: const Offset(0, 8),
+                  ),
+                ],
+              ),
+              alignment: Alignment.center,
+              child: state.isSaving
+                  ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                  : Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: const [
+                        Icon(Icons.assignment_turned_in_outlined, color: Colors.white, size: 20),
+                        SizedBox(width: 8),
+                        Text(
+                          "Assign Homework",
+                          style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold),
+                        ),
+                      ],
+                    ),
+            ),
+          ),
+
+          // 3. HOMEWORK HISTORY SECTION
+          if (state.homeworkList.isNotEmpty) ...[
+            const SizedBox(height: 36),
+            Row(
+              children: [
+                const Icon(Icons.history, color: Colors.grey, size: 20),
+                const SizedBox(width: 8),
+                Text(
+                  "Recent Homework History",
+                  style: TextStyle(
+                    fontSize: 16,
+                    fontWeight: FontWeight.bold,
+                    color: isDark ? Colors.white70 : Colors.grey[800],
+                  ),
+                ),
+              ],
+            ),
+            const SizedBox(height: 12),
+            ListView.builder(
+              shrinkWrap: true,
+              physics: const NeverScrollableScrollPhysics(),
+              itemCount: state.homeworkList.length,
+              itemBuilder: (context, index) {
+                final hw = state.homeworkList[index];
+                return Container(
+                  margin: const EdgeInsets.only(bottom: 12),
+                  padding: const EdgeInsets.all(16),
+                  decoration: BoxDecoration(
+                    color: isDark ? Colors.white.withOpacity(0.04) : Colors.white,
+                    borderRadius: BorderRadius.circular(16),
+                    border: Border.all(
+                      color: isDark ? Colors.white.withOpacity(0.08) : Colors.grey[200]!,
+                    ),
+                    boxShadow: isDark ? [] : [
+                      BoxShadow(
+                        color: Colors.black.withOpacity(0.03),
+                        blurRadius: 6,
+                        offset: const Offset(0, 2),
+                      ),
+                    ],
+                  ),
+                  child: Row(
+                    children: [
+                      Container(
+                        padding: const EdgeInsets.all(10),
+                        decoration: BoxDecoration(
+                          color: const Color(0xFFF59E0B).withOpacity(0.1),
+                          shape: BoxShape.circle,
+                        ),
+                        child: const Icon(Icons.assignment, color: Color(0xFFF59E0B), size: 18),
+                      ),
+                      const SizedBox(width: 14),
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(
+                              hw['topic'] ?? 'Homework',
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 15,
+                                color: isDark ? Colors.white : Colors.black87,
+                              ),
+                            ),
+                            if ((hw['chapter'] ?? '').isNotEmpty)
+                              Padding(
+                                padding: const EdgeInsets.only(top: 2),
+                                child: Text(
+                                  hw['chapter'] ?? '',
+                                  style: TextStyle(color: Colors.grey[500], fontSize: 12),
+                                ),
+                              ),
+                            const SizedBox(height: 4),
+                            Text(
+                              "Assigned: ${hw['assignedDate'] ?? '-'}  •  Due: ${hw['dueDate'] ?? '-'}",
+                              style: TextStyle(
+                                color: const Color(0xFF10b981),
+                                fontSize: 12,
+                                fontWeight: FontWeight.w500,
+                              ),
+                            ),
+                          ],
+                        ),
+                      ),
+                      IconButton(
+                        icon: const Icon(Icons.delete_outline, color: Colors.grey, size: 20),
+                        onPressed: () => _showDeleteHomeworkDialog(context, notifier, hw['id']),
+                      ),
+                    ],
+                  ),
+                );
+              },
+            ),
+          ],
+
+          const SizedBox(height: 100),
+        ],
+      ),
+    );
+  }
+
+  void _showDeleteHomeworkDialog(BuildContext context, NextClassNotifier notifier, String homeworkId) {
+    showDialog(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        backgroundColor: Theme.of(context).brightness == Brightness.dark ? AppTheme.surfaceDark : Colors.white,
+        title: Text(
+          "Delete Homework?",
+          style: TextStyle(color: Theme.of(context).brightness == Brightness.dark ? Colors.white : Colors.indigo[900]),
+        ),
+        content: Text(
+          "Are you sure you want to delete this homework record?",
+          style: TextStyle(color: Theme.of(context).brightness == Brightness.dark ? Colors.grey : Colors.grey[600]),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx),
+            child: const Text("Cancel", style: TextStyle(color: Colors.grey)),
+          ),
+          TextButton(
+            onPressed: () {
+              Navigator.pop(ctx);
+              notifier.deleteHomework(homeworkId);
+              ScaffoldMessenger.of(context).showSnackBar(
+                const SnackBar(content: Text("Homework deleted.")),
+              );
+            },
+            child: const Text("Delete", style: TextStyle(color: Colors.red, fontWeight: FontWeight.bold)),
+          ),
         ],
       ),
     );
