@@ -4,6 +4,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:teacher_mobile_app/features/auth/auth_provider.dart';
 import 'package:flutter/foundation.dart';
 
+import 'package:teacher_mobile_app/core/services/local_db_service.dart';
+
 // Provides the current teacher's document data by merging global_users + schools/{id}/teachers/{uid} in real-time
 final teacherDataProvider = StreamProvider<Map<String, dynamic>?>((ref) async* {
   final user = ref.watch(currentUserProvider);
@@ -12,11 +14,34 @@ final teacherDataProvider = StreamProvider<Map<String, dynamic>?>((ref) async* {
       return;
   }
 
+  final cacheKey = 'teacher_profile_${user.uid}';
+
+  // 1. Immediately yield cached profile if offline or opening cold
+  final cachedProfile = LocalDbService.getCache(cacheKey);
+  if (cachedProfile != null && cachedProfile is Map) {
+    debugPrint('📦 [Hive] Loaded teacher profile for ${user.uid} from local cache.');
+    yield Map<String, dynamic>.from(cachedProfile);
+  }
+
   try {
-      // Fetch global data once
-      final globalDoc = await FirebaseFirestore.instance.collection('global_users').doc(user.uid).get();
-      if (!globalDoc.exists) {
-          yield null;
+      // Fetch global data (from cache if offline)
+      DocumentSnapshot<Map<String, dynamic>> globalDoc;
+      try {
+        globalDoc = await FirebaseFirestore.instance.collection('global_users').doc(user.uid).get(
+          const GetOptions(source: Source.serverAndCache),
+        );
+      } catch (_) {
+        globalDoc = await FirebaseFirestore.instance.collection('global_users').doc(user.uid).get(
+          const GetOptions(source: Source.cache),
+        );
+      }
+
+      if (!globalDoc.exists || globalDoc.data() == null) {
+          if (cachedProfile != null && cachedProfile is Map) {
+            yield Map<String, dynamic>.from(cachedProfile);
+          } else {
+            yield null;
+          }
           return;
       }
 
@@ -32,33 +57,38 @@ final teacherDataProvider = StreamProvider<Map<String, dynamic>?>((ref) async* {
       debugPrint('teacherDataProvider: Fetching local profile from schools/$schoolId/teachers/${user.uid}');
 
       // Stream the local school teacher profile
-      yield* FirebaseFirestore.instance
+      final stream = FirebaseFirestore.instance
           .collection('schools')
           .doc(schoolId)
           .collection('teachers')
           .doc(user.uid)
-          .snapshots()
-          .map((teacherSnapshot) {
+          .snapshots();
+
+      await for (final teacherSnapshot in stream) {
+        Map<String, dynamic> combined;
         if (teacherSnapshot.exists && teacherSnapshot.data() != null) {
-          return {
+          combined = {
             ...globalData,
             ...teacherSnapshot.data()!,
             'schoolId': schoolId,
           };
         } else {
-          debugPrint('teacherDataProvider: No local document found at schools/$schoolId/teachers/${user.uid}');
-          return {
+          combined = {
             ...globalData,
             'schoolId': schoolId,
-            'error': 'Local profile not found'
           };
         }
-      }).handleError((e) {
-          debugPrint('teacherDataProvider stream error: $e');
-      });
+
+        // Save fresh combined profile to local Hive cache
+        await LocalDbService.saveCache(cacheKey, combined);
+        yield combined;
+      }
   } catch (e, st) {
       debugPrint('Error in teacherDataProvider stream setup: $e');
       debugPrint(st.toString());
+      if (cachedProfile != null && cachedProfile is Map) {
+        yield Map<String, dynamic>.from(cachedProfile);
+      }
   }
 });
 

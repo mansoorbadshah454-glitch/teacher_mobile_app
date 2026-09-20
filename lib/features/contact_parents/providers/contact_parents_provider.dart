@@ -2,8 +2,11 @@ import 'dart:io';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
+import 'package:path_provider/path_provider.dart';
 import 'package:teacher_mobile_app/core/providers/user_data_provider.dart';
 import 'package:teacher_mobile_app/features/attendance/providers/attendance_provider.dart';
+import 'package:teacher_mobile_app/core/services/local_db_service.dart';
+import 'package:teacher_mobile_app/core/services/sync_queue_service.dart';
 
 class ContactParentsState {
   final Map<String, dynamic>? assignedClass;
@@ -101,12 +104,23 @@ class ContactParentsNotifier extends StateNotifier<ContactParentsState> {
   }
 
   Future<void> _fetchParentsMap(String schoolId) async {
+    final cacheKey = 'parents_map_$schoolId';
+    final cachedMap = LocalDbService.getCache(cacheKey);
+    if (cachedMap != null && cachedMap is Map) {
+      if (mounted) {
+        state = state.copyWith(
+          parentMap: Map<String, dynamic>.from(cachedMap),
+          isLoading: false,
+        );
+      }
+    }
+
     try {
       final parentsSnapshot = await FirebaseFirestore.instance
           .collection('schools')
           .doc(schoolId)
           .collection('parents')
-          .get();
+          .get(const GetOptions(source: Source.serverAndCache));
 
       final mapping = <String, dynamic>{};
       
@@ -124,11 +138,16 @@ class ContactParentsNotifier extends StateNotifier<ContactParentsState> {
         }
       }
 
+      await LocalDbService.saveCache(cacheKey, mapping);
+
       if (mounted) {
-        state = state.copyWith(parentMap: mapping);
+        state = state.copyWith(parentMap: mapping, isLoading: false);
       }
     } catch (e) {
       print("ContactParents: Error fetching parents map $e");
+      if (mounted) {
+        state = state.copyWith(isLoading: false);
+      }
     }
   }
 
@@ -151,6 +170,7 @@ class ContactParentsNotifier extends StateNotifier<ContactParentsState> {
   void toggleGroupMode(bool isGroup) {
      state = state.copyWith(isGroupMode: isGroup);
   }
+
   Future<void> sendMessage({
     required Map<String, dynamic> student,
     required Map<String, dynamic> parent,
@@ -163,12 +183,53 @@ class ContactParentsNotifier extends StateNotifier<ContactParentsState> {
     if (teacherData == null) return;
 
     final schoolId = teacherData['schoolId'] as String?;
-    final teacherId = teacherData['uid'] as String? ?? teacherData['id'] as String?; // Handle different auth models
+    final teacherId = teacherData['uid'] as String? ?? teacherData['id'] as String?;
     final teacherName = teacherData['name'] as String? ?? 'Teacher';
 
     if (schoolId == null || teacherId == null) return;
 
     state = state.copyWith(isSending: true);
+
+    final textToSave = (messageText != null && messageText.isNotEmpty)
+        ? messageText.trim()
+        : 'Sent an attachment';
+
+    final payload = {
+      'schoolId': schoolId,
+      'teacherId': teacherId,
+      'teacherName': teacherName,
+      'parentId': parent['id'],
+      'parentName': parent['name'] ?? 'Parent',
+      'studentId': student['id'],
+      'studentName': student['name'] ?? 'Student',
+      'messageText': textToSave,
+    };
+
+    final bool online = await SyncQueueService.isOnline();
+
+    if (!online) {
+      // Offline Outbox
+      String? persistentPath;
+      if (attachedFile != null) {
+        final appDir = await getApplicationDocumentsDirectory();
+        final outboxDir = Directory('${appDir.path}/outbox_media');
+        await outboxDir.create(recursive: true);
+        final fileName = '${DateTime.now().millisecondsSinceEpoch}_${attachedFile.path.split(Platform.pathSeparator).last}';
+        final savedFile = await attachedFile.copy('${outboxDir.path}/$fileName');
+        persistentPath = savedFile.path;
+      }
+
+      await SyncQueueService.enqueue(
+        type: attachedFile != null ? 'parent_media_message' : 'parent_text_message',
+        payload: payload,
+        filePath: persistentPath,
+      );
+
+      if (mounted) {
+        state = state.copyWith(isSending: false, clearExpanded: true);
+      }
+      return;
+    }
 
     try {
       String? attachmentUrl;
@@ -177,7 +238,7 @@ class ContactParentsNotifier extends StateNotifier<ContactParentsState> {
 
       if (attachedFile != null) {
         final pathStr = attachedFile.path;
-        attachmentName = pathStr.split('/').last;
+        attachmentName = pathStr.split(Platform.pathSeparator).last;
         attachmentType = pathStr.split('.').last.toLowerCase();
         
         final destination = 'schools/$schoolId/messages/attachments/${DateTime.now().millisecondsSinceEpoch}_$attachmentName';
@@ -185,10 +246,6 @@ class ContactParentsNotifier extends StateNotifier<ContactParentsState> {
         await refStorage.putFile(attachedFile);
         attachmentUrl = await refStorage.getDownloadURL();
       }
-
-      final textToSave = (messageText != null && messageText.isNotEmpty)
-          ? messageText.trim()
-          : 'Sent an attachment';
 
       final batch = FirebaseFirestore.instance.batch();
 
@@ -211,6 +268,7 @@ class ContactParentsNotifier extends StateNotifier<ContactParentsState> {
         if (attachmentType != null) 'attachmentType': attachmentType,
         if (attachmentName != null) 'attachmentName': attachmentName,
         'timestamp': FieldValue.serverTimestamp(),
+        'expiresAt': Timestamp.fromDate(DateTime.now().add(const Duration(days: 14))),
         'read': false,
         'schoolId': schoolId,
         'type': 'direct'
@@ -240,11 +298,26 @@ class ContactParentsNotifier extends StateNotifier<ContactParentsState> {
         state = state.copyWith(isSending: false, clearExpanded: true);
       }
     } catch (e) {
-      print("ContactParents: Error sending message $e");
-      if (mounted) {
-        state = state.copyWith(isSending: false);
+      print("ContactParents: Online send failed, falling back to offline queue: $e");
+      String? persistentPath;
+      if (attachedFile != null) {
+        final appDir = await getApplicationDocumentsDirectory();
+        final outboxDir = Directory('${appDir.path}/outbox_media');
+        await outboxDir.create(recursive: true);
+        final fileName = '${DateTime.now().millisecondsSinceEpoch}_${attachedFile.path.split(Platform.pathSeparator).last}';
+        final savedFile = await attachedFile.copy('${outboxDir.path}/$fileName');
+        persistentPath = savedFile.path;
       }
-      rethrow;
+
+      await SyncQueueService.enqueue(
+        type: attachedFile != null ? 'parent_media_message' : 'parent_text_message',
+        payload: payload,
+        filePath: persistentPath,
+      );
+
+      if (mounted) {
+        state = state.copyWith(isSending: false, clearExpanded: true);
+      }
     }
   }
 
@@ -257,12 +330,43 @@ class ContactParentsNotifier extends StateNotifier<ContactParentsState> {
     if (teacherData == null) return;
 
     final schoolId = teacherData['schoolId'] as String?;
-    final teacherId = teacherData['uid'] as String? ?? teacherData['id'] as String?; // Handle different auth models
+    final teacherId = teacherData['uid'] as String? ?? teacherData['id'] as String?;
     final teacherName = teacherData['name'] as String? ?? 'Teacher';
 
     if (schoolId == null || teacherId == null) return;
 
     state = state.copyWith(isSending: true);
+
+    final payload = {
+      'schoolId': schoolId,
+      'teacherId': teacherId,
+      'teacherName': teacherName,
+      'parentId': parent['id'],
+      'parentName': parent['name'] ?? 'Parent',
+      'studentId': student['id'],
+      'studentName': student['name'] ?? 'Student',
+    };
+
+    final bool online = await SyncQueueService.isOnline();
+
+    if (!online) {
+      // Offline voice note outbox
+      final appDir = await getApplicationDocumentsDirectory();
+      final outboxDir = Directory('${appDir.path}/outbox_voice');
+      await outboxDir.create(recursive: true);
+      final persistentFile = await audioFile.copy('${outboxDir.path}/${DateTime.now().millisecondsSinceEpoch}_voice.m4a');
+
+      await SyncQueueService.enqueue(
+        type: 'parent_voice_message',
+        payload: payload,
+        filePath: persistentFile.path,
+      );
+
+      if (mounted) {
+        state = state.copyWith(isSending: false, clearExpanded: true);
+      }
+      return;
+    }
 
     try {
       final destination = 'schools/$schoolId/messages/attachments/${DateTime.now().millisecondsSinceEpoch}_voice.m4a';
@@ -272,7 +376,6 @@ class ContactParentsNotifier extends StateNotifier<ContactParentsState> {
 
       final batch = FirebaseFirestore.instance.batch();
 
-      // 1. Create Message Record
       final messageRef = FirebaseFirestore.instance
           .collection('schools')
           .doc(schoolId)
@@ -290,12 +393,12 @@ class ContactParentsNotifier extends StateNotifier<ContactParentsState> {
         'attachmentUrl': audioUrl,
         'attachmentType': 'audio',
         'timestamp': FieldValue.serverTimestamp(),
+        'expiresAt': Timestamp.fromDate(DateTime.now().add(const Duration(days: 14))),
         'read': false,
         'schoolId': schoolId,
         'type': 'direct'
       });
 
-      // 2. Send Notification to Parent
       final notificationRef = FirebaseFirestore.instance
           .collection('schools')
           .doc(schoolId)
@@ -319,11 +422,21 @@ class ContactParentsNotifier extends StateNotifier<ContactParentsState> {
         state = state.copyWith(isSending: false, clearExpanded: true);
       }
     } catch (e) {
-      print("ContactParents: Error sending voice message $e");
+      print("ContactParents: Online voice send failed, queuing offline: $e");
+      final appDir = await getApplicationDocumentsDirectory();
+      final outboxDir = Directory('${appDir.path}/outbox_voice');
+      await outboxDir.create(recursive: true);
+      final persistentFile = await audioFile.copy('${outboxDir.path}/${DateTime.now().millisecondsSinceEpoch}_voice.m4a');
+
+      await SyncQueueService.enqueue(
+        type: 'parent_voice_message',
+        payload: payload,
+        filePath: persistentFile.path,
+      );
+
       if (mounted) {
-        state = state.copyWith(isSending: false);
+        state = state.copyWith(isSending: false, clearExpanded: true);
       }
-      rethrow;
     }
   }
 
@@ -344,6 +457,43 @@ class ContactParentsNotifier extends StateNotifier<ContactParentsState> {
     if (schoolId == null || classId == null || teacherId == null) return;
     if (state.parentMap.isEmpty) return; // No parents to email
 
+    final textToSave = (messageText != null && messageText.isNotEmpty)
+        ? messageText.trim()
+        : (isVoice ? 'Sent a voice message' : 'Sent an attachment');
+
+    final bool online = await SyncQueueService.isOnline();
+
+    if (!online) {
+      // OFFLINE: Enqueue broadcast immediately without blocking UI
+      String? localFilePath;
+      String? attachmentName;
+      String? attachmentType;
+
+      if (attachedFile != null) {
+        localFilePath = attachedFile.path;
+        attachmentName = attachedFile.path.split('/').last.split('\\').last;
+        attachmentType = isVoice ? 'audio' : attachedFile.path.split('.').last.toLowerCase();
+      }
+
+      await SyncQueueService.enqueue(
+        type: 'class_broadcast',
+        payload: {
+          'schoolId': schoolId,
+          'classId': classId,
+          'teacherId': teacherId,
+          'teacherName': teacherName,
+          'messageText': textToSave,
+          'isVoice': isVoice,
+          'attachmentName': attachmentName,
+          'attachmentType': attachmentType,
+          'parentMap': state.parentMap,
+          'students': state.students,
+        },
+        filePath: localFilePath,
+      );
+      return;
+    }
+
     state = state.copyWith(isSending: true);
 
     try {
@@ -361,10 +511,6 @@ class ContactParentsNotifier extends StateNotifier<ContactParentsState> {
         await refStorage.putFile(attachedFile);
         attachmentUrl = await refStorage.getDownloadURL();
       }
-
-      final textToSave = (messageText != null && messageText.isNotEmpty)
-          ? messageText.trim()
-          : (isVoice ? 'Sent a voice message' : 'Sent an attachment');
 
       // 1. Create Master Broadcast Document
       final broadcastRef = FirebaseFirestore.instance
@@ -460,7 +606,36 @@ class ContactParentsNotifier extends StateNotifier<ContactParentsState> {
     } catch (e) {
       print("ContactParents: Error broadcasting $e");
       if (mounted) state = state.copyWith(isSending: false);
-      rethrow;
+
+      // Fallback: enqueue offline task if network write threw an error
+      try {
+        String? localFilePath;
+        String? attachmentName;
+        String? attachmentType;
+
+        if (attachedFile != null) {
+          localFilePath = attachedFile.path;
+          attachmentName = attachedFile.path.split('/').last.split('\\').last;
+          attachmentType = isVoice ? 'audio' : attachedFile.path.split('.').last.toLowerCase();
+        }
+
+        await SyncQueueService.enqueue(
+          type: 'class_broadcast',
+          payload: {
+            'schoolId': schoolId,
+            'classId': classId,
+            'teacherId': teacherId,
+            'teacherName': teacherName,
+            'messageText': textToSave,
+            'isVoice': isVoice,
+            'attachmentName': attachmentName,
+            'attachmentType': attachmentType,
+            'parentMap': state.parentMap,
+            'students': state.students,
+          },
+          filePath: localFilePath,
+        );
+      } catch (_) {}
     }
   }
 
@@ -502,28 +677,42 @@ final contactParentsProvider = StateNotifierProvider.autoDispose<ContactParentsN
   return ContactParentsNotifier(ref, teacherDataAsync);
 });
 
-final classBroadcastsProvider = StreamProvider.autoDispose<List<Map<String, dynamic>>>((ref) {
+final classBroadcastsProvider = StreamProvider.autoDispose<List<Map<String, dynamic>>>((ref) async* {
   final teacherDataAsync = ref.watch(teacherDataProvider);
   final assignedClassAsync = ref.watch(assignedClassProvider);
 
   if (teacherDataAsync.value == null || assignedClassAsync.value == null) {
-     return Stream.value([]);
+     yield [];
+     return;
   }
 
   final schoolId = teacherDataAsync.value!['schoolId'];
   final classId = assignedClassAsync.value!['id'];
+  final cacheKey = 'class_broadcasts_${schoolId}_$classId';
 
-  return FirebaseFirestore.instance
+  // 1. Immediately yield cached broadcasts offline
+  final cached = LocalDbService.getCache(cacheKey);
+  if (cached is List) {
+    yield cached.map((e) => Map<String, dynamic>.from(e as Map)).toList();
+  }
+
+  // 2. Stream from Firestore
+  final stream = FirebaseFirestore.instance
       .collection('schools')
       .doc(schoolId)
       .collection('classes')
       .doc(classId)
       .collection('broadcasts')
       .orderBy('timestamp', descending: true)
-      .snapshots()
-      .map((snapshot) => snapshot.docs.map((doc) {
-        final data = doc.data();
-        data['id'] = doc.id;
-        return data;
-      }).toList());
+      .snapshots();
+
+  await for (final snapshot in stream) {
+    final list = snapshot.docs.map((doc) {
+      final data = doc.data();
+      data['id'] = doc.id;
+      return data;
+    }).toList();
+    await LocalDbService.saveCache(cacheKey, list);
+    yield list;
+  }
 });

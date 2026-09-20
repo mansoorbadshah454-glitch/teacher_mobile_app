@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:teacher_mobile_app/core/providers/user_data_provider.dart';
 import 'package:teacher_mobile_app/features/auth/auth_provider.dart';
+import 'package:teacher_mobile_app/core/services/local_db_service.dart';
 
 class TimetableSlot {
   final String time;
@@ -20,6 +21,28 @@ class TimetableSlot {
     this.isFree = false,
     this.isBreak = false,
   });
+
+  Map<String, dynamic> toMap() {
+    return {
+      'time': time,
+      'period': period,
+      'className': className,
+      'subject': subject,
+      'isFree': isFree,
+      'isBreak': isBreak,
+    };
+  }
+
+  factory TimetableSlot.fromMap(Map<String, dynamic> map) {
+    return TimetableSlot(
+      time: map['time'] as String? ?? '',
+      period: map['period'] as String? ?? '',
+      className: map['className'] as String? ?? '',
+      subject: map['subject'] as String? ?? '',
+      isFree: map['isFree'] as bool? ?? false,
+      isBreak: map['isBreak'] as bool? ?? false,
+    );
+  }
 }
 
 // 1. Live Firestore Timetable Stream
@@ -34,29 +57,53 @@ final schoolSettingsProvider = StreamProvider<Map<String, dynamic>>((ref) async*
   }
 
   final String schoolId = teacherData['schoolId'];
+  final cacheKey = 'school_settings_$schoolId';
+
+  final cached = LocalDbService.getCache(cacheKey);
+  if (cached != null && cached is Map) {
+    yield Map<String, dynamic>.from(cached);
+  }
 
   final stream = FirebaseFirestore.instance
       .collection('schools')
       .doc(schoolId)
       .collection('settings')
       .doc('profile')
-      .snapshots()
-      .map((snapshot) {
-    if (!snapshot.exists || snapshot.data() == null) return <String, dynamic>{};
-    return snapshot.data()!;
-  });
+      .snapshots();
 
-  yield* stream;
+  await for (final snapshot in stream) {
+    if (snapshot.exists && snapshot.data() != null) {
+      final data = snapshot.data() as Map<String, dynamic>;
+      await LocalDbService.saveCache(cacheKey, data);
+      yield data;
+    }
+  }
 });
 
-// 2. Live Firestore Timetable Stream
+// 2. Live Firestore Timetable Stream with Hive Offline Persistence
 final timetableProvider = StreamProvider<List<TimetableSlot>>((ref) async* {
   final user = ref.watch(currentUserProvider);
   final teacherDataAsync = ref.watch(teacherDataProvider);
   final teacherData = teacherDataAsync.value;
 
-  if (user == null || teacherData == null || !teacherData.containsKey('schoolId')) {
+  if (user == null) {
     yield [];
+    return;
+  }
+
+  final cacheKey = 'timetable_${user.uid}';
+
+  // 1. Immediately yield cached timetable so teacher sees today's periods offline instantly
+  final cachedRaw = LocalDbService.getCache(cacheKey);
+  if (cachedRaw != null && cachedRaw is List && cachedRaw.isNotEmpty) {
+    final cachedSlots = cachedRaw
+        .map((e) => TimetableSlot.fromMap(Map<String, dynamic>.from(e)))
+        .toList();
+    yield cachedSlots;
+  }
+
+  if (teacherData == null || !teacherData.containsKey('schoolId')) {
+    if (cachedRaw == null) yield [];
     return;
   }
 
@@ -67,38 +114,43 @@ final timetableProvider = StreamProvider<List<TimetableSlot>>((ref) async* {
       .doc(schoolId)
       .collection('timetables')
       .doc('weeklyMaster')
-      .snapshots()
-      .map((snapshot) {
-    if (!snapshot.exists || snapshot.data() == null) return <TimetableSlot>[];
-    
+      .snapshots();
+
+  await for (final snapshot in stream) {
+    if (!snapshot.exists || snapshot.data() == null) {
+      if (cachedRaw == null) yield <TimetableSlot>[];
+      continue;
+    }
+
     final data = snapshot.data()!;
     final List<dynamic> cols = data['cols'] ?? [];
     final List<dynamic> rows = data['rows'] ?? [];
 
-    // Find row belonging to current teacher securely
     final myRow = rows.firstWhere(
       (r) => r != null && (r as Map)['teacherId'] == user.uid,
-      orElse: () { return <String, dynamic>{}; },
+      orElse: () => <String, dynamic>{},
     );
 
-    if (myRow == null || (myRow as Map).isEmpty) return <TimetableSlot>[];
+    if (myRow == null || (myRow as Map).isEmpty) {
+      if (cachedRaw == null) yield <TimetableSlot>[];
+      continue;
+    }
 
     final List<dynamic> cells = myRow['cells'] ?? [];
     final List<TimetableSlot> slots = [];
 
     for (var i = 0; i < cells.length; i++) {
-      if (i >= cols.length) break; // safeguard against mismatched lengths
+      if (i >= cols.length) break;
       final cell = cells[i];
       final className = cell['class'] as String? ?? '';
       final subject = cell['subject'] as String? ?? '';
       final timeStr = cols[i] as String;
-      
+
       final isFree = className.isEmpty || className == 'FREE';
       final isBreak = className == 'BREAK';
 
       slots.add(TimetableSlot(
         time: timeStr,
-        // Calculate period mapping correctly (1-based index)
         period: 'P${i + 1}',
         className: className,
         subject: subject,
@@ -106,10 +158,11 @@ final timetableProvider = StreamProvider<List<TimetableSlot>>((ref) async* {
         isBreak: isBreak,
       ));
     }
-    return slots;
-  });
 
-  yield* stream;
+    // Save to Hive cache
+    await LocalDbService.saveCache(cacheKey, slots.map((s) => s.toMap()).toList());
+    yield slots;
+  }
 });
 
 // 3. Emergency Notification Badge Logic

@@ -136,7 +136,11 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
           });
         }
       } else if (isMultiple) {
-        final List<XFile> files = await picker.pickMultiImage();
+        final List<XFile> files = await picker.pickMultiImage(
+          imageQuality: 75,
+          maxWidth: 1280,
+          maxHeight: 1280,
+        );
         if (files.isNotEmpty) {
           setState(() {
             _selectedBackgroundIndex = 0;
@@ -144,7 +148,12 @@ class _CreatePostScreenState extends ConsumerState<CreatePostScreen> {
           });
         }
       } else {
-        final XFile? file = await picker.pickImage(source: source);
+        final XFile? file = await picker.pickImage(
+          source: source,
+          imageQuality: 75,
+          maxWidth: 1280,
+          maxHeight: 1280,
+        );
         if (file != null) {
           setState(() {
             _selectedBackgroundIndex = 0;

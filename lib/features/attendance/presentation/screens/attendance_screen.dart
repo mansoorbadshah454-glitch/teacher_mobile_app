@@ -10,6 +10,7 @@ import 'package:teacher_mobile_app/core/providers/user_data_provider.dart';
 import 'package:intl/intl.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:teacher_mobile_app/features/attendance/screens/leave_letter_screen.dart';
+import 'package:teacher_mobile_app/core/services/sync_queue_service.dart';
 
 class StudentAvatar extends StatefulWidget {
   final String studentId;
@@ -31,64 +32,57 @@ class StudentAvatar extends StatefulWidget {
 
 class _StudentAvatarState extends State<StudentAvatar> {
   String? _imageUrl;
-  bool _loading = true;
 
   @override
   void initState() {
     super.initState();
-    _fetchImage();
+    _resolveImage();
   }
 
   @override
   void didUpdateWidget(covariant StudentAvatar oldWidget) {
     super.didUpdateWidget(oldWidget);
     if (oldWidget.studentId != widget.studentId || oldWidget.profilePic != widget.profilePic) {
-      setState(() {
-        _loading = true;
-        _imageUrl = null;
-      });
-      _fetchImage();
+      _resolveImage();
     }
   }
 
-  Future<void> _fetchImage() async {
-    // Phase 1: Try reading directly from the pre-supplied Document profilePic mapping!
+  void _resolveImage() {
+    // Phase 1: Immediate synchronous resolution from document data
     if (widget.profilePic != null && widget.profilePic!.isNotEmpty) {
       String resolvedPic = widget.profilePic!;
 
-      // Convert expensive mathematical SVGs to pure light PNGs before handing off to the memory cache.
       if (resolvedPic.contains('api.dicebear.com') && resolvedPic.contains('/svg')) {
-          resolvedPic = resolvedPic.replaceAll('/svg', '/png');
+        resolvedPic = resolvedPic.replaceAll('/svg', '/png');
       }
 
       if (resolvedPic.startsWith('http') || resolvedPic.startsWith('data:image')) {
-          if (mounted) {
-              setState(() {
-                  _imageUrl = resolvedPic;
-                  _loading = false;
-              });
-          }
-          return; // BREAK execution! Absolutely no need to ping Firebase Storage server.
+        _imageUrl = resolvedPic;
+        return;
       }
     }
 
-    // Phase 2: Firebase Storage physical query (slow, heavy operations fallback)
+    _imageUrl = null;
+
+    // Phase 2: Background Storage fetch ONLY if online (never block UI or hang offline)
+    _fetchStorageImageInBackground();
+  }
+
+  Future<void> _fetchStorageImageInBackground() async {
     try {
+      final bool online = await SyncQueueService.isOnline();
+      if (!online) return; // Zero network hang if offline
+
       final storagePath = 'schools/${widget.schoolId}/students/${widget.studentId}/profile.jpg';
       final ref = FirebaseStorage.instance.ref(storagePath);
       final url = await ref.getDownloadURL();
       if (mounted) {
-         setState(() {
-            _imageUrl = url;
-            _loading = false;
-         });
-      }
-    } catch (e) {
-      if (mounted) {
         setState(() {
-          _loading = false;
+          _imageUrl = url;
         });
       }
+    } catch (_) {
+      // Graceful fallback - no UI bricking or infinite spinning
     }
   }
 
@@ -110,21 +104,6 @@ class _StudentAvatarState extends State<StudentAvatar> {
   @override
   Widget build(BuildContext context) {
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    if (_loading) {
-      return Container(
-        width: widget.size,
-        height: widget.size,
-        decoration: BoxDecoration(
-          color: isDark ? Colors.white.withOpacity(0.05) : Colors.black.withOpacity(0.03),
-          borderRadius: BorderRadius.circular(14),
-        ),
-        alignment: Alignment.center,
-        child: SizedBox(
-          width: 20, height: 20,
-          child: CircularProgressIndicator(strokeWidth: 2, color: isDark ? Colors.grey : Colors.indigoAccent),
-        ),
-      );
-    }
 
     if (_imageUrl != null && _imageUrl!.startsWith('http')) {
       return Container(
@@ -133,9 +112,17 @@ class _StudentAvatarState extends State<StudentAvatar> {
         decoration: BoxDecoration(
           borderRadius: BorderRadius.circular(14),
           border: Border.all(color: isDark ? Colors.white.withOpacity(0.1) : Colors.black.withOpacity(0.05), width: 2),
-          image: DecorationImage(
-            image: CachedNetworkImageProvider(_imageUrl!),
+        ),
+        child: ClipRRect(
+          borderRadius: BorderRadius.circular(12),
+          child: CachedNetworkImage(
+            imageUrl: _imageUrl!,
+            width: widget.size,
+            height: widget.size,
             fit: BoxFit.cover,
+            fadeInDuration: const Duration(milliseconds: 100),
+            placeholder: (context, url) => _buildFallback(context),
+            errorWidget: (context, url, error) => _buildFallback(context),
           ),
         ),
       );
@@ -190,6 +177,7 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
     final attendanceState = ref.watch(attendanceProvider);
     final searchFilter = ref.watch(classSearchQueryProvider);
     final statsFilter = ref.watch(statsFilterProvider);
+    final isMarkedToday = ref.watch(isAttendanceMarkedTodayProvider);
 
     final isDark = Theme.of(context).brightness == Brightness.dark;
     final theme = Theme.of(context);
@@ -277,33 +265,75 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
                           child: Row(
                             mainAxisAlignment: MainAxisAlignment.spaceBetween,
                             children: [
-                              Row(
-                                children: [
-                                  GestureDetector(
-                                    onTap: () => context.pop(),
-                                    child: Container(
-                                      width: 44,
-                                      height: 44,
-                                      decoration: BoxDecoration(
-                                        color: Colors.white.withOpacity(0.2), // Transparent white
-                                        borderRadius: BorderRadius.circular(14),
-                                        border: Border.all(color: Colors.white.withOpacity(0.3)),
+                              Expanded(
+                                child: Row(
+                                  children: [
+                                    GestureDetector(
+                                      onTap: () => context.pop(),
+                                      child: Container(
+                                        width: 44,
+                                        height: 44,
+                                        decoration: BoxDecoration(
+                                          color: Colors.white.withOpacity(0.2), // Transparent white
+                                          borderRadius: BorderRadius.circular(14),
+                                          border: Border.all(color: Colors.white.withOpacity(0.3)),
+                                        ),
+                                        child: const Icon(Icons.chevron_left, color: Colors.white),
                                       ),
-                                      child: const Icon(Icons.chevron_left, color: Colors.white),
                                     ),
-                                  ),
-                                  const SizedBox(width: 12),
-                                  Column(
-                                    crossAxisAlignment: CrossAxisAlignment.start,
-                                    children: [
-                                      const Text("Mark Attendance", style: TextStyle(fontSize: 20, fontWeight: FontWeight.w800, color: Colors.white)),
-                                      Text("${assignedClass['name']} • ${DateFormat('EEEE, MMMM d').format(DateTime.now())}", style: TextStyle(fontSize: 12, color: Colors.white.withOpacity(0.8))),
-                                    ],
-                                  ),
-                                ],
+                                    const SizedBox(width: 12),
+                                    Expanded(
+                                      child: Column(
+                                        crossAxisAlignment: CrossAxisAlignment.start,
+                                        mainAxisSize: MainAxisSize.min,
+                                        children: [
+                                          const Text(
+                                            "Mark Attendance",
+                                            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: Colors.white),
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                          Text(
+                                            "${assignedClass['name']} • ${DateFormat('EEEE, MMMM d').format(DateTime.now())}",
+                                            style: TextStyle(fontSize: 11, color: Colors.white.withOpacity(0.8)),
+                                            maxLines: 1,
+                                            overflow: TextOverflow.ellipsis,
+                                          ),
+                                        ],
+                                      ),
+                                    ),
+                                  ],
+                                ),
                               ),
+                              const SizedBox(width: 8),
                               Row(
                                 children: [
+                                  ValueListenableBuilder<int>(
+                                    valueListenable: SyncQueueService.pendingCountNotifier,
+                                    builder: (context, pendingCount, _) {
+                                      if (pendingCount == 0) return const SizedBox.shrink();
+                                      return Container(
+                                        margin: const EdgeInsets.only(right: 8),
+                                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                                        decoration: BoxDecoration(
+                                          color: Colors.white.withOpacity(0.25),
+                                          borderRadius: BorderRadius.circular(12),
+                                          border: Border.all(color: Colors.white.withOpacity(0.4)),
+                                        ),
+                                        child: Row(
+                                          mainAxisSize: MainAxisSize.min,
+                                          children: [
+                                            const Icon(Icons.cloud_queue, size: 14, color: Colors.white),
+                                            const SizedBox(width: 4),
+                                            Text(
+                                              '$pendingCount Queued',
+                                              style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                                            ),
+                                          ],
+                                        ),
+                                      );
+                                    },
+                                  ),
                                   GestureDetector(
                                     onTap: () => context.push('/attendance-report'),
                                     child: Container(
@@ -538,8 +568,73 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
                                             }
 
                                             return GestureDetector(
-                                              onTap: () {
-                                                ref.read(attendanceProvider.notifier).toggleStatus(sId);
+                                              onTap: () async {
+                                                if (isMarkedToday && !isPresent) {
+                                                  final studentName = student['name'] ?? 'Student';
+                                                  final confirm = await showDialog<bool>(
+                                                    context: context,
+                                                    builder: (ctx) => AlertDialog(
+                                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+                                                      backgroundColor: isDark ? const Color(0xFF1E1E2E) : Colors.white,
+                                                      title: Row(
+                                                        children: const [
+                                                          Icon(Icons.access_time_filled, color: Color(0xFF6366f1)),
+                                                          SizedBox(width: 8),
+                                                          Text("Late Arrival", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
+                                                        ],
+                                                      ),
+                                                      content: Text(
+                                                        "Mark $studentName as Present (Late Entry)? This will update today's record and notify the parent.",
+                                                        style: TextStyle(color: isDark ? Colors.white70 : Colors.black87),
+                                                      ),
+                                                      actions: [
+                                                        TextButton(
+                                                          onPressed: () => Navigator.pop(ctx, false),
+                                                          child: const Text("Cancel"),
+                                                        ),
+                                                        ElevatedButton(
+                                                          style: ElevatedButton.styleFrom(
+                                                            backgroundColor: const Color(0xFF6366f1),
+                                                            foregroundColor: Colors.white,
+                                                            elevation: 0,
+                                                            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                                                            shape: RoundedRectangleBorder(
+                                                              borderRadius: BorderRadius.circular(14),
+                                                            ),
+                                                          ),
+                                                          onPressed: () => Navigator.pop(ctx, true),
+                                                          child: const Text(
+                                                            "Mark Present",
+                                                            style: TextStyle(
+                                                              color: Colors.white,
+                                                              fontWeight: FontWeight.bold,
+                                                              fontSize: 14,
+                                                            ),
+                                                          ),
+                                                        ),
+                                                      ],
+                                                    ),
+                                                  );
+
+                                                  if (confirm == true && mounted) {
+                                                    final bool synced = await ref.read(attendanceProvider.notifier).updateLateStudent(
+                                                      studentId: sId,
+                                                      newStatus: 'present',
+                                                    );
+                                                    if (mounted) {
+                                                      ScaffoldMessenger.of(context).showSnackBar(
+                                                        SnackBar(
+                                                          content: Text(synced
+                                                              ? "$studentName marked Present! Parent notified."
+                                                              : "⚡ $studentName marked Present offline! Will auto-sync when online."),
+                                                          backgroundColor: synced ? Colors.green : Colors.orange,
+                                                        ),
+                                                      );
+                                                    }
+                                                  }
+                                                } else {
+                                                  ref.read(attendanceProvider.notifier).toggleStatus(sId);
+                                                }
                                               },
                                               child: AnimatedContainer(
                                                 duration: const Duration(milliseconds: 200),
@@ -582,35 +677,54 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
                           if (_saving) return;
                           setState(() => _saving = true);
                           try {
-                            await ref.read(attendanceProvider.notifier).saveAttendance();
+                            final bool synced = await ref.read(attendanceProvider.notifier).saveAttendance();
                             if (mounted) {
-                                ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text("Attendance marked & parents notified!"), backgroundColor: Colors.green));
-                                context.pop();
+                              if (synced) {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text("✅ Attendance marked & parents notified!"),
+                                    backgroundColor: Colors.green,
+                                  ),
+                                );
+                              } else {
+                                ScaffoldMessenger.of(context).showSnackBar(
+                                  const SnackBar(
+                                    content: Text("⚡ Attendance saved offline! Will auto-sync when online."),
+                                    backgroundColor: Colors.orange,
+                                  ),
+                                );
+                              }
+                              context.pop();
                             }
                           } catch (e) {
-                             if (mounted) {
-                                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text("Error: $e"), backgroundColor: Colors.red));
-                             }
+                            if (mounted) {
+                              ScaffoldMessenger.of(context).showSnackBar(
+                                SnackBar(content: Text("Error: $e"), backgroundColor: Colors.red),
+                              );
+                            }
                           } finally {
                             if (mounted) setState(() => _saving = false);
                           }
                         },
                         child: Container(
                           height: 60,
-                            decoration: BoxDecoration(
-                              color: const Color(0xFF6366f1),
-                              borderRadius: BorderRadius.circular(20),
-                              boxShadow: [BoxShadow(color: const Color(0xFF6366f1).withOpacity(isDark ? 0.5 : 0.3), blurRadius: 20, offset: const Offset(0, 10))],
-                            ),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF6366f1),
+                            borderRadius: BorderRadius.circular(20),
+                            boxShadow: [BoxShadow(color: const Color(0xFF6366f1).withOpacity(isDark ? 0.5 : 0.3), blurRadius: 20, offset: const Offset(0, 10))],
+                          ),
                           alignment: Alignment.center,
                           child: _saving 
                                ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 3))
                                : Row(
                                    mainAxisAlignment: MainAxisAlignment.center,
-                                   children: const [
-                                     Icon(Icons.how_to_reg, color: Colors.white),
-                                     SizedBox(width: 8),
-                                     Text("CONFIRM ATTENDANCE", style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w900)),
+                                   children: [
+                                     Icon(isMarkedToday ? Icons.sync_alt : Icons.how_to_reg, color: Colors.white),
+                                     const SizedBox(width: 8),
+                                     Text(
+                                       isMarkedToday ? "UPDATE ATTENDANCE" : "CONFIRM ATTENDANCE",
+                                       style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w900),
+                                     ),
                                    ],
                                  ),
                         ),

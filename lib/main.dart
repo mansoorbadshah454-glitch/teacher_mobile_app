@@ -12,6 +12,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import 'package:teacher_mobile_app/services/push_notification_service.dart';
 import 'package:teacher_mobile_app/core/services/local_db_service.dart';
+import 'package:teacher_mobile_app/core/services/sync_queue_service.dart';
 
 @pragma('vm:entry-point')
 Future<void> _firebaseMessagingBackgroundHandler(RemoteMessage message) async {
@@ -81,6 +82,9 @@ void main() async {
 
       await LocalDbService.init();
       print("💽 [Main] Hive Local DB Initialized");
+
+      await SyncQueueService.init();
+      print("⚡ [Main] SyncQueueService Initialized");
 
       // Enable bounded offline persistence to prevent storage bloat
       FirebaseFirestore.instance.settings = const Settings(

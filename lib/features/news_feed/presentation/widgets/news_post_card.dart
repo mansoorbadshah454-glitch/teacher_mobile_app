@@ -191,28 +191,15 @@ class _NewsPostCardState extends ConsumerState<NewsPostCard> {
     }
   }
 
+  String? _optimisticReaction;
+
   Future<void> _updateReaction(String type) async {
     final user = ref.read(currentUserProvider);
     if (user == null) return;
 
-    final postRef = FirebaseFirestore.instance
-        .collection('schools')
-        .doc(widget.schoolId)
-        .collection('posts')
-        .doc(widget.id);
-
-    try {
-      await postRef.set({
-        'reactions': { user.uid: type }
-      }, SetOptions(merge: true));
-    } catch (e) {
-      print("Error updating reaction: $e");
-    }
-  }
-
-  Future<void> _removeReaction() async {
-    final user = ref.read(currentUserProvider);
-    if (user == null) return;
+    setState(() {
+      _optimisticReaction = type;
+    });
 
     final postRef = FirebaseFirestore.instance
         .collection('schools')
@@ -222,7 +209,39 @@ class _NewsPostCardState extends ConsumerState<NewsPostCard> {
 
     try {
       await postRef.update({
-        'reactions.${user.uid}': FieldValue.delete()
+        'reactions.${user.uid}': type,
+        'likes': FieldValue.arrayRemove([user.uid])
+      });
+    } catch (e) {
+      try {
+        await postRef.set({
+          'reactions': { user.uid: type },
+          'likes': FieldValue.arrayRemove([user.uid])
+        }, SetOptions(merge: true));
+      } catch (err) {
+        print("Error updating reaction: $err");
+      }
+    }
+  }
+
+  Future<void> _removeReaction() async {
+    final user = ref.read(currentUserProvider);
+    if (user == null) return;
+
+    setState(() {
+      _optimisticReaction = 'none';
+    });
+
+    final postRef = FirebaseFirestore.instance
+        .collection('schools')
+        .doc(widget.schoolId)
+        .collection('posts')
+        .doc(widget.id);
+
+    try {
+      await postRef.update({
+        'reactions.${user.uid}': FieldValue.delete(),
+        'likes': FieldValue.arrayRemove([user.uid])
       });
     } catch (e) {
       if (e.toString().contains("No document to update")) return;
@@ -467,22 +486,39 @@ class _NewsPostCardState extends ConsumerState<NewsPostCard> {
     
     final authUser = ref.watch(currentUserProvider);
     final likesList = List<String>.from(widget.data['likes'] ?? []);
-    final reactionsMap = widget.data['reactions'] as Map<String, dynamic>? ?? {};
+    final reactionsMap = widget.data['reactions'] is Map
+        ? Map<String, dynamic>.from(widget.data['reactions'] as Map)
+        : <String, dynamic>{};
     
     String currentReaction = 'none';
     if (authUser != null) {
       if (reactionsMap.containsKey(authUser.uid)) {
-        currentReaction = reactionsMap[authUser.uid];
+        currentReaction = reactionsMap[authUser.uid]?.toString() ?? 'none';
       } else if (likesList.contains(authUser.uid)) {
         currentReaction = 'like';
       }
     }
 
+    if (_optimisticReaction != null) {
+      if (_optimisticReaction == currentReaction) {
+        _optimisticReaction = null;
+      } else {
+        currentReaction = _optimisticReaction!;
+      }
+    }
+
     final Set<String> totalReactors = {...likesList, ...reactionsMap.keys};
+    if (authUser != null && _optimisticReaction != null) {
+      if (_optimisticReaction == 'none') {
+        totalReactors.remove(authUser.uid);
+      } else {
+        totalReactors.add(authUser.uid);
+      }
+    }
     final int combinedLikeCount = totalReactors.length;
-    final bool hasHearts = reactionsMap.values.contains('heart');
-    final bool hasHahas = reactionsMap.values.contains('haha');
-    final bool hasWows = reactionsMap.values.contains('wow');
+    final bool hasHearts = reactionsMap.values.contains('heart') || (currentReaction == 'heart');
+    final bool hasHahas = reactionsMap.values.contains('haha') || (currentReaction == 'haha');
+    final bool hasWows = reactionsMap.values.contains('wow') || (currentReaction == 'wow');
 
     return Container(
       margin: const EdgeInsets.only(bottom: 12),
@@ -698,15 +734,6 @@ class _NewsPostCardState extends ConsumerState<NewsPostCard> {
                              _updateReaction('like');
                           } else {
                              _removeReaction();
-                             final authUser = ref.read(currentUserProvider);
-                             if (authUser != null && likesList.contains(authUser.uid)) {
-                               FirebaseFirestore.instance
-                                  .collection('schools')
-                                  .doc(widget.schoolId)
-                                  .collection('posts')
-                                  .doc(widget.id)
-                                  .update({ 'likes': FieldValue.arrayRemove([authUser.uid]) });
-                             }
                           }
                         },
                         icon: _getReactionIcon(currentReaction, context),

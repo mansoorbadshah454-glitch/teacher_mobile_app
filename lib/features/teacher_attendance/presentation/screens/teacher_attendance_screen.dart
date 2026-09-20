@@ -7,6 +7,19 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:teacher_mobile_app/core/theme/app_theme.dart';
 import 'package:teacher_mobile_app/features/teacher_attendance/providers/teacher_attendance_provider.dart';
 
+DateTime? _parseAttendanceDate(dynamic val) {
+  if (val == null) return null;
+  if (val is Timestamp) return val.toDate();
+  if (val is DateTime) return val;
+  if (val is String) return DateTime.tryParse(val);
+  return null;
+}
+
+String _formatAttendanceTime(dynamic val) {
+  final dt = _parseAttendanceDate(val);
+  return dt != null ? DateFormat('hh:mm a').format(dt) : '--:--';
+}
+
 class TeacherAttendanceScreen extends ConsumerStatefulWidget {
   const TeacherAttendanceScreen({super.key});
 
@@ -253,7 +266,7 @@ class _ScanTabContent extends ConsumerWidget {
   }
 
   Widget _buildDutyActiveUI(BuildContext context, WidgetRef ref, TeacherAttendanceState state, Map<String, dynamic> log, bool isDark, String dutyString) {
-    final checkInTime = log['checkIn'] != null ? DateFormat('hh:mm a').format((log['checkIn'] as Timestamp).toDate()) : '--:--';
+    final checkInTime = _formatAttendanceTime(log['checkIn']);
     final dateStr = DateFormat('EEEE, MMMM d, yyyy').format(DateTime.now());
 
     return Padding(
@@ -340,8 +353,8 @@ class _ScanTabContent extends ConsumerWidget {
   }
 
   Widget _buildDutyCompletedUI(BuildContext context, Map<String, dynamic> log, bool isDark, String dutyString) {
-    final checkInTime = log['checkIn'] != null ? DateFormat('hh:mm a').format((log['checkIn'] as Timestamp).toDate()) : '--:--';
-    final checkOutTime = log['checkOut'] != null ? DateFormat('hh:mm a').format((log['checkOut'] as Timestamp).toDate()) : '--:--';
+    final checkInTime = _formatAttendanceTime(log['checkIn']);
+    final checkOutTime = _formatAttendanceTime(log['checkOut']);
     final dateStr = DateFormat('EEEE, MMMM d, yyyy').format(DateTime.now());
 
     return Padding(
@@ -697,8 +710,8 @@ class _HistoryTabContent extends ConsumerWidget {
   }
 
   void _showDayDetailsBottomSheet(BuildContext context, Map<String, dynamic> log, String dateStr) {
-    final checkInTime = log['checkIn'] != null ? DateFormat('hh:mm a').format(log['checkIn'].toDate()) : '--:--';
-    final checkOutTime = log['checkOut'] != null ? DateFormat('hh:mm a').format(log['checkOut'].toDate()) : '--:--';
+    final checkInTime = _formatAttendanceTime(log['checkIn']);
+    final checkOutTime = _formatAttendanceTime(log['checkOut']);
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     showModalBottomSheet(

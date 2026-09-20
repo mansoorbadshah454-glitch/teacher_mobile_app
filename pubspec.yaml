@@ -66,6 +66,7 @@ dependencies:
   hive: ^2.2.3
   hive_flutter: ^1.1.0
   printing: ^5.14.3
+  connectivity_plus: ^6.0.3
 dev_dependencies:
   flutter_test:
     sdk: flutter

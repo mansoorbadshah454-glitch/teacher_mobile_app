@@ -29,26 +29,24 @@ class _NewsFeedScreenState extends ConsumerState<NewsFeedScreen> {
     _fetchSchoolInfo();
   }
 
-  Future<QuerySnapshot>? _postsFuture;
+  Stream<QuerySnapshot>? _postsStream;
 
-  void _refreshPosts() {
+  void _initPostsStream() {
     if (schoolId != null) {
       setState(() {
-        _postsFuture = FirebaseFirestore.instance
+        _postsStream = FirebaseFirestore.instance
             .collection('schools')
             .doc(schoolId)
             .collection('posts')
             .orderBy('timestamp', descending: true)
-            .get();
+            .snapshots();
       });
     }
   }
 
   Future<void> _handleRefresh() async {
-    _refreshPosts();
-    if (_postsFuture != null) {
-      await _postsFuture;
-    }
+    _initPostsStream();
+    await Future.delayed(const Duration(milliseconds: 500));
   }
 
   Future<void> _fetchSchoolInfo() async {
@@ -94,7 +92,7 @@ class _NewsFeedScreenState extends ConsumerState<NewsFeedScreen> {
           _errorMessage = null;
         });
         print("✅ [NewsFeed] Found school: ${schoolDoc.id}");
-        _refreshPosts();
+        _initPostsStream();
         _markFeedAsRead(); // Mark feed as read right after getting school info
       } else {
         setState(() {
@@ -206,14 +204,14 @@ class _NewsFeedScreenState extends ConsumerState<NewsFeedScreen> {
                   )
                 : RefreshIndicator(
                     onRefresh: _handleRefresh,
-                    child: FutureBuilder<QuerySnapshot>(
-                    future: _postsFuture,
+                    child: StreamBuilder<QuerySnapshot>(
+                    stream: _postsStream,
                     builder: (context, snapshot) {
                       if (snapshot.hasError) {
                         return Center(child: Text('Error: ${snapshot.error}', style: Theme.of(context).textTheme.bodyMedium));
                       }
 
-                      if (snapshot.connectionState == ConnectionState.waiting) {
+                      if (snapshot.connectionState == ConnectionState.waiting && !snapshot.hasData) {
                         return const Center(child: CircularProgressIndicator());
                       }
 
@@ -256,6 +254,7 @@ class _NewsFeedScreenState extends ConsumerState<NewsFeedScreen> {
                           final data = docs[index - 1].data() as Map<String, dynamic>;
                           final id = docs[index - 1].id;
                           return NewsPostCard(
+                            key: ValueKey(id),
                             id: id,
                             data: data,
                             schoolId: schoolId!,

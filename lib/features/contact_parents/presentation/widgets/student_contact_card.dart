@@ -11,6 +11,7 @@ import 'package:audioplayers/audioplayers.dart';
 import 'package:teacher_mobile_app/core/theme/app_theme.dart';
 import 'package:teacher_mobile_app/features/contact_parents/providers/contact_parents_provider.dart';
 import 'package:teacher_mobile_app/features/attendance/presentation/screens/attendance_screen.dart';
+import 'package:teacher_mobile_app/features/contact_parents/presentation/screens/parent_personal_chat_screen.dart';
 
 class StudentContactCard extends StatefulWidget {
   final Map<String, dynamic> student;
@@ -381,11 +382,16 @@ class _StudentContactCardState extends State<StudentContactCard> {
       onTapUp: (_) => setState(() => _isPressed = false),
       onTapCancel: () => setState(() => _isPressed = false),
       onTap: () {
-        if (!widget.isExpanded) {
-          widget.messageController.clear();
-          _deletePreview();
-        }
-        widget.notifier.toggleStudentExpansion(widget.student['id']);
+        Navigator.push(
+          context,
+          MaterialPageRoute(
+            builder: (context) => ParentPersonalChatScreen(
+              student: widget.student,
+              parentData: widget.parentData,
+              schoolId: widget.schoolId,
+            ),
+          ),
+        );
       },
       child: AnimatedScale(
         scale: (_isPressed && !widget.isExpanded) ? 0.98 : 1.0,
@@ -475,7 +481,7 @@ class _StudentContactCardState extends State<StudentContactCard> {
                                 ),
                               ),
                               const Text(
-                                "• Tap to Message",
+                                "• Tap to Chat",
                                 style: TextStyle(color: Colors.grey, fontSize: 12),
                               ),
                             ],
@@ -487,12 +493,12 @@ class _StudentContactCardState extends State<StudentContactCard> {
                       width: 36,
                       height: 36,
                       decoration: BoxDecoration(
-                        color: widget.isExpanded ? const Color(0xFFec4899) : const Color(0xFFec4899).withOpacity(0.1),
+                        color: const Color(0xFFec4899).withOpacity(0.1),
                         shape: BoxShape.circle,
                       ),
-                      child: Icon(
-                        Icons.message, 
-                        color: widget.isExpanded ? Colors.white : const Color(0xFFec4899), 
+                      child: const Icon(
+                        Icons.chat_bubble_outline_rounded, 
+                        color: Color(0xFFec4899), 
                         size: 18,
                       ),
                     ),

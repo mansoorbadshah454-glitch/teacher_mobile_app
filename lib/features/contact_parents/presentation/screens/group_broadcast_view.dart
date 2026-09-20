@@ -13,6 +13,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:intl/intl.dart';
 import 'package:teacher_mobile_app/core/theme/app_theme.dart';
 import 'package:teacher_mobile_app/features/contact_parents/providers/contact_parents_provider.dart';
+import 'package:teacher_mobile_app/core/services/sync_queue_service.dart';
 
 class GroupBroadcastView extends StatefulWidget {
   final ContactParentsState state;
@@ -135,8 +136,10 @@ class _GroupBroadcastViewState extends State<GroupBroadcastView> {
     }
   }
 
-  void _addPendingAndSend(String text, File? file, String? type, String? fileName) {
+  Future<void> _addPendingAndSend(String text, File? file, String? type, String? fileName) async {
     final pendingId = "pending_${DateTime.now().millisecondsSinceEpoch}";
+    final bool isOnline = await SyncQueueService.isOnline();
+
     setState(() {
       _pendingBroadcasts.insert(0, {
          'id': pendingId,
@@ -147,11 +150,18 @@ class _GroupBroadcastViewState extends State<GroupBroadcastView> {
       });
     });
 
-    widget.notifier.sendBroadcast(messageText: text, attachedFile: file, isVoice: type == 'audio').then((_) {
-       if (mounted) setState(() => _pendingBroadcasts.removeWhere((m) => m['id'] == pendingId));
-    }).catchError((_) {
-       if (mounted) setState(() => _pendingBroadcasts.removeWhere((m) => m['id'] == pendingId));
-    });
+    try {
+      await widget.notifier.sendBroadcast(messageText: text, attachedFile: file, isVoice: type == 'audio');
+      if (isOnline) {
+        Future.delayed(const Duration(milliseconds: 600), () {
+          if (mounted) {
+            setState(() => _pendingBroadcasts.removeWhere((m) => m['id'] == pendingId));
+          }
+        });
+      }
+    } catch (_) {
+      // Keep in list with isPending = true so user sees the message status
+    }
   }
 
   void _showAttachmentMenu() {
@@ -466,6 +476,14 @@ class _GroupBroadcastViewState extends State<GroupBroadcastView> {
     String formattedTime = '';
     if (msg['timestamp'] is Timestamp) {
       formattedTime = DateFormat('h:mm a').format((msg['timestamp'] as Timestamp).toDate());
+    } else if (msg['timestamp'] is DateTime) {
+      formattedTime = DateFormat('h:mm a').format(msg['timestamp'] as DateTime);
+    } else if (msg['timestamp'] is String) {
+      final dt = DateTime.tryParse(msg['timestamp']);
+      if (dt != null) formattedTime = DateFormat('h:mm a').format(dt);
+    }
+    if (formattedTime.isEmpty) {
+      formattedTime = DateFormat('h:mm a').format(DateTime.now());
     }
 
     return Align(
@@ -792,9 +810,7 @@ class _GroupBroadcastViewState extends State<GroupBroadcastView> {
           shape: BoxShape.circle,
         ),
         child: Center(
-          child: widget.state.isSending 
-              ? const SizedBox(width: 20, height: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2)) 
-              : Icon(_isRecording ? Icons.mic : Icons.mic_none, color: Colors.white, size: _isRecording ? 32 : 24),
+          child: Icon(_isRecording ? Icons.mic : Icons.mic_none, color: Colors.white, size: _isRecording ? 32 : 24),
         ),
       ),
     );

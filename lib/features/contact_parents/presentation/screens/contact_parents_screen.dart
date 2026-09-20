@@ -122,7 +122,7 @@ class _ContactParentsScreenState extends ConsumerState<ContactParentsScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const Text(
-                      "Contact Parents",
+                      "Parents Chat",
                       style: TextStyle(
                         fontSize: 22,
                         fontWeight: FontWeight.w800,
