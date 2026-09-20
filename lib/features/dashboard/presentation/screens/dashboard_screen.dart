@@ -214,7 +214,7 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                     onTap: () => context.push('/notebook'),
                   ),
                    StatCard(
-                    title: "Contact Parents",
+                    title: "Parents Chat",
                     description: "Messages",
                     icon: Icons.people_outline,
                     color: const Color(0xFF3b82f6), // Blue
