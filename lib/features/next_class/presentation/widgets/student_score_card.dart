@@ -8,6 +8,7 @@ class StudentScoreCard extends ConsumerStatefulWidget {
   // Normal Mode Params
   final int? academicScore;
   final int? homeworkScore;
+  final bool hasActiveHomework;
   final Function(String, String, int)? onScoreChanged;
 
   // Test Mode Params
@@ -20,6 +21,7 @@ class StudentScoreCard extends ConsumerStatefulWidget {
     this.isTestMode = false,
     this.academicScore,
     this.homeworkScore,
+    this.hasActiveHomework = false,
     this.onScoreChanged,
     this.testScore,
     this.onTestScoreChanged,
@@ -116,7 +118,7 @@ class _StudentScoreCardState extends ConsumerState<StudentScoreCard> {
           else ...[
             _buildSlider(
               context: context,
-              label: "Subject Score",
+              label: "Subject Performance",
               value: widget.academicScore ?? 0,
               onChanged: (val) {
                 if (widget.onScoreChanged != null) {
@@ -124,20 +126,215 @@ class _StudentScoreCardState extends ConsumerState<StudentScoreCard> {
                 }
               },
             ),
-            const SizedBox(height: 12),
-            _buildSlider(
-              context: context,
-              label: "Homework Score",
-              value: widget.homeworkScore ?? 0,
-              onChanged: (val) {
-                if (widget.onScoreChanged != null) {
-                  widget.onScoreChanged!(student['id'], 'homework', val.toInt());
-                }
-              },
-            ),
+            const SizedBox(height: 10),
+            _buildHomeworkButtons(context),
           ],
           
         ],
+      ),
+    );
+  }
+
+  Widget _buildHomeworkButtons(BuildContext context) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+
+    if (!widget.hasActiveHomework) {
+      return Container(
+        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+        decoration: BoxDecoration(
+          color: isDark ? Colors.white.withOpacity(0.03) : Colors.grey[100],
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(color: isDark ? Colors.white.withOpacity(0.06) : Colors.grey[200]!),
+        ),
+        child: Row(
+          children: [
+            Icon(Icons.assignment_late_outlined, size: 15, color: Colors.grey[500]),
+            const SizedBox(width: 8),
+            Expanded(
+              child: Text(
+                "No Homework Assigned",
+                style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: FontWeight.w600,
+                  color: isDark ? Colors.grey[400] : Colors.grey[600],
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            Container(
+              padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+              decoration: BoxDecoration(
+                color: isDark ? Colors.white.withOpacity(0.06) : Colors.grey[200],
+                borderRadius: BorderRadius.circular(6),
+              ),
+              child: Text(
+                "Inactive",
+                style: TextStyle(
+                  fontSize: 10,
+                  fontWeight: FontWeight.bold,
+                  color: isDark ? Colors.grey[400] : Colors.grey[600],
+                ),
+              ),
+            ),
+          ],
+        ),
+      );
+    }
+
+    final hwScore = widget.homeworkScore;
+    final bool hasMark = hwScore != null;
+    final isDone = hasMark && hwScore >= 75;
+    final isIncomplete = hasMark && hwScore >= 25 && hwScore < 75;
+    final isNotDone = hasMark && hwScore < 25;
+
+    String statusText = "Unmarked";
+    Color statusColor = Colors.grey;
+    if (isDone) {
+      statusText = "Done (100%)";
+      statusColor = const Color(0xFF10B981);
+    } else if (isIncomplete) {
+      statusText = "Incomplete (50%)";
+      statusColor = const Color(0xFFF59E0B);
+    } else if (isNotDone) {
+      statusText = "Not Done (0%)";
+      statusColor = const Color(0xFFEF4444);
+    }
+
+    return Column(
+      crossAxisAlignment: CrossAxisAlignment.start,
+      children: [
+        Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Text(
+              "Homework",
+              style: TextStyle(
+                color: isDark ? Colors.grey : Colors.grey[600],
+                fontWeight: FontWeight.w600,
+                fontSize: 12,
+              ),
+            ),
+            Text(
+              statusText,
+              style: TextStyle(
+                color: statusColor,
+                fontWeight: FontWeight.bold,
+                fontSize: 12,
+              ),
+            ),
+          ],
+        ),
+        const SizedBox(height: 6),
+        Row(
+          children: [
+            Expanded(
+              child: _buildHomeworkPill(
+                title: "Done",
+                icon: Icons.check_circle_outline,
+                isSelected: isDone,
+                selectedColor: const Color(0xFF10B981),
+                isDark: isDark,
+                onTap: () {
+                  if (widget.onScoreChanged != null) {
+                    widget.onScoreChanged!(widget.student['id'], 'homework', 100);
+                  }
+                },
+              ),
+            ),
+            const SizedBox(width: 6),
+            Expanded(
+              child: _buildHomeworkPill(
+                title: "Incomplete",
+                icon: Icons.timelapse_outlined,
+                isSelected: isIncomplete,
+                selectedColor: const Color(0xFFF59E0B),
+                isDark: isDark,
+                onTap: () {
+                  if (widget.onScoreChanged != null) {
+                    widget.onScoreChanged!(widget.student['id'], 'homework', 50);
+                  }
+                },
+              ),
+            ),
+            const SizedBox(width: 6),
+            Expanded(
+              child: _buildHomeworkPill(
+                title: "Not Done",
+                icon: Icons.cancel_outlined,
+                isSelected: isNotDone,
+                selectedColor: const Color(0xFFEF4444),
+                isDark: isDark,
+                onTap: () {
+                  if (widget.onScoreChanged != null) {
+                    widget.onScoreChanged!(widget.student['id'], 'homework', 0);
+                  }
+                },
+              ),
+            ),
+          ],
+        ),
+      ],
+    );
+  }
+
+  Widget _buildHomeworkPill({
+    required String title,
+    required IconData icon,
+    required bool isSelected,
+    required Color selectedColor,
+    required bool isDark,
+    required VoidCallback onTap,
+  }) {
+    return GestureDetector(
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 200),
+        padding: const EdgeInsets.symmetric(vertical: 6, horizontal: 4),
+        decoration: BoxDecoration(
+          color: isSelected
+              ? selectedColor
+              : (isDark ? Colors.white.withOpacity(0.05) : Colors.grey[100]),
+          borderRadius: BorderRadius.circular(10),
+          border: Border.all(
+            color: isSelected
+                ? selectedColor
+                : (isDark ? Colors.white.withOpacity(0.08) : Colors.grey[300]!),
+            width: isSelected ? 1.5 : 1,
+          ),
+          boxShadow: isSelected
+              ? [
+                  BoxShadow(
+                    color: selectedColor.withOpacity(0.3),
+                    blurRadius: 6,
+                    offset: const Offset(0, 2),
+                  ),
+                ]
+              : [],
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.center,
+          children: [
+            Icon(
+              icon,
+              size: 13,
+              color: isSelected ? Colors.white : (isDark ? Colors.grey[400] : Colors.grey[600]),
+            ),
+            const SizedBox(width: 4),
+            Flexible(
+              child: Text(
+                title,
+                style: TextStyle(
+                  color: isSelected ? Colors.white : (isDark ? Colors.grey[300] : Colors.grey[700]),
+                  fontWeight: isSelected ? FontWeight.bold : FontWeight.w600,
+                  fontSize: 11,
+                ),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+          ],
+        ),
       ),
     );
   }

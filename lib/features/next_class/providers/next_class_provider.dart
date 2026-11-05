@@ -8,7 +8,7 @@ import 'package:teacher_mobile_app/core/services/local_db_service.dart';
 import 'package:teacher_mobile_app/core/services/sync_queue_service.dart';
 import 'package:uuid/uuid.dart';
 
-enum NextClassViewMode { classes, subjects, students, scheduleTest, test, activeTestScore, homework }
+enum NextClassViewMode { classes, subjects, students, scheduleTest, test, activeTestScore, homework, assignHomework }
 
 class ScheduleTestDraft {
   final DateTime? date;
@@ -123,6 +123,7 @@ class NextClassState {
 
   final Map<String, dynamic>? activeHomework;
   final List<Map<String, dynamic>> homeworkList;
+  final int homeworkReportsPageIndex;
   final bool isFetchingHomework;
 
   NextClassState({
@@ -145,6 +146,7 @@ class NextClassState {
     this.isFetchingTest = false,
     this.activeHomework,
     this.homeworkList = const [],
+    this.homeworkReportsPageIndex = 0,
     this.isFetchingHomework = false,
   });
 
@@ -168,6 +170,7 @@ class NextClassState {
     bool? isFetchingTest,
     Map<String, dynamic>? activeHomework,
     List<Map<String, dynamic>>? homeworkList,
+    int? homeworkReportsPageIndex,
     bool? isFetchingHomework,
   }) {
     return NextClassState(
@@ -190,6 +193,7 @@ class NextClassState {
       isFetchingTest: isFetchingTest ?? this.isFetchingTest,
       activeHomework: activeHomework ?? this.activeHomework,
       homeworkList: homeworkList ?? this.homeworkList,
+      homeworkReportsPageIndex: homeworkReportsPageIndex ?? this.homeworkReportsPageIndex,
       isFetchingHomework: isFetchingHomework ?? this.isFetchingHomework,
     );
   }
@@ -399,8 +403,43 @@ class NextClassNotifier extends StateNotifier<NextClassState> {
           }
         }
 
+        final now = DateTime.now();
+        final sevenDaysAgo = now.subtract(const Duration(days: 7));
+        final List<Map<String, dynamic>> validDocs = [];
+        final List<String> expiredDocIds = [];
+
+        for (var data in docs) {
+          DateTime? date;
+          if (data['createdAt'] is Timestamp) {
+            date = (data['createdAt'] as Timestamp).toDate();
+          } else if (data['assignedDate'] != null && data['assignedDate'].toString().isNotEmpty) {
+            try {
+              date = DateTime.parse(data['assignedDate'].toString());
+            } catch (_) {}
+          } else if (data['dueDateTime'] is Timestamp) {
+            date = (data['dueDateTime'] as Timestamp).toDate();
+          } else if (data['dueDateTime'] != null && data['dueDateTime'].toString().isNotEmpty) {
+            try {
+              date = DateTime.parse(data['dueDateTime'].toString());
+            } catch (_) {}
+          }
+
+          if (date != null && date.isBefore(sevenDaysAgo)) {
+            if (data['id'] != null && data['isPendingSync'] != true) {
+              expiredDocIds.add(data['id'].toString());
+            }
+          } else {
+            validDocs.add(data);
+          }
+        }
+
+        // Silent background prune of expired homework older than 7 days
+        if (expiredDocIds.isNotEmpty && schoolId != null) {
+          _silentPruneExpiredHomework(schoolId!, classId, expiredDocIds);
+        }
+
         // Sort descending by createdAt / updatedAt / assignedDate
-        docs.sort((a, b) {
+        validDocs.sort((a, b) {
           final aTime = a['createdAt'] ?? a['updatedAt'];
           final bTime = b['createdAt'] ?? b['updatedAt'];
           if (aTime is Timestamp && bTime is Timestamp) {
@@ -412,21 +451,21 @@ class NextClassNotifier extends StateNotifier<NextClassState> {
         });
 
         Map<String, dynamic>? active;
-        final activeMatches = docs.where((h) => h['status'] == 'active').toList();
+        final activeMatches = validDocs.where((h) => h['status'] == 'active').toList();
         if (activeMatches.isNotEmpty) {
           active = activeMatches.first;
-        } else if (docs.isNotEmpty) {
-          active = docs.first;
+        } else if (validDocs.isNotEmpty) {
+          active = validDocs.first;
         }
 
         // Cache homework locally
         LocalDbService.saveCache('homework_${schoolId}_${classId}_$subject', {
-          'list': docs,
+          'list': validDocs,
           'active': active ?? {},
         });
 
         state = state.copyWith(
-          homeworkList: docs,
+          homeworkList: validDocs,
           activeHomework: active ?? {},
           isFetchingHomework: false,
         );
@@ -434,6 +473,23 @@ class NextClassNotifier extends StateNotifier<NextClassState> {
     }, onError: (e) {
       if (mounted) state = state.copyWith(isFetchingHomework: false);
     });
+  }
+
+  void _silentPruneExpiredHomework(String sId, String cId, List<String> expiredIds) async {
+    try {
+      final coll = FirebaseFirestore.instance
+          .collection('schools')
+          .doc(sId)
+          .collection('classes')
+          .doc(cId)
+          .collection('homework');
+      for (final docId in expiredIds) {
+        await coll.doc(docId).delete();
+      }
+      debugPrint("Auto-pruned ${expiredIds.length} expired homework records older than 7 days.");
+    } catch (e) {
+      debugPrint("Auto-prune expired homework error: $e");
+    }
   }
 
   void _fetchScheduledTest() {
@@ -573,6 +629,8 @@ class NextClassNotifier extends StateNotifier<NextClassState> {
   void goBack() {
     if (state.viewMode == NextClassViewMode.test || state.viewMode == NextClassViewMode.activeTestScore) {
       state = state.copyWith(viewMode: NextClassViewMode.scheduleTest);
+    } else if (state.viewMode == NextClassViewMode.assignHomework) {
+      state = state.copyWith(viewMode: NextClassViewMode.homework);
     } else if (state.viewMode == NextClassViewMode.scheduleTest || state.viewMode == NextClassViewMode.homework) {
       state = state.copyWith(viewMode: NextClassViewMode.students);
     } else if (state.viewMode == NextClassViewMode.students) {
@@ -606,7 +664,18 @@ class NextClassNotifier extends StateNotifier<NextClassState> {
   }
 
   void goToHomeworkMode() {
-    state = state.copyWith(viewMode: NextClassViewMode.homework);
+    state = state.copyWith(viewMode: NextClassViewMode.homework, homeworkReportsPageIndex: 0);
+  }
+
+  void goToAssignHomeworkMode({Map<String, dynamic>? editHw}) {
+    if (editHw != null) {
+      populateDraftFromExisting(editHw);
+    }
+    state = state.copyWith(viewMode: NextClassViewMode.assignHomework);
+  }
+
+  void setHomeworkReportsPage(int page) {
+    state = state.copyWith(homeworkReportsPageIndex: page);
   }
 
   void goToActiveTestScoreMode() {
@@ -768,6 +837,7 @@ class NextClassNotifier extends StateNotifier<NextClassState> {
         activeHomework: hwData,
         homeworkList: currentList,
         homeworkDrafts: newDrafts,
+        viewMode: NextClassViewMode.homework,
       );
 
       final bool online = await SyncQueueService.isOnline();
@@ -1429,12 +1499,51 @@ class NextClassNotifier extends StateNotifier<NextClassState> {
 
   // --- Scoring Logic ---
 
+  int? getStudentHomeworkStatus(Map<String, dynamic> student) {
+    final studentId = student['id'] as String;
+
+    // Check local updates first
+    if (state.scoreUpdates[studentId] != null && state.scoreUpdates[studentId]!['homework'] != null) {
+      return state.scoreUpdates[studentId]!['homework'];
+    }
+
+    // Check active homework submissions
+    if (state.activeHomework != null &&
+        state.activeHomework!['subject'] == state.selectedSubject &&
+        state.activeHomework!['submissions'] is Map) {
+      final submissions = state.activeHomework!['submissions'] as Map;
+      if (submissions.containsKey(studentId)) {
+        final sub = submissions[studentId];
+        if (sub is Map && sub['score'] != null) {
+          return int.tryParse(sub['score'].toString());
+        }
+      }
+    }
+
+    // If no submission has been recorded for this active homework, return null (Unmarked)
+    return null;
+  }
+
   int getStudentScore(Map<String, dynamic> student, String type) {
     final studentId = student['id'] as String;
     
     // Check local updates first
     if (state.scoreUpdates[studentId] != null && state.scoreUpdates[studentId]![type] != null) {
       return state.scoreUpdates[studentId]![type]!;
+    }
+
+    // Check active homework submissions first for homework type
+    if (type == 'homework' &&
+        state.activeHomework != null &&
+        state.activeHomework!['subject'] == state.selectedSubject &&
+        state.activeHomework!['submissions'] is Map) {
+      final submissions = state.activeHomework!['submissions'] as Map;
+      if (submissions.containsKey(studentId)) {
+        final sub = submissions[studentId];
+        if (sub is Map && sub['score'] != null) {
+          return int.tryParse(sub['score'].toString()) ?? 0;
+        }
+      }
     }
 
     // Fallback to database
@@ -1474,6 +1583,23 @@ class NextClassNotifier extends StateNotifier<NextClassState> {
     final subject = state.selectedSubject!;
     final scoreUpdatesCopy = Map<String, Map<String, int>>.from(state.scoreUpdates);
 
+    // Update active homework submissions locally if active homework matches subject
+    final activeHw = state.activeHomework;
+    final activeHwId = (activeHw != null && activeHw.isNotEmpty && activeHw['subject'] == subject) ? activeHw['id'] : null;
+    if (activeHw != null && activeHw.isNotEmpty && activeHw['subject'] == subject) {
+      final Map<String, dynamic> updatedSubmissions = Map<String, dynamic>.from(activeHw['submissions'] ?? {});
+      for (var entry in scoreUpdatesCopy.entries) {
+        if (entry.value.containsKey('homework')) {
+          final score = entry.value['homework']!;
+          updatedSubmissions[entry.key] = {
+            'score': score,
+            'status': score >= 75 ? 'done' : (score >= 25 ? 'incomplete' : 'not_done'),
+          };
+        }
+      }
+      state = state.copyWith(activeHomework: { ...activeHw, 'submissions': updatedSubmissions });
+    }
+
     state = state.copyWith(isSaving: false, scoreUpdates: {});
 
     final bool online = await SyncQueueService.isOnline();
@@ -1509,11 +1635,20 @@ class NextClassNotifier extends StateNotifier<NextClassState> {
           }
 
           if (updates.containsKey('homework')) {
+            final hwScore = updates['homework']!;
+            final String statusStr = hwScore >= 75 ? 'done' : (hwScore >= 25 ? 'incomplete' : 'not_done');
             final idx = newHomeworkScores.indexWhere((s) => s['subject'] == subject);
+            final newEntry = {
+              'subject': subject,
+              'score': hwScore,
+              'status': statusStr,
+              'date': DateTime.now().toIso8601String().substring(0, 10),
+              if (activeHwId != null) 'homeworkId': activeHwId,
+            };
             if (idx >= 0) {
-              newHomeworkScores[idx] = { ...newHomeworkScores[idx], 'score': updates['homework'] };
+              newHomeworkScores[idx] = { ...newHomeworkScores[idx], ...newEntry };
             } else {
-              newHomeworkScores.add({ 'subject': subject, 'score': updates['homework'] });
+              newHomeworkScores.add(newEntry);
             }
           }
 
@@ -1521,6 +1656,35 @@ class NextClassNotifier extends StateNotifier<NextClassState> {
             'academicScores': newAcademicScores,
             'homeworkScores': newHomeworkScores,
           });
+        }
+
+        // Also update active homework document's submissions in Firestore
+        if (activeHwId != null && activeHwId.toString().isNotEmpty) {
+          final hwRef = FirebaseFirestore.instance
+              .collection('schools')
+              .doc(schoolId)
+              .collection('classes')
+              .doc(classId)
+              .collection('homework')
+              .doc(activeHwId.toString());
+
+          final Map<String, dynamic> submissionUpdates = {};
+          for (var entry in scoreUpdatesCopy.entries) {
+            final sId = entry.key;
+            final studentUpdates = entry.value;
+            if (studentUpdates.containsKey('homework')) {
+              final score = studentUpdates['homework']!;
+              final status = score >= 75 ? 'done' : (score >= 25 ? 'incomplete' : 'not_done');
+              submissionUpdates['submissions.$sId'] = {
+                'score': score,
+                'status': status,
+                'updatedAt': Timestamp.now(),
+              };
+            }
+          }
+          if (submissionUpdates.isNotEmpty) {
+            batch.update(hwRef, submissionUpdates);
+          }
         }
 
         await batch.commit();
