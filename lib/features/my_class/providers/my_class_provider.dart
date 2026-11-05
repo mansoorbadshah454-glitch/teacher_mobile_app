@@ -116,12 +116,19 @@ final todaysAbsentCountProvider = StreamProvider.autoDispose<int>((ref) {
         if (snapshot.docs.isNotEmpty) {
           final docs = snapshot.docs.toList();
           docs.sort((a, b) {
-            final tA = a.data()['timestamp'] as Timestamp?;
-            final tB = b.data()['timestamp'] as Timestamp?;
-            if (tA == null && tB == null) return 0;
-            if (tA == null) return 1;
-            if (tB == null) return -1;
-            return tB.compareTo(tA); // Descending order
+            int aMs = 0;
+            int bMs = 0;
+            final tA = a.data()['timestamp'];
+            final tB = b.data()['timestamp'];
+            if (tA is Timestamp) aMs = tA.millisecondsSinceEpoch;
+            else if (tA is DateTime) aMs = tA.millisecondsSinceEpoch;
+            else if (tA is String) aMs = DateTime.tryParse(tA)?.millisecondsSinceEpoch ?? 0;
+
+            if (tB is Timestamp) bMs = tB.millisecondsSinceEpoch;
+            else if (tB is DateTime) bMs = tB.millisecondsSinceEpoch;
+            else if (tB is String) bMs = DateTime.tryParse(tB)?.millisecondsSinceEpoch ?? 0;
+
+            return bMs.compareTo(aMs); // Descending order
           });
 
           final data = docs.first.data();

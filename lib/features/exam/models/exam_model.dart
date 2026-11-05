@@ -5,6 +5,8 @@ class ExamModel {
   final String title;
   final String session;
   final String status; // 'active', 'completed', 'upcoming'
+  final bool isLocked;
+  final String? lockedReason;
   final DateTime? startDate;
   final DateTime? endDate;
   final int defaultTotalMarks;
@@ -15,11 +17,18 @@ class ExamModel {
     required this.title,
     required this.session,
     this.status = 'active',
+    this.isLocked = false,
+    this.lockedReason,
     this.startDate,
     this.endDate,
     this.defaultTotalMarks = 100,
     this.passingMarks = 33,
   });
+
+  bool get isCompletedOrLocked =>
+      isLocked ||
+      status.toLowerCase() == 'completed' ||
+      status.toLowerCase() == 'archived';
 
   factory ExamModel.fromFirestore(String id, Map<String, dynamic> data) {
     DateTime? parseDate(dynamic val) {
@@ -28,11 +37,18 @@ class ExamModel {
       return null;
     }
 
+    final statusStr = (data['status'] ?? 'active').toString();
+    final bool locked = (data['isLocked'] == true) ||
+        statusStr.toLowerCase() == 'completed' ||
+        statusStr.toLowerCase() == 'archived';
+
     return ExamModel(
       id: id,
       title: (data['title'] ?? data['name'] ?? 'Term Exam').toString(),
       session: (data['session'] ?? '').toString(),
-      status: (data['status'] ?? 'active').toString(),
+      status: statusStr,
+      isLocked: locked,
+      lockedReason: data['lockedReason']?.toString(),
       startDate: parseDate(data['startDate']),
       endDate: parseDate(data['endDate']),
       defaultTotalMarks: (data['defaultTotalMarks'] as num?)?.toInt() ??

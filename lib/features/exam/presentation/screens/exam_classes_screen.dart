@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:teacher_mobile_app/core/services/sync_queue_service.dart';
 import 'package:teacher_mobile_app/features/exam/models/exam_model.dart';
 import 'package:teacher_mobile_app/features/exam/providers/exam_provider.dart';
 
@@ -56,27 +57,73 @@ class ExamClassesScreen extends ConsumerWidget {
                   ),
                 ),
                 const SizedBox(width: 16),
-                const Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  children: [
-                    Text(
-                      "Exam & Marks",
-                      style: TextStyle(
-                        fontSize: 22,
-                        fontWeight: FontWeight.w800,
-                        color: Colors.white,
+                const Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      Text(
+                        "Exam & Marks",
+                        style: TextStyle(
+                          fontSize: 22,
+                          fontWeight: FontWeight.w800,
+                          color: Colors.white,
+                        ),
                       ),
-                    ),
-                    SizedBox(height: 2),
-                    Text(
-                      "Select class to enter or view marks",
-                      style: TextStyle(
-                        fontSize: 13,
-                        color: Colors.white70,
-                        fontWeight: FontWeight.w500,
+                      SizedBox(height: 2),
+                      Text(
+                        "Select class to enter or view marks",
+                        style: TextStyle(
+                          fontSize: 13,
+                          color: Colors.white70,
+                          fontWeight: FontWeight.w500,
+                        ),
                       ),
-                    ),
-                  ],
+                    ],
+                  ),
+                ),
+                ValueListenableBuilder<int>(
+                  valueListenable: SyncQueueService.pendingCountNotifier,
+                  builder: (context, count, _) {
+                    if (count > 0) {
+                      return GestureDetector(
+                        onTap: () async {
+                          ScaffoldMessenger.of(context).showSnackBar(
+                            SnackBar(
+                              content: Text("Syncing $count offline items..."),
+                              duration: const Duration(seconds: 2),
+                            ),
+                          );
+                          await SyncQueueService.checkAndSync();
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: Colors.amber.shade400,
+                            borderRadius: BorderRadius.circular(12),
+                            boxShadow: [
+                              BoxShadow(color: Colors.black.withOpacity(0.2), blurRadius: 4),
+                            ],
+                          ),
+                          child: Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              const Icon(Icons.sync, size: 14, color: Colors.black87),
+                              const SizedBox(width: 4),
+                              Text(
+                                "$count pending",
+                                style: const TextStyle(
+                                  color: Colors.black87,
+                                  fontWeight: FontWeight.bold,
+                                  fontSize: 11,
+                                ),
+                              ),
+                            ],
+                          ),
+                        ),
+                      );
+                    }
+                    return const SizedBox.shrink();
+                  },
                 ),
               ],
             ),
@@ -232,57 +279,66 @@ class _ClassExamCard extends StatelessWidget {
               children: [
                 // Top Row: Class Name and Student Count
                 Row(
-                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  crossAxisAlignment: CrossAxisAlignment.center,
                   children: [
-                    Row(
-                      children: [
-                        Container(
-                          width: 46,
-                          height: 46,
-                          decoration: BoxDecoration(
-                            gradient: const LinearGradient(
-                              colors: [Color(0xFF6366F1), Color(0xFF4F46E5)],
-                              begin: Alignment.topLeft,
-                              end: Alignment.bottomRight,
+                    Expanded(
+                      child: Row(
+                        children: [
+                          Container(
+                            width: 44,
+                            height: 44,
+                            decoration: BoxDecoration(
+                              gradient: const LinearGradient(
+                                colors: [Color(0xFF6366F1), Color(0xFF4F46E5)],
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                              ),
+                              borderRadius: BorderRadius.circular(14),
+                              boxShadow: [
+                                BoxShadow(
+                                  color: const Color(0xFF4F46E5).withOpacity(0.3),
+                                  blurRadius: 6,
+                                  offset: const Offset(0, 2),
+                                )
+                              ],
                             ),
-                            borderRadius: BorderRadius.circular(14),
-                            boxShadow: [
-                              BoxShadow(
-                                color: const Color(0xFF4F46E5).withOpacity(0.3),
-                                blurRadius: 6,
-                                offset: const Offset(0, 2),
-                              )
-                            ],
+                            child: const Icon(Icons.school, color: Colors.white, size: 22),
                           ),
-                          child: const Icon(Icons.school, color: Colors.white, size: 24),
-                        ),
-                        const SizedBox(width: 14),
-                        Column(
-                          crossAxisAlignment: CrossAxisAlignment.start,
-                          children: [
-                            Text(
-                              item.className,
-                              style: TextStyle(
-                                fontSize: 17,
-                                fontWeight: FontWeight.w700,
-                                color: isDark ? Colors.white : const Color(0xFF0F172A),
-                              ),
+                          const SizedBox(width: 12),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  item.className,
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    fontSize: 16,
+                                    fontWeight: FontWeight.w700,
+                                    color: isDark ? Colors.white : const Color(0xFF0F172A),
+                                  ),
+                                ),
+                                const SizedBox(height: 2),
+                                Text(
+                                  "${item.subjects.length} Assigned ${item.subjects.length == 1 ? 'Subject' : 'Subjects'}",
+                                  maxLines: 1,
+                                  overflow: TextOverflow.ellipsis,
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    color: isDark ? Colors.white60 : const Color(0xFF64748B),
+                                    fontWeight: FontWeight.w500,
+                                  ),
+                                ),
+                              ],
                             ),
-                            const SizedBox(height: 2),
-                            Text(
-                              "${item.subjects.length} Assigned ${item.subjects.length == 1 ? 'Subject' : 'Subjects'}",
-                              style: TextStyle(
-                                fontSize: 12,
-                                color: isDark ? Colors.white60 : const Color(0xFF64748B),
-                                fontWeight: FontWeight.w500,
-                              ),
-                            ),
-                          ],
-                        ),
-                      ],
+                          ),
+                        ],
+                      ),
                     ),
+                    const SizedBox(width: 8),
                     Container(
-                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 5),
+                      padding: const EdgeInsets.symmetric(horizontal: 9, vertical: 5),
                       decoration: BoxDecoration(
                         color: const Color(0xFF4F46E5).withOpacity(0.1),
                         borderRadius: BorderRadius.circular(10),

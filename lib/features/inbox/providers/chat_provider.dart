@@ -1,8 +1,19 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:teacher_mobile_app/core/providers/user_data_provider.dart';
 import 'package:teacher_mobile_app/features/auth/auth_provider.dart';
-import 'package:shared_preferences/shared_preferences.dart';
+int _getMillis(dynamic val) {
+  if (val == null) return DateTime.now().millisecondsSinceEpoch;
+  if (val is Timestamp) return val.millisecondsSinceEpoch;
+  if (val is DateTime) return val.millisecondsSinceEpoch;
+  if (val is String) {
+    final dt = DateTime.tryParse(val);
+    if (dt != null) return dt.millisecondsSinceEpoch;
+  }
+  if (val is num) return val.toInt();
+  return DateTime.now().millisecondsSinceEpoch;
+}
 
 // Provides real-time chat messages between the current teacher and a specific admin
 final chatMessagesProvider = StreamProvider.family<List<Map<String, dynamic>>, String>((ref, adminId) {
@@ -73,8 +84,8 @@ final chatMessagesProvider = StreamProvider.family<List<Map<String, dynamic>>, S
 
         // Sort in-memory to avoid composite index requirement
         messages.sort((a, b) {
-          final aTime = (a['timestamp'] as Timestamp?)?.millisecondsSinceEpoch ?? DateTime.now().millisecondsSinceEpoch;
-          final bTime = (b['timestamp'] as Timestamp?)?.millisecondsSinceEpoch ?? DateTime.now().millisecondsSinceEpoch;
+          final aTime = _getMillis(a['timestamp']);
+          final bTime = _getMillis(b['timestamp']);
           return bTime.compareTo(aTime); // Descending
         });
 

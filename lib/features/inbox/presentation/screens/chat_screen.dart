@@ -650,6 +650,11 @@ class _ChatBubble extends StatelessWidget {
     String formattedTime = '';
     if (msg['timestamp'] is Timestamp) {
       formattedTime = DateFormat('h:mm a').format((msg['timestamp'] as Timestamp).toDate());
+    } else if (msg['timestamp'] is DateTime) {
+      formattedTime = DateFormat('h:mm a').format(msg['timestamp'] as DateTime);
+    } else if (msg['timestamp'] is String) {
+      final dt = DateTime.tryParse(msg['timestamp']);
+      if (dt != null) formattedTime = DateFormat('h:mm a').format(dt);
     }
 
     bool isRead = msg['read'] == true;

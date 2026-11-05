@@ -13,8 +13,10 @@ class LocalDbService {
   static Box get cacheBox => Hive.box(cacheBoxName);
 
   static dynamic _sanitize(dynamic data) {
+    if (data == null) return null;
     if (data is Timestamp) return data.toDate().toIso8601String();
     if (data is DateTime) return data.toIso8601String();
+    if (data is FieldValue) return null;
     if (data is Map) {
       return data.map((key, value) => MapEntry(key.toString(), _sanitize(value)));
     }
@@ -39,5 +41,9 @@ class LocalDbService {
       }
     }
     return null;
+  }
+
+  static Future<void> removeCache(String key) async {
+    await cacheBox.delete(key);
   }
 }

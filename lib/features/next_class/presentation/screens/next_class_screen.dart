@@ -104,8 +104,8 @@ class NextClassScreen extends ConsumerWidget {
   }
 
   Widget _buildHeader(BuildContext context, NextClassState state, NextClassNotifier notifier) {
-    String title = "All Classes";
-    String subtitle = "Select a class to manage";
+    String title = "My Classes";
+    String subtitle = "Select an assigned class";
     bool showActionButtons = false;
 
     if (state.viewMode == NextClassViewMode.subjects) {
@@ -119,11 +119,11 @@ class NextClassScreen extends ConsumerWidget {
       title = "Homework";
       subtitle = "${state.selectedSubject} • ${state.selectedClass?['name']}";
     } else if (state.viewMode == NextClassViewMode.scheduleTest) {
-      title = "Schedule Test";
-      subtitle = state.selectedSubject ?? "Details";
+      title = "Test Dashboard";
+      subtitle = "${state.selectedSubject} • Reports & Assessments";
     } else if (state.viewMode == NextClassViewMode.test) {
-      title = "Test: ${state.selectedSubject}";
-      subtitle = "Enter scores & generate report";
+      title = "Schedule Test";
+      subtitle = "${state.selectedSubject} • New Assessment";
     } else if (state.viewMode == NextClassViewMode.activeTestScore) {
       title = "Record Scores";
       subtitle = "${state.selectedSubject} • ${state.activeScheduledTest?['testType'] ?? ''} Test";
@@ -276,7 +276,7 @@ class NextClassScreen extends ConsumerWidget {
     }
     switch (state.viewMode) {
       case NextClassViewMode.classes:
-        return _buildClassesView(context, state, notifier);
+        return _buildClassesView(context, state, notifier, timetableSlots);
       case NextClassViewMode.subjects:
         return _buildSubjectsView(context, state, notifier, timetableSlots);
       case NextClassViewMode.students:
@@ -284,34 +284,76 @@ class NextClassScreen extends ConsumerWidget {
       case NextClassViewMode.homework:
         return _buildHomeworkView(context, state, notifier, teacherData, schoolData);
       case NextClassViewMode.scheduleTest:
-        return _buildScheduleTestView(context, state, notifier);
+        return _buildTestDashboardView(context, state, notifier, teacherData, schoolData);
       case NextClassViewMode.test:
-        return _buildTestView(context, state, notifier, teacherData, schoolData);
+        return _buildScheduleTestFormView(context, state, notifier);
       case NextClassViewMode.activeTestScore:
         return _buildActiveTestScoreView(context, state, notifier, teacherData, schoolData);
     }
   }
 
-  Widget _buildClassesView(BuildContext context, NextClassState state, NextClassNotifier notifier) {
-    if (state.classes.isEmpty) {
+  Widget _buildClassesView(BuildContext context, NextClassState state, NextClassNotifier notifier, List<TimetableSlot> timetableSlots) {
+    if (state.isLoading && state.classes.isEmpty) {
       return const Center(
-        child: Text("No classes found.", style: TextStyle(color: Colors.grey)),
+        child: CircularProgressIndicator(color: AppTheme.primary),
       );
     }
 
-    return GridView.builder(
-      padding: const EdgeInsets.all(16),
-      gridDelegate: const SliverGridDelegateWithFixedCrossAxisCount(
-        crossAxisCount: 2,
-        crossAxisSpacing: 16,
-        mainAxisSpacing: 16,
-        childAspectRatio: 0.9,
-      ),
-      itemCount: state.classes.length,
+    // Filter classes to only those assigned to the teacher in the timetable
+    final assignedClasses = state.classes.where((cls) {
+      final clsName = (cls['name'] ?? '').toString().trim().toLowerCase();
+      return timetableSlots.any((slot) =>
+          !slot.isFree &&
+          !slot.isBreak &&
+          slot.className.trim().toLowerCase() == clsName);
+    }).toList();
+
+    if (assignedClasses.isEmpty) {
+      return Center(
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 32),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              Container(
+                padding: const EdgeInsets.all(20),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF10b981).withOpacity(0.1),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.event_busy_rounded, color: Color(0xFF10b981), size: 42),
+              ),
+              const SizedBox(height: 18),
+              const Text(
+                "No Assigned Classes",
+                style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold),
+              ),
+              const SizedBox(height: 8),
+              const Text(
+                "No timetable periods are assigned to you for any class yet. Please contact your principal to update the school timetable.",
+                textAlign: TextAlign.center,
+                style: TextStyle(color: Colors.grey, fontSize: 13, height: 1.4),
+              ),
+            ],
+          ),
+        ),
+      );
+    }
+
+    return ListView.builder(
+      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 12),
+      itemCount: assignedClasses.length,
       itemBuilder: (context, index) {
-        final cls = state.classes[index];
+        final cls = assignedClasses[index];
+        final clsName = (cls['name'] ?? '').toString().trim().toLowerCase();
+        final assignedSlots = timetableSlots.where((slot) =>
+            !slot.isFree &&
+            !slot.isBreak &&
+            slot.className.trim().toLowerCase() == clsName).toList();
+
         return ClassCard(
           cls: cls,
+          assignedSlots: assignedSlots,
           onTap: () => notifier.selectClass(cls),
         );
       },
@@ -320,7 +362,7 @@ class NextClassScreen extends ConsumerWidget {
 
   Widget _buildSubjectsView(BuildContext context, NextClassState state, NextClassNotifier notifier, List<TimetableSlot> timetableSlots) {
     final subjects = List<String>.from(state.selectedClass?['subjects'] ?? []);
-    final className = state.selectedClass?['name'];
+    final className = (state.selectedClass?['name'] ?? '').toString().trim();
 
     if (subjects.isEmpty) {
       return const Center(
@@ -328,14 +370,37 @@ class NextClassScreen extends ConsumerWidget {
       );
     }
 
+    // Sort subjects so assigned subjects appear first
+    final sortedSubjects = List<String>.from(subjects)
+      ..sort((a, b) {
+        final aAssigned = timetableSlots.any((slot) =>
+            !slot.isFree &&
+            !slot.isBreak &&
+            slot.className.trim().toLowerCase() == className.toLowerCase() &&
+            slot.subject.trim().toLowerCase() == a.trim().toLowerCase());
+        final bAssigned = timetableSlots.any((slot) =>
+            !slot.isFree &&
+            !slot.isBreak &&
+            slot.className.trim().toLowerCase() == className.toLowerCase() &&
+            slot.subject.trim().toLowerCase() == b.trim().toLowerCase());
+        if (aAssigned && !bAssigned) return -1;
+        if (!aAssigned && bAssigned) return 1;
+        return a.compareTo(b);
+      });
+
     return ListView.builder(
       padding: const EdgeInsets.all(16),
-      itemCount: subjects.length,
+      itemCount: sortedSubjects.length,
       itemBuilder: (context, index) {
         final isLight = Theme.of(context).brightness == Brightness.light;
         final isDark = !isLight;
-        final subject = subjects[index];
-        final isAssigned = timetableSlots.any((slot) => slot.className == className && slot.subject == subject);
+        final subject = sortedSubjects[index];
+        final assignedSlots = timetableSlots.where((slot) =>
+            !slot.isFree &&
+            !slot.isBreak &&
+            slot.className.trim().toLowerCase() == className.toLowerCase() &&
+            slot.subject.trim().toLowerCase() == subject.trim().toLowerCase()).toList();
+        final isAssigned = assignedSlots.isNotEmpty;
 
         return GestureDetector(
           onTap: isAssigned ? () => notifier.selectSubject(subject) : () {
@@ -347,7 +412,7 @@ class NextClassScreen extends ConsumerWidget {
             opacity: isAssigned ? 1.0 : 0.5,
             child: Container(
               margin: const EdgeInsets.only(bottom: 12),
-              padding: const EdgeInsets.all(20),
+              padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
                 color: isAssigned
                     ? (isDark ? Colors.white.withOpacity(0.05) : Colors.white)
@@ -363,16 +428,16 @@ class NextClassScreen extends ConsumerWidget {
               child: Row(
                 children: [
                   Container(
-                    width: 40,
-                    height: 40,
+                    width: 42,
+                    height: 42,
                     decoration: BoxDecoration(
-                      color: const Color(0xFFF43F5E).withOpacity(0.1),
-                      borderRadius: BorderRadius.circular(10),
+                      color: const Color(0xFF10b981).withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(12),
                     ),
                     alignment: Alignment.center,
-                    child: const Icon(Icons.menu_book, color: Color(0xFFF43F5E), size: 18),
+                    child: const Icon(Icons.menu_book_rounded, color: Color(0xFF10b981), size: 20),
                   ),
-                  const SizedBox(width: 16),
+                  const SizedBox(width: 14),
                   Expanded(
                     child: Column(
                       crossAxisAlignment: CrossAxisAlignment.start,
@@ -385,7 +450,21 @@ class NextClassScreen extends ConsumerWidget {
                             fontWeight: FontWeight.w600,
                           ),
                         ),
-                        if (!isAssigned)
+                        if (isAssigned) ...[
+                          const SizedBox(height: 4),
+                          Wrap(
+                            spacing: 6,
+                            runSpacing: 4,
+                            children: assignedSlots.map((s) => Text(
+                              "${s.period}${s.time.isNotEmpty ? ' (${s.time})' : ''}",
+                              style: const TextStyle(
+                                color: Color(0xFF059669),
+                                fontSize: 11,
+                                fontWeight: FontWeight.w600,
+                              ),
+                            )).toList(),
+                          ),
+                        ] else
                           const Text(
                             "No Period on Timetable",
                             style: TextStyle(
@@ -739,13 +818,9 @@ class NextClassScreen extends ConsumerWidget {
     );
   }
 
-  Widget _buildScheduleTestView(BuildContext context, NextClassState state, NextClassNotifier notifier) {
+  Widget _buildScheduleTestFormView(BuildContext context, NextClassState state, NextClassNotifier notifier) {
     if (state.isFetchingTest) {
       return const Center(child: CircularProgressIndicator(color: AppTheme.primary));
-    }
-    
-    if (state.activeScheduledTest != null && state.activeScheduledTest!.isNotEmpty) {
-      return _buildScheduledTestDetailsWidget(context, state, notifier);
     }
 
     final isDark = Theme.of(context).brightness == Brightness.dark;
@@ -872,8 +947,28 @@ class NextClassScreen extends ConsumerWidget {
                   );
                   return;
                }
-               // INSTANT UI UPDATE
-               notifier.saveScheduledTest();
+               try {
+                 final synced = await notifier.saveScheduledTest();
+                 if (context.mounted) {
+                   ScaffoldMessenger.of(context).showSnackBar(
+                     SnackBar(
+                       content: Text(synced 
+                           ? "Test scheduled and parents alerted!" 
+                           : "Test saved offline! Parents will be alerted once online."),
+                       backgroundColor: const Color(0xFF10B981),
+                     ),
+                   );
+                 }
+               } catch (e) {
+                 if (context.mounted) {
+                   ScaffoldMessenger.of(context).showSnackBar(
+                     SnackBar(
+                       content: Text("Failed to schedule test: $e"),
+                       backgroundColor: Colors.red,
+                     ),
+                   );
+                 }
+               }
             },
             child: Container(
               width: double.infinity,
@@ -957,123 +1052,1323 @@ class NextClassScreen extends ConsumerWidget {
   }
 
 
-  Widget _buildScheduledTestDetailsWidget(BuildContext context, NextClassState state, NextClassNotifier notifier) {
+  Widget _buildTestDashboardView(BuildContext context, NextClassState state, NextClassNotifier notifier, Map<String, dynamic>? teacherData, Map<String, dynamic>? schoolData) {
+    if (state.isFetchingTest && state.testReportsList.isEmpty && (state.activeScheduledTest == null || state.activeScheduledTest!.isEmpty)) {
+      return const Center(child: CircularProgressIndicator(color: AppTheme.primary));
+    }
+
     final isDark = Theme.of(context).brightness == Brightness.dark;
-    final test = state.activeScheduledTest!;
-    
-    return SingleChildScrollView(
-      padding: const EdgeInsets.all(24),
+    final hasActiveTest = state.activeScheduledTest != null && state.activeScheduledTest!.isNotEmpty;
+    final testReports = state.testReportsList;
+
+    const int pageSize = 4;
+    final int totalReports = testReports.length;
+    final int totalPages = totalReports > 0 ? ((totalReports + pageSize - 1) ~/ pageSize) : 1;
+    final int rawPage = state.testReportsPageIndex;
+    final int currentPage = rawPage.clamp(0, totalPages - 1);
+    final int startIndex = currentPage * pageSize;
+    final int endIndex = (startIndex + pageSize < totalReports) ? (startIndex + pageSize) : totalReports;
+    final List<Map<String, dynamic>> currentReports = totalReports > 0 ? testReports.sublist(startIndex, endIndex) : [];
+
+    return Padding(
+      padding: const EdgeInsets.fromLTRB(20, 16, 20, 10),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Container(
-            width: double.infinity,
-            padding: const EdgeInsets.all(24),
-            decoration: BoxDecoration(
-              gradient: const LinearGradient(
-                colors: [Color(0xFF6366f1), Color(0xFF4f46e5)],
-                begin: Alignment.topLeft,
-                end: Alignment.bottomRight,
-              ),
-              borderRadius: BorderRadius.circular(24),
-              boxShadow: [BoxShadow(color: const Color(0xFF6366f1).withOpacity(0.3), blurRadius: 20, offset: const Offset(0, 10))],
-            ),
-            child: Column(
-              children: [
-                Container(
-                  padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 6),
-                  decoration: BoxDecoration(color: Colors.white.withOpacity(0.2), borderRadius: BorderRadius.circular(20)),
-                  child: Text("${test['testType']} Test", style: const TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12)),
-                ),
-                const SizedBox(height: 16),
-                const Icon(Icons.event_available, color: Colors.white, size: 48),
-                const SizedBox(height: 16),
-                Text(test['subject'] ?? "Subject", style: const TextStyle(color: Colors.white, fontSize: 24, fontWeight: FontWeight.w800)),
-                const SizedBox(height: 8),
-                Text(test['chapter'] ?? "", style: TextStyle(color: Colors.white.withOpacity(0.9), fontSize: 16), textAlign: TextAlign.center),
-                if ((test['paragraphs'] ?? '').isNotEmpty)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 4),
-                    child: Text("Topic: ${test['paragraphs']}", style: TextStyle(color: Colors.white.withOpacity(0.7), fontSize: 14)),
+          // 1. STICKY TOP HERO CARD (Active or Schedule) - Always fixed at the top
+          if (hasActiveTest)
+            _buildActiveTestHeroCard(context, state, notifier)
+          else
+            _buildNoActiveTestBanner(context, notifier, isDark),
+          const SizedBox(height: 16),
+
+          // 2. TEST REPORTS & HISTORY HEADER
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Row(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      color: const Color(0xFF6366f1).withOpacity(0.1),
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    child: const Icon(Icons.analytics_outlined, color: Color(0xFF6366f1), size: 20),
                   ),
+                  const SizedBox(width: 10),
+                  Text(
+                    "Test Reports & History",
+                    style: TextStyle(
+                      fontWeight: FontWeight.bold,
+                      fontSize: 16,
+                      color: isDark ? Colors.white : Colors.indigo[950],
+                    ),
+                  ),
+                ],
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: isDark ? Colors.white.withOpacity(0.08) : Colors.indigo[50],
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: isDark ? Colors.white.withOpacity(0.1) : Colors.indigo[100]!),
+                ),
+                child: Text(
+                  "$totalReports ${totalReports == 1 ? 'Report' : 'Reports'}",
+                  style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: isDark ? Colors.indigo[300] : Colors.indigo[600]),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 10),
+
+          // 3. PAGINATED REPORTS (4 items per page with horizontal swipe & bottom > navigation)
+          Expanded(
+            child: testReports.isEmpty
+                ? SingleChildScrollView(child: _buildEmptyReportsCard(context, isDark))
+                : GestureDetector(
+                    onHorizontalDragEnd: (details) {
+                      final velocity = details.primaryVelocity ?? 0;
+                      if (velocity < -250 && currentPage < totalPages - 1) {
+                        notifier.setTestReportsPage(currentPage + 1);
+                      } else if (velocity > 250 && currentPage > 0) {
+                        notifier.setTestReportsPage(currentPage - 1);
+                      }
+                    },
+                    child: Column(
+                      children: [
+                        Expanded(
+                          child: ListView.builder(
+                            padding: const EdgeInsets.only(bottom: 6),
+                            itemCount: currentReports.length,
+                            itemBuilder: (context, idx) {
+                              return _buildTestReportCard(
+                                context,
+                                currentReports[idx],
+                                state,
+                                notifier,
+                                teacherData,
+                                schoolData,
+                              );
+                            },
+                          ),
+                        ),
+
+                        // Bottom Navigation Bar (Shows < Prev, Page pill, and > Next button)
+                        if (totalPages > 1)
+                          _buildReportsPaginationBar(
+                            context: context,
+                            currentPage: currentPage,
+                            totalPages: totalPages,
+                            startNum: startIndex + 1,
+                            endNum: endIndex,
+                            totalCount: totalReports,
+                            notifier: notifier,
+                            isDark: isDark,
+                          ),
+                      ],
+                    ),
+                  ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildReportsPaginationBar({
+    required BuildContext context,
+    required int currentPage,
+    required int totalPages,
+    required int startNum,
+    required int endNum,
+    required int totalCount,
+    required NextClassNotifier notifier,
+    required bool isDark,
+  }) {
+    final bool hasPrev = currentPage > 0;
+    final bool hasNext = currentPage < totalPages - 1;
+
+    return Container(
+      margin: const EdgeInsets.only(top: 6, bottom: 8),
+      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 7),
+      decoration: BoxDecoration(
+        color: isDark ? Colors.white.withOpacity(0.04) : Colors.white,
+        borderRadius: BorderRadius.circular(14),
+        border: Border.all(color: isDark ? Colors.white.withOpacity(0.08) : Colors.grey[200]!),
+        boxShadow: isDark
+            ? []
+            : [
+                BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 6, offset: const Offset(0, 2)),
               ],
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          // Prev button (<)
+          GestureDetector(
+            onTap: hasPrev ? () => notifier.setTestReportsPage(currentPage - 1) : null,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+              decoration: BoxDecoration(
+                color: hasPrev
+                    ? (isDark ? Colors.white.withOpacity(0.08) : Colors.indigo[50])
+                    : Colors.transparent,
+                borderRadius: BorderRadius.circular(8),
+              ),
+              child: Row(
+                children: [
+                  Icon(
+                    Icons.arrow_back_ios_rounded,
+                    size: 13,
+                    color: hasPrev ? const Color(0xFF6366f1) : Colors.grey[400],
+                  ),
+                  const SizedBox(width: 4),
+                  Text(
+                    "Prev",
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      color: hasPrev ? const Color(0xFF6366f1) : Colors.grey[400],
+                    ),
+                  ),
+                ],
+              ),
             ),
           ),
-          const SizedBox(height: 24),
+
+          // Page pill
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+            decoration: BoxDecoration(
+              color: const Color(0xFF6366f1).withOpacity(0.1),
+              borderRadius: BorderRadius.circular(10),
+            ),
+            child: Text(
+              "$startNum–$endNum of $totalCount (Page ${currentPage + 1}/$totalPages)",
+              style: const TextStyle(
+                fontSize: 11,
+                fontWeight: FontWeight.bold,
+                color: Color(0xFF6366f1),
+              ),
+            ),
+          ),
+
+          // Next button (">")
+          GestureDetector(
+            onTap: hasNext ? () => notifier.setTestReportsPage(currentPage + 1) : null,
+            child: Container(
+              padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+              decoration: BoxDecoration(
+                color: hasNext
+                    ? const Color(0xFF6366f1)
+                    : (isDark ? Colors.white.withOpacity(0.03) : Colors.grey[200]),
+                borderRadius: BorderRadius.circular(8),
+                boxShadow: hasNext
+                    ? [
+                        BoxShadow(
+                          color: const Color(0xFF6366f1).withOpacity(0.3),
+                          blurRadius: 6,
+                          offset: const Offset(0, 2),
+                        ),
+                      ]
+                    : [],
+              ),
+              child: Row(
+                children: [
+                  Text(
+                    "Next",
+                    style: TextStyle(
+                      fontSize: 12,
+                      fontWeight: FontWeight.bold,
+                      color: hasNext ? Colors.white : Colors.grey[400],
+                    ),
+                  ),
+                  const SizedBox(width: 4),
+                  Icon(
+                    Icons.arrow_forward_ios_rounded,
+                    size: 13,
+                    color: hasNext ? Colors.white : Colors.grey[400],
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildNoActiveTestBanner(BuildContext context, NextClassNotifier notifier, bool isDark) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(20),
+      decoration: BoxDecoration(
+        color: isDark ? Colors.white.withOpacity(0.04) : Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: isDark ? Colors.white.withOpacity(0.08) : Colors.grey[200]!),
+        boxShadow: isDark ? [] : [
+          BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 10, offset: const Offset(0, 4)),
+        ],
+      ),
+      child: Column(
+        children: [
           Row(
             children: [
-              Expanded(child: _buildDetailCard(context, Icons.calendar_today, "Date", test['dateStr'] ?? "TBD")),
+              Container(
+                padding: const EdgeInsets.all(12),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF6366f1).withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(14),
+                ),
+                child: const Icon(Icons.quiz_outlined, color: Color(0xFF6366f1), size: 28),
+              ),
               const SizedBox(width: 16),
-              Expanded(child: _buildDetailCard(context, Icons.access_time, "Time", test['timeStr'] ?? "TBD")),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      "No Active Test",
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                        color: isDark ? Colors.white : Colors.indigo[950],
+                      ),
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      "Schedule a test to assess students and notify parents.",
+                      style: TextStyle(color: Colors.grey[500], fontSize: 12),
+                    ),
+                  ],
+                ),
+              ),
             ],
           ),
           const SizedBox(height: 16),
-          _buildDetailCard(context, Icons.score, "Max Marks", "${test['maxMarks'] ?? 10} Marks", fullWidth: true),
-          const SizedBox(height: 40),
-          Row(
-            children: [
-              Expanded(
-                child: GestureDetector(
-                  onTap: state.isSaving ? null : () => _showCancelDialog(context, notifier),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    decoration: BoxDecoration(
-                      color: isDark ? Colors.red.withOpacity(0.2) : Colors.red[50],
-                      borderRadius: BorderRadius.circular(16),
-                      border: Border.all(color: Colors.red.withOpacity(0.5)),
-                    ),
-                    alignment: Alignment.center,
-                    child: state.isSaving
-                        ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.red, strokeWidth: 2))
-                        : const Text("Cancel Test", style: TextStyle(color: Colors.red, fontSize: 16, fontWeight: FontWeight.bold)),
-                  ),
-                ),
-              ),
-              const SizedBox(width: 16),
-              Expanded(
-                child: GestureDetector(
-                  onTap: state.isSaving ? null : () => notifier.completeScheduledTest(),
-                  child: Container(
-                    padding: const EdgeInsets.symmetric(vertical: 16),
-                    decoration: BoxDecoration(
-                      gradient: const LinearGradient(
-                        colors: [Color(0xFF10b981), Color(0xFF059669)],
-                        begin: Alignment.topLeft,
-                        end: Alignment.bottomRight,
-                      ),
-                      borderRadius: BorderRadius.circular(16),
-                      boxShadow: [BoxShadow(color: const Color(0xFF10b981).withOpacity(0.4), blurRadius: 16, offset: const Offset(0, 8))],
-                    ),
-                    alignment: Alignment.center,
-                    child: state.isSaving
-                        ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
-                        : const Text("Completed", style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
-                  ),
-                ),
-              ),
-            ],
-          ),
-          const SizedBox(height: 24),
           GestureDetector(
-            onTap: state.isSaving ? null : () => notifier.goToActiveTestScoreMode(),
+            onTap: () => notifier.goToScheduleTestForm(),
             child: Container(
               width: double.infinity,
-              padding: const EdgeInsets.symmetric(vertical: 16),
+              padding: const EdgeInsets.symmetric(vertical: 14),
               decoration: BoxDecoration(
                 gradient: const LinearGradient(
                   colors: [Color(0xFF6366f1), Color(0xFF4f46e5)],
                   begin: Alignment.topLeft,
                   end: Alignment.bottomRight,
                 ),
-                borderRadius: BorderRadius.circular(16),
-                boxShadow: [BoxShadow(color: const Color(0xFF6366f1).withOpacity(0.4), blurRadius: 16, offset: const Offset(0, 8))],
+                borderRadius: BorderRadius.circular(14),
+                boxShadow: [
+                  BoxShadow(color: const Color(0xFF6366f1).withOpacity(0.35), blurRadius: 12, offset: const Offset(0, 6)),
+                ],
               ),
               alignment: Alignment.center,
-              child: const Text("Start Test", style: TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.bold)),
+              child: Row(
+                mainAxisAlignment: MainAxisAlignment.center,
+                children: const [
+                  Icon(Icons.add_circle_outline, color: Colors.white, size: 18),
+                  SizedBox(width: 8),
+                  Text("Schedule New Test", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15)),
+                ],
+              ),
             ),
           ),
         ],
       ),
+    );
+  }
+
+  Widget _buildActiveTestHeroCard(BuildContext context, NextClassState state, NextClassNotifier notifier) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final test = state.activeScheduledTest!;
+    final recordedCount = notifier.getTestDraftRecordedCount();
+    final isResuming = recordedCount > 0;
+
+    return Container(
+      width: double.infinity,
+      decoration: BoxDecoration(
+        color: isDark ? Colors.white.withOpacity(0.05) : Colors.white,
+        borderRadius: BorderRadius.circular(20),
+        border: Border.all(color: isDark ? Colors.white.withOpacity(0.08) : Colors.grey[200]!),
+        boxShadow: isDark ? [] : [
+          BoxShadow(color: Colors.black.withOpacity(0.03), blurRadius: 10, offset: const Offset(0, 4)),
+        ],
+      ),
+      child: Column(
+        children: [
+          // Top gradient header
+          Container(
+            width: double.infinity,
+            padding: const EdgeInsets.all(18),
+            decoration: const BoxDecoration(
+              gradient: LinearGradient(
+                colors: [Color(0xFF6366f1), Color(0xFF4f46e5)],
+                begin: Alignment.topLeft,
+                end: Alignment.bottomRight,
+              ),
+              borderRadius: BorderRadius.only(
+                topLeft: Radius.circular(20),
+                topRight: Radius.circular(20),
+              ),
+            ),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.2),
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        "${test['testType'] ?? 'Written'} Test",
+                        style: const TextStyle(color: Colors.white, fontSize: 12, fontWeight: FontWeight.bold),
+                      ),
+                    ),
+                    if (test['isPendingSync'] == true)
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.amber.withOpacity(0.25),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Row(
+                          children: const [
+                            Icon(Icons.sync, color: Colors.amber, size: 12),
+                            SizedBox(width: 4),
+                            Text("Offline", style: TextStyle(color: Colors.amber, fontSize: 11, fontWeight: FontWeight.bold)),
+                          ],
+                        ),
+                      )
+                    else
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                        decoration: BoxDecoration(
+                          color: Colors.white.withOpacity(0.15),
+                          borderRadius: BorderRadius.circular(12),
+                        ),
+                        child: Text(
+                          isResuming ? "In Progress" : "Scheduled",
+                          style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.w600),
+                        ),
+                      ),
+                  ],
+                ),
+                const SizedBox(height: 12),
+                Text(
+                  test['chapter'] ?? 'Chapter Test',
+                  style: const TextStyle(color: Colors.white, fontSize: 18, fontWeight: FontWeight.bold),
+                ),
+                if ((test['paragraphs'] ?? '').isNotEmpty) ...[
+                  const SizedBox(height: 4),
+                  Text(
+                    "Topic: ${test['paragraphs']}",
+                    style: TextStyle(color: Colors.white.withOpacity(0.85), fontSize: 13),
+                  ),
+                ],
+                const SizedBox(height: 12),
+                Row(
+                  children: [
+                    Icon(Icons.calendar_today, color: Colors.white.withOpacity(0.8), size: 14),
+                    const SizedBox(width: 4),
+                    Text(
+                      test['dateStr'] ?? '',
+                      style: TextStyle(color: Colors.white.withOpacity(0.9), fontSize: 12),
+                    ),
+                    const SizedBox(width: 14),
+                    Icon(Icons.access_time, color: Colors.white.withOpacity(0.8), size: 14),
+                    const SizedBox(width: 4),
+                    Text(
+                      test['timeStr'] ?? '',
+                      style: TextStyle(color: Colors.white.withOpacity(0.9), fontSize: 12),
+                    ),
+                    const Spacer(),
+                    Text(
+                      "Max: ${test['maxMarks'] ?? 10} M",
+                      style: const TextStyle(color: Colors.amber, fontWeight: FontWeight.bold, fontSize: 13),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+
+          // Actions inside Active card
+          Padding(
+            padding: const EdgeInsets.all(16),
+            child: Column(
+              children: [
+                GestureDetector(
+                  onTap: state.isSaving ? null : () => notifier.goToActiveTestScoreMode(),
+                  child: Container(
+                    width: double.infinity,
+                    padding: const EdgeInsets.symmetric(vertical: 14),
+                    decoration: BoxDecoration(
+                      gradient: LinearGradient(
+                        colors: isResuming
+                            ? const [Color(0xFFF59E0B), Color(0xFFD97706)]
+                            : const [Color(0xFF6366f1), Color(0xFF4f46e5)],
+                        begin: Alignment.topLeft,
+                        end: Alignment.bottomRight,
+                      ),
+                      borderRadius: BorderRadius.circular(14),
+                      boxShadow: [
+                        BoxShadow(
+                          color: (isResuming ? const Color(0xFFF59E0B) : const Color(0xFF6366f1)).withOpacity(0.35),
+                          blurRadius: 12,
+                          offset: const Offset(0, 6),
+                        ),
+                      ],
+                    ),
+                    alignment: Alignment.center,
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(
+                          isResuming ? Icons.play_circle_fill_rounded : Icons.play_arrow_rounded,
+                          color: Colors.white,
+                          size: 20,
+                        ),
+                        const SizedBox(width: 8),
+                        Text(
+                          isResuming ? "Resume Test ($recordedCount Recorded)" : "Start Test",
+                          style: const TextStyle(color: Colors.white, fontSize: 15, fontWeight: FontWeight.bold),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+                const SizedBox(height: 10),
+                Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceEvenly,
+                  children: [
+                    TextButton.icon(
+                      onPressed: state.isSaving ? null : () => _showCancelDialog(context, notifier),
+                      icon: const Icon(Icons.cancel_outlined, size: 16, color: Colors.red),
+                      label: const Text("Cancel Test", style: TextStyle(color: Colors.red, fontWeight: FontWeight.w600, fontSize: 13)),
+                    ),
+                    TextButton.icon(
+                      onPressed: state.isSaving ? null : () => notifier.completeScheduledTest(),
+                      icon: const Icon(Icons.check_circle_outline, size: 16, color: Color(0xFF10b981)),
+                      label: const Text("Mark Complete", style: TextStyle(color: Color(0xFF10b981), fontWeight: FontWeight.w600, fontSize: 13)),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildEmptyReportsCard(BuildContext context, bool isDark) {
+    return Container(
+      width: double.infinity,
+      padding: const EdgeInsets.all(28),
+      decoration: BoxDecoration(
+        color: isDark ? Colors.white.withOpacity(0.04) : Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: isDark ? Colors.white.withOpacity(0.08) : Colors.grey[200]!),
+      ),
+      child: Column(
+        children: [
+          Icon(Icons.folder_open_rounded, size: 48, color: Colors.grey[400]),
+          const SizedBox(height: 12),
+          Text(
+            "No Test Reports Yet",
+            style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: isDark ? Colors.white : Colors.indigo[950]),
+          ),
+          const SizedBox(height: 4),
+          Text(
+            "Once you complete and save a test, official reports and results will appear here.",
+            textAlign: TextAlign.center,
+            style: TextStyle(color: Colors.grey[500], fontSize: 12),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildTestReportCard(
+    BuildContext context,
+    Map<String, dynamic> report,
+    NextClassState state,
+    NextClassNotifier notifier,
+    Map<String, dynamic>? teacherData,
+    Map<String, dynamic>? schoolData,
+  ) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final maxMarks = report['maxMarks'] ?? 10;
+    final int presentCount = (report['presentCount'] is int)
+        ? report['presentCount']
+        : ((report['scores'] as Map?)?.length ?? 0);
+    final int absentCount = (report['absentCount'] is int)
+        ? report['absentCount']
+        : ((report['absentStudents'] as List?)?.length ?? 0);
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 14),
+      padding: const EdgeInsets.all(16),
+      decoration: BoxDecoration(
+        color: isDark ? Colors.white.withOpacity(0.04) : Colors.white,
+        borderRadius: BorderRadius.circular(18),
+        border: Border.all(color: isDark ? Colors.white.withOpacity(0.08) : Colors.grey[200]!),
+        boxShadow: isDark ? [] : [
+          BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 8, offset: const Offset(0, 3)),
+        ],
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            children: [
+              Container(
+                padding: const EdgeInsets.all(10),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF10B981).withOpacity(0.12),
+                  shape: BoxShape.circle,
+                ),
+                child: const Icon(Icons.assignment_turned_in, color: Color(0xFF10B981), size: 20),
+              ),
+              const SizedBox(width: 12),
+              Expanded(
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      report['chapter'] ?? report['subject'] ?? 'Completed Test',
+                      style: TextStyle(
+                        fontWeight: FontWeight.bold,
+                        fontSize: 16,
+                        color: isDark ? Colors.white : Colors.indigo[950],
+                      ),
+                      maxLines: 1,
+                      overflow: TextOverflow.ellipsis,
+                    ),
+                    const SizedBox(height: 2),
+                    Text(
+                      "${report['testType'] ?? 'Written'} • ${report['dateStr'] ?? ''}",
+                      style: TextStyle(color: Colors.grey[500], fontSize: 12),
+                    ),
+                  ],
+                ),
+              ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF10B981).withOpacity(0.1),
+                  borderRadius: BorderRadius.circular(10),
+                ),
+                child: const Text(
+                  "Completed",
+                  style: TextStyle(color: Color(0xFF10B981), fontWeight: FontWeight.bold, fontSize: 11),
+                ),
+              ),
+            ],
+          ),
+          const SizedBox(height: 12),
+          // Chips
+          Wrap(
+            spacing: 8,
+            runSpacing: 6,
+            children: [
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: const Color(0xFF10B981).withOpacity(0.08),
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    const Icon(Icons.people_outline, size: 13, color: Color(0xFF10B981)),
+                    const SizedBox(width: 4),
+                    Text("$presentCount Present", style: const TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Color(0xFF10B981))),
+                  ],
+                ),
+              ),
+              if (absentCount > 0)
+                Container(
+                  padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: Colors.red.withOpacity(0.08),
+                    borderRadius: BorderRadius.circular(8),
+                  ),
+                  child: Row(
+                    mainAxisSize: MainAxisSize.min,
+                    children: [
+                      Icon(Icons.person_off_outlined, size: 13, color: Colors.red[700]),
+                      const SizedBox(width: 4),
+                      Text("$absentCount Absent", style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: Colors.red[700])),
+                    ],
+                  ),
+                ),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                decoration: BoxDecoration(
+                  color: isDark ? Colors.white.withOpacity(0.06) : Colors.grey[100],
+                  borderRadius: BorderRadius.circular(8),
+                ),
+                child: Text("Max: $maxMarks M", style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600, color: isDark ? Colors.white70 : Colors.grey[700])),
+              ),
+            ],
+          ),
+          const SizedBox(height: 14),
+          const Divider(height: 1),
+          const SizedBox(height: 10),
+          Row(
+            children: [
+              Expanded(
+                child: GestureDetector(
+                  onTap: () {
+                    _showTestReportModal(
+                      context: context,
+                      report: report,
+                      state: state,
+                      notifier: notifier,
+                      teacherData: teacherData,
+                      schoolData: schoolData,
+                    );
+                  },
+                  child: Container(
+                    padding: const EdgeInsets.symmetric(vertical: 10),
+                    decoration: BoxDecoration(
+                      color: isDark ? Colors.white.withOpacity(0.08) : Colors.indigo[50],
+                      borderRadius: BorderRadius.circular(10),
+                    ),
+                    alignment: Alignment.center,
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Icon(Icons.visibility_outlined, size: 16, color: isDark ? Colors.indigo[300] : Colors.indigo[700]),
+                        const SizedBox(width: 6),
+                        Text(
+                          "View Report",
+                          style: TextStyle(
+                            color: isDark ? Colors.indigo[300] : Colors.indigo[700],
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13,
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ),
+              ),
+              const SizedBox(width: 10),
+              GestureDetector(
+                onTap: () async {
+                  final scoresMap = <String, int>{};
+                  if (report['scores'] is Map) {
+                    (report['scores'] as Map).forEach((k, v) {
+                      final val = int.tryParse(v?.toString() ?? '');
+                      if (val != null) scoresMap[k.toString()] = val;
+                    });
+                  }
+                  final absentSet = <String>{};
+                  if (report['absentStudents'] is List) {
+                    for (var id in report['absentStudents'] as List) {
+                      absentSet.add(id.toString());
+                    }
+                  }
+
+                  final file = await TestReportPdfGenerator.generateReport(
+                    schoolData: schoolData ?? {},
+                    teacherData: teacherData ?? {},
+                    testData: report,
+                    students: state.students,
+                    testScores: scoresMap,
+                    absentStudents: absentSet,
+                  );
+                  await Share.shareXFiles([XFile(file.path)], text: "Test Report for ${report['subject']} - ${report['chapter']}");
+                },
+                child: Container(
+                  padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 14),
+                  decoration: BoxDecoration(
+                    color: isDark ? Colors.white.withOpacity(0.08) : Colors.grey[100],
+                    borderRadius: BorderRadius.circular(10),
+                    border: Border.all(color: isDark ? Colors.transparent : Colors.grey[300]!),
+                  ),
+                  child: Row(
+                    children: const [
+                      Icon(Icons.picture_as_pdf, size: 16, color: Color(0xFFEF4444)),
+                      SizedBox(width: 4),
+                      Text("PDF", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 13, color: Color(0xFFEF4444))),
+                    ],
+                  ),
+                ),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  void _showTestReportModal({
+    required BuildContext context,
+    required Map<String, dynamic> report,
+    required NextClassState state,
+    required NextClassNotifier notifier,
+    required Map<String, dynamic>? teacherData,
+    required Map<String, dynamic>? schoolData,
+  }) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final maxMarks = report['maxMarks'] ?? 10;
+    int maxM = (maxMarks is int) ? maxMarks : int.tryParse(maxMarks.toString()) ?? 10;
+
+    final Map<String, int> testScores = {};
+    if (report['scores'] is Map) {
+      (report['scores'] as Map).forEach((k, v) {
+        final val = int.tryParse(v?.toString() ?? '');
+        if (val != null) testScores[k.toString()] = val;
+      });
+    }
+    final Set<String> absentStudents = {};
+    if (report['absentStudents'] is List) {
+      for (var id in report['absentStudents'] as List) {
+        absentStudents.add(id.toString());
+      }
+    }
+
+    // Ranking Logic
+    List<Map<String, dynamic>> rankedStudents = [];
+    List<Map<String, dynamic>> absentList = [];
+
+    for (var s in state.students) {
+      final sId = s['id']?.toString() ?? '';
+      if (absentStudents.contains(sId)) {
+        absentList.add({...s, 'isAbsent': true, 'rank': -1});
+      } else {
+        int score = testScores[sId] ?? 0;
+        rankedStudents.add({...s, 'score': score, 'isAbsent': false});
+      }
+    }
+    rankedStudents.sort((a, b) => ((b['score'] as int?) ?? 0).compareTo((a['score'] as int?) ?? 0));
+
+    int trueRank = 1;
+    int displayRank = 1;
+    int prevScore = -1;
+
+    for (var i = 0; i < rankedStudents.length; i++) {
+      int score = rankedStudents[i]['score'] ?? 0;
+      if (score != prevScore) {
+        displayRank = trueRank;
+      }
+      rankedStudents[i]['rank'] = displayRank;
+      prevScore = score;
+      trueRank++;
+    }
+
+    final allDisplayStudents = [...rankedStudents, ...absentList];
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        return Container(
+          height: MediaQuery.of(context).size.height * 0.85,
+          decoration: BoxDecoration(
+            color: isDark ? AppTheme.surfaceDark : Colors.white,
+            borderRadius: const BorderRadius.only(
+              topLeft: Radius.circular(24),
+              topRight: Radius.circular(24),
+            ),
+          ),
+          child: Column(
+            children: [
+              Center(
+                child: Container(
+                  margin: const EdgeInsets.only(top: 12, bottom: 8),
+                  width: 40,
+                  height: 4,
+                  decoration: BoxDecoration(
+                    color: Colors.grey[400],
+                    borderRadius: BorderRadius.circular(2),
+                  ),
+                ),
+              ),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                child: Row(
+                  mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                  children: [
+                    Expanded(
+                      child: Column(
+                        crossAxisAlignment: CrossAxisAlignment.start,
+                        children: [
+                          Text(
+                            report['chapter'] ?? report['subject'] ?? 'Test Report',
+                            style: TextStyle(
+                              fontSize: 18,
+                              fontWeight: FontWeight.bold,
+                              color: isDark ? Colors.white : Colors.indigo[950],
+                            ),
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                          ),
+                          Text(
+                            "${report['subject']} • ${report['testType'] ?? 'Written'} • ${report['dateStr'] ?? ''} • Max: $maxM",
+                            style: TextStyle(color: Colors.grey[500], fontSize: 12),
+                          ),
+                        ],
+                      ),
+                    ),
+                    IconButton(
+                      icon: const Icon(Icons.close),
+                      onPressed: () => Navigator.pop(ctx),
+                    ),
+                  ],
+                ),
+              ),
+              const Divider(height: 1),
+              Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
+                child: Row(
+                  children: [
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: () async {
+                          final file = await TestReportPdfGenerator.generateReport(
+                            schoolData: schoolData ?? {},
+                            teacherData: teacherData ?? {},
+                            testData: report,
+                            students: state.students,
+                            testScores: testScores,
+                            absentStudents: absentStudents,
+                          );
+                          await Share.shareXFiles([XFile(file.path)], text: "Test Report for ${report['subject']} - ${report['chapter']}");
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFFF59E0B),
+                            borderRadius: BorderRadius.circular(12),
+                            boxShadow: [
+                              BoxShadow(color: const Color(0xFFF59E0B).withOpacity(0.3), blurRadius: 8, offset: const Offset(0, 3)),
+                            ],
+                          ),
+                          alignment: Alignment.center,
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: const [
+                              Icon(Icons.picture_as_pdf, color: Colors.white, size: 16),
+                              SizedBox(width: 6),
+                              Text("Share PDF", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                    const SizedBox(width: 12),
+                    Expanded(
+                      child: GestureDetector(
+                        onTap: () {
+                          Navigator.pop(ctx);
+                          _showEditTestScoresDialog(
+                            context: context,
+                            report: report,
+                            state: state,
+                            notifier: notifier,
+                            initialScores: testScores,
+                            initialAbsent: absentStudents,
+                          );
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(vertical: 12),
+                          decoration: BoxDecoration(
+                            color: const Color(0xFF6366f1),
+                            borderRadius: BorderRadius.circular(12),
+                            boxShadow: [
+                              BoxShadow(color: const Color(0xFF6366f1).withOpacity(0.3), blurRadius: 8, offset: const Offset(0, 3)),
+                            ],
+                          ),
+                          alignment: Alignment.center,
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.center,
+                            children: const [
+                              Icon(Icons.edit, color: Colors.white, size: 16),
+                              SizedBox(width: 6),
+                              Text("Edit Scores", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 13)),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ),
+                  ],
+                ),
+              ),
+              Expanded(
+                child: ListView.separated(
+                  padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                  itemCount: allDisplayStudents.length,
+                  separatorBuilder: (_, __) => const Divider(height: 1),
+                  itemBuilder: (context, index) {
+                    final s = allDisplayStudents[index];
+                    final bool isAbsent = s['isAbsent'] == true;
+                    final int rank = s['rank'] ?? -1;
+                    final int score = (s['score'] as int?) ?? 0;
+                    double percent = maxM > 0 ? (score / maxM) * 100 : 0.0;
+
+                    return Padding(
+                      padding: const EdgeInsets.symmetric(vertical: 10),
+                      child: Row(
+                        children: [
+                          SizedBox(
+                            width: 44,
+                            child: isAbsent
+                                ? Text("-", style: TextStyle(color: Colors.grey[400], fontWeight: FontWeight.bold, fontSize: 14))
+                                : Text(
+                                    rank == 1 ? "🥇 1st" : (rank == 2 ? "🥈 2nd" : (rank == 3 ? "🥉 3rd" : "$rank")),
+                                    style: TextStyle(
+                                      fontWeight: FontWeight.bold,
+                                      fontSize: rank <= 3 ? 12 : 14,
+                                      color: rank == 1 ? Colors.amber[800] : (isDark ? Colors.white70 : Colors.black87),
+                                    ),
+                                  ),
+                          ),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Text(
+                                  s['name'] ?? 'Student',
+                                  style: TextStyle(fontWeight: FontWeight.bold, fontSize: 15, color: isDark ? Colors.white : Colors.black87),
+                                  overflow: TextOverflow.ellipsis,
+                                ),
+                                Text("Roll No: ${s['rollNo'] ?? '-'}", style: TextStyle(color: Colors.grey[500], fontSize: 12)),
+                              ],
+                            ),
+                          ),
+                          Container(
+                            padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                            decoration: BoxDecoration(
+                              color: isAbsent ? Colors.red.withOpacity(0.1) : const Color(0xFF10B981).withOpacity(0.1),
+                              borderRadius: BorderRadius.circular(8),
+                            ),
+                            child: Text(
+                              isAbsent ? "ABS" : "$score / $maxM",
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                fontSize: 13,
+                                color: isAbsent ? Colors.red : const Color(0xFF10B981),
+                              ),
+                            ),
+                          ),
+                          const SizedBox(width: 8),
+                          SizedBox(
+                            width: 48,
+                            child: Text(
+                              isAbsent ? "-" : "${percent.toStringAsFixed(0)}%",
+                              textAlign: TextAlign.end,
+                              style: TextStyle(
+                                color: isAbsent ? Colors.grey[400] : (isDark ? Colors.white70 : Colors.black87),
+                                fontWeight: FontWeight.w600,
+                                fontSize: 13,
+                              ),
+                            ),
+                          ),
+                        ],
+                      ),
+                    );
+                  },
+                ),
+              ),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  void _showEditTestScoresDialog({
+    required BuildContext context,
+    required Map<String, dynamic> report,
+    required NextClassState state,
+    required NextClassNotifier notifier,
+    required Map<String, int> initialScores,
+    required Set<String> initialAbsent,
+  }) {
+    final isDark = Theme.of(context).brightness == Brightness.dark;
+    final maxMarks = report['maxMarks'] ?? 10;
+    int maxM = (maxMarks is int) ? maxMarks : int.tryParse(maxMarks.toString()) ?? 10;
+
+    final Map<String, int> editScores = Map<String, int>.from(initialScores);
+    final Set<String> editAbsent = Set<String>.from(initialAbsent);
+    bool notifyParents = false;
+    bool isSaving = false;
+
+    showModalBottomSheet(
+      context: context,
+      isScrollControlled: true,
+      backgroundColor: Colors.transparent,
+      builder: (ctx) {
+        return StatefulBuilder(
+          builder: (context, setModalState) {
+            return Container(
+              height: MediaQuery.of(context).size.height * 0.90,
+              decoration: BoxDecoration(
+                color: isDark ? AppTheme.surfaceDark : Colors.white,
+                borderRadius: const BorderRadius.only(
+                  topLeft: Radius.circular(24),
+                  topRight: Radius.circular(24),
+                ),
+              ),
+              child: Column(
+                children: [
+                  Center(
+                    child: Container(
+                      margin: const EdgeInsets.only(top: 12, bottom: 8),
+                      width: 40,
+                      height: 4,
+                      decoration: BoxDecoration(
+                        color: Colors.grey[400],
+                        borderRadius: BorderRadius.circular(2),
+                      ),
+                    ),
+                  ),
+                  Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 8),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Expanded(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.start,
+                            children: [
+                              Text(
+                                "Edit Test Scores",
+                                style: TextStyle(
+                                  fontSize: 18,
+                                  fontWeight: FontWeight.bold,
+                                  color: isDark ? Colors.white : Colors.indigo[950],
+                                ),
+                              ),
+                              Text(
+                                "${report['subject']} • ${report['chapter'] ?? ''} • Max: $maxM",
+                                style: TextStyle(color: Colors.grey[500], fontSize: 12),
+                              ),
+                            ],
+                          ),
+                        ),
+                        IconButton(
+                          icon: const Icon(Icons.close),
+                          onPressed: () => Navigator.pop(ctx),
+                        ),
+                      ],
+                    ),
+                  ),
+                  const Divider(height: 1),
+                  Expanded(
+                    child: ListView.builder(
+                      padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 8),
+                      itemCount: state.students.length,
+                      itemBuilder: (context, index) {
+                        final student = state.students[index];
+                        final studentId = student['id']?.toString() ?? '';
+                        final bool isAbsent = editAbsent.contains(studentId);
+                        double currentScore = (editScores[studentId] ?? 0).toDouble();
+
+                        Color sliderColor;
+                        double percentage = maxM > 0 ? currentScore / maxM : 0.0;
+                        if (isAbsent) {
+                          sliderColor = const Color(0xFFEF4444);
+                        } else if (percentage <= 0.3) {
+                          sliderColor = const Color(0xFFEF4444);
+                        } else if (percentage <= 0.6) {
+                          sliderColor = const Color(0xFFF59E0B);
+                        } else {
+                          sliderColor = const Color(0xFF10B981);
+                        }
+
+                        return Container(
+                          margin: const EdgeInsets.only(bottom: 10),
+                          padding: const EdgeInsets.all(12),
+                          decoration: BoxDecoration(
+                            color: isAbsent
+                                ? (isDark ? Colors.red.withOpacity(0.08) : const Color(0xFFFEF2F2))
+                                : (isDark ? Colors.white.withOpacity(0.04) : Colors.grey[50]),
+                            borderRadius: BorderRadius.circular(14),
+                            border: Border.all(
+                              color: isAbsent ? Colors.red.withOpacity(0.3) : (isDark ? Colors.transparent : Colors.grey[200]!),
+                            ),
+                          ),
+                          child: Column(
+                            children: [
+                              Row(
+                                children: [
+                                  CircleAvatar(
+                                    backgroundColor: isAbsent ? Colors.red.withOpacity(0.15) : const Color(0xFF6366f1).withOpacity(0.1),
+                                    radius: 18,
+                                    child: Text(
+                                      student['name']?.substring(0, 1).toUpperCase() ?? "?",
+                                      style: TextStyle(color: isAbsent ? Colors.red : const Color(0xFF6366f1), fontWeight: FontWeight.bold),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        Text(
+                                          student['name'] ?? 'Student',
+                                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 14, color: isDark ? Colors.white : Colors.black87),
+                                          overflow: TextOverflow.ellipsis,
+                                        ),
+                                        Text("Roll No: ${student['rollNo'] ?? '-'}", style: TextStyle(color: Colors.grey[500], fontSize: 11)),
+                                      ],
+                                    ),
+                                  ),
+                                  GestureDetector(
+                                    onTap: () {
+                                      setModalState(() {
+                                        if (editAbsent.contains(studentId)) {
+                                          editAbsent.remove(studentId);
+                                        } else {
+                                          editAbsent.add(studentId);
+                                          editScores.remove(studentId);
+                                        }
+                                      });
+                                    },
+                                    child: Container(
+                                      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                      decoration: BoxDecoration(
+                                        color: isAbsent ? Colors.red : (isDark ? Colors.white.withOpacity(0.08) : Colors.grey[200]),
+                                        borderRadius: BorderRadius.circular(8),
+                                      ),
+                                      child: Text(
+                                        "ABS",
+                                        style: TextStyle(
+                                          color: isAbsent ? Colors.white : (isDark ? Colors.grey[400] : Colors.grey[700]),
+                                          fontWeight: FontWeight.bold,
+                                          fontSize: 11,
+                                        ),
+                                      ),
+                                    ),
+                                  ),
+                                  const SizedBox(width: 8),
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                    decoration: BoxDecoration(
+                                      color: isAbsent ? Colors.red.withOpacity(0.1) : sliderColor.withOpacity(0.1),
+                                      borderRadius: BorderRadius.circular(8),
+                                    ),
+                                    child: Text(
+                                      isAbsent ? "ABSENT" : "${currentScore.toInt()} / $maxM",
+                                      style: TextStyle(fontWeight: FontWeight.bold, fontSize: 12, color: isAbsent ? Colors.red : sliderColor),
+                                    ),
+                                  ),
+                                ],
+                              ),
+                              if (!isAbsent)
+                                SliderTheme(
+                                  data: SliderTheme.of(context).copyWith(
+                                    activeTrackColor: sliderColor,
+                                    thumbColor: sliderColor,
+                                    inactiveTrackColor: sliderColor.withOpacity(0.2),
+                                    trackHeight: 4,
+                                    thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 8),
+                                    overlayShape: const RoundSliderOverlayShape(overlayRadius: 16),
+                                  ),
+                                  child: Slider(
+                                    value: currentScore,
+                                    min: 0,
+                                    max: maxM.toDouble(),
+                                    divisions: maxM > 0 ? maxM : 1,
+                                    onChanged: (val) {
+                                      setModalState(() {
+                                        editScores[studentId] = val.toInt();
+                                        editAbsent.remove(studentId);
+                                      });
+                                    },
+                                  ),
+                                ),
+                            ],
+                          ),
+                        );
+                      },
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.all(16),
+                    decoration: BoxDecoration(
+                      color: isDark ? Colors.white.withOpacity(0.03) : Colors.grey[50],
+                      border: Border(top: BorderSide(color: isDark ? Colors.white.withOpacity(0.08) : Colors.grey[200]!)),
+                    ),
+                    child: Column(
+                      children: [
+                        Row(
+                          children: [
+                            Checkbox(
+                              value: notifyParents,
+                              activeColor: const Color(0xFF6366f1),
+                              onChanged: (v) {
+                                setModalState(() => notifyParents = v ?? false);
+                              },
+                            ),
+                            Expanded(
+                              child: Text(
+                                "Notify parents about updated marks",
+                                style: TextStyle(fontSize: 13, color: isDark ? Colors.white70 : Colors.grey[800]),
+                              ),
+                            ),
+                          ],
+                        ),
+                        const SizedBox(height: 8),
+                        GestureDetector(
+                          onTap: isSaving
+                              ? null
+                              : () async {
+                                  setModalState(() => isSaving = true);
+                                  final success = await notifier.updateCompletedTestScores(
+                                    testId: report['id'],
+                                    updatedScores: editScores,
+                                    updatedAbsent: editAbsent,
+                                    notifyParents: notifyParents,
+                                  );
+                                  if (context.mounted) {
+                                    Navigator.pop(ctx);
+                                    ScaffoldMessenger.of(context).showSnackBar(
+                                      SnackBar(
+                                        content: Text(success ? "Test report updated successfully!" : "Failed to update test report"),
+                                        backgroundColor: success ? const Color(0xFF10B981) : Colors.red,
+                                      ),
+                                    );
+                                  }
+                                },
+                          child: Container(
+                            width: double.infinity,
+                            padding: const EdgeInsets.symmetric(vertical: 14),
+                            decoration: BoxDecoration(
+                              gradient: const LinearGradient(
+                                colors: [Color(0xFF6366f1), Color(0xFF4f46e5)],
+                                begin: Alignment.topLeft,
+                                end: Alignment.bottomRight,
+                              ),
+                              borderRadius: BorderRadius.circular(14),
+                            ),
+                            alignment: Alignment.center,
+                            child: isSaving
+                                ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 2))
+                                : const Text("Save & Apply Updates", style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 15)),
+                          ),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
     );
   }
 
@@ -1183,7 +2478,31 @@ class NextClassScreen extends ConsumerWidget {
             ),
           ),
           const SizedBox(height: 24),
-          Text("Enter Test Scores", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: isDark ? Colors.white : Colors.indigo[900])),
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text("Enter Test Scores", style: TextStyle(fontWeight: FontWeight.bold, fontSize: 18, color: isDark ? Colors.white : Colors.indigo[900])),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
+                decoration: BoxDecoration(
+                  color: isDark ? Colors.white.withOpacity(0.08) : Colors.indigo[50],
+                  borderRadius: BorderRadius.circular(12),
+                  border: Border.all(color: isDark ? Colors.white.withOpacity(0.1) : Colors.indigo[100]!),
+                ),
+                child: Row(
+                  mainAxisSize: MainAxisSize.min,
+                  children: [
+                    Icon(Icons.check_circle_outline, size: 14, color: isDark ? Colors.indigo[300] : Colors.indigo[600]),
+                    const SizedBox(width: 4),
+                    Text(
+                      "${state.testScores.length + state.absentTestStudents.length} / ${state.students.length} Recorded",
+                      style: TextStyle(fontSize: 12, fontWeight: FontWeight.bold, color: isDark ? Colors.indigo[300] : Colors.indigo[600]),
+                    ),
+                  ],
+                ),
+              ),
+            ],
+          ),
           const SizedBox(height: 16),
 
           // Students List
@@ -1191,11 +2510,17 @@ class NextClassScreen extends ConsumerWidget {
             final studentId = student['id'];
             final maxMarks = test['maxMarks'] ?? 10;
             int maxM = (maxMarks is int) ? maxMarks : int.tryParse(maxMarks.toString()) ?? 10;
+            final bool isAbsent = state.absentTestStudents.contains(studentId);
+            final bool hasScore = state.testScores.containsKey(studentId);
             double currentScore = (state.testScores[studentId] ?? 0).toDouble();
 
             Color sliderColor;
             double percentage = maxM > 0 ? currentScore / maxM : 0.0;
-            if (percentage <= 0.3) {
+            if (isAbsent) {
+              sliderColor = const Color(0xFFEF4444); // Red
+            } else if (!hasScore) {
+              sliderColor = isDark ? Colors.grey[600]! : Colors.grey[400]!;
+            } else if (percentage <= 0.3) {
               sliderColor = const Color(0xFFEF4444); // Red
             } else if (percentage <= 0.6) {
               sliderColor = const Color(0xFFF59E0B); // Amber/Yellow
@@ -1207,9 +2532,15 @@ class NextClassScreen extends ConsumerWidget {
               margin: const EdgeInsets.only(bottom: 12),
               padding: const EdgeInsets.all(16),
               decoration: BoxDecoration(
-                color: isDark ? Colors.white.withOpacity(0.05) : Colors.white,
+                color: isAbsent
+                    ? (isDark ? Colors.red.withOpacity(0.08) : const Color(0xFFFEF2F2))
+                    : (isDark ? Colors.white.withOpacity(0.05) : Colors.white),
                 borderRadius: BorderRadius.circular(16),
-                border: Border.all(color: isDark ? Colors.transparent : Colors.grey[200]!),
+                border: Border.all(
+                  color: isAbsent
+                      ? Colors.red.withOpacity(0.3)
+                      : (isDark ? Colors.transparent : Colors.grey[200]!),
+                ),
                 boxShadow: isDark ? [] : [BoxShadow(color: Colors.black.withOpacity(0.02), blurRadius: 10, offset: const Offset(0, 4))],
               ),
               child: Column(
@@ -1217,57 +2548,132 @@ class NextClassScreen extends ConsumerWidget {
                   Row(
                     children: [
                       CircleAvatar(
-                        backgroundColor: const Color(0xFF6366f1).withOpacity(0.1),
+                        backgroundColor: isAbsent
+                            ? Colors.red.withOpacity(0.15)
+                            : const Color(0xFF6366f1).withOpacity(0.1),
                         radius: 20,
                         child: Text(
                           student['name']?.substring(0, 1).toUpperCase() ?? "?",
-                          style: const TextStyle(color: Color(0xFF6366f1), fontWeight: FontWeight.bold),
+                          style: TextStyle(
+                            color: isAbsent ? Colors.red : const Color(0xFF6366f1),
+                            fontWeight: FontWeight.bold,
+                          ),
                         ),
                       ),
-                      const SizedBox(width: 16),
+                      const SizedBox(width: 12),
                       Expanded(
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            Text(student['name'] ?? 'Unknown', style: TextStyle(fontWeight: FontWeight.bold, color: isDark ? Colors.white : Colors.black87, fontSize: 16)),
+                            Text(
+                              student['name'] ?? 'Unknown',
+                              style: TextStyle(
+                                fontWeight: FontWeight.bold,
+                                color: isDark ? Colors.white : Colors.black87,
+                                fontSize: 16,
+                              ),
+                              overflow: TextOverflow.ellipsis,
+                            ),
                             Text("Roll No: ${student['rollNo'] ?? '-'}", style: TextStyle(color: Colors.grey[500], fontSize: 12)),
                           ],
                         ),
                       ),
+                      const SizedBox(width: 8),
+                      // ABS Toggle button
+                      GestureDetector(
+                        onTap: () {
+                          notifier.toggleTestAbsent(studentId);
+                        },
+                        child: Container(
+                          padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
+                          decoration: BoxDecoration(
+                            color: isAbsent ? Colors.red : (isDark ? Colors.white.withOpacity(0.08) : Colors.grey[100]),
+                            borderRadius: BorderRadius.circular(10),
+                            border: Border.all(
+                              color: isAbsent ? Colors.red : (isDark ? Colors.grey[700]! : Colors.grey[300]!),
+                            ),
+                          ),
+                          child: Text(
+                            "ABS",
+                            style: TextStyle(
+                              color: isAbsent ? Colors.white : (isDark ? Colors.grey[400] : Colors.grey[700]),
+                              fontWeight: FontWeight.bold,
+                              fontSize: 12,
+                            ),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 8),
                       Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
+                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 6),
                         decoration: BoxDecoration(
-                          color: sliderColor.withOpacity(0.1),
+                          color: isAbsent
+                              ? Colors.red.withOpacity(0.1)
+                              : (hasScore ? sliderColor.withOpacity(0.1) : (isDark ? Colors.white.withOpacity(0.05) : Colors.grey[100])),
                           borderRadius: BorderRadius.circular(12),
-                          border: Border.all(color: sliderColor.withOpacity(0.3)),
+                          border: Border.all(
+                            color: isAbsent
+                                ? Colors.red.withOpacity(0.3)
+                                : (hasScore ? sliderColor.withOpacity(0.3) : (isDark ? Colors.grey[700]! : Colors.grey[300]!)),
+                          ),
                         ),
                         child: Text(
-                          "${currentScore.toInt()} / $maxM",
-                          style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: sliderColor),
+                          isAbsent
+                              ? "ABSENT"
+                              : (hasScore ? "${currentScore.toInt()} / $maxM" : "Pending"),
+                          style: TextStyle(
+                            fontWeight: FontWeight.bold,
+                            fontSize: 13,
+                            color: isAbsent
+                                ? Colors.red
+                                : (hasScore ? sliderColor : (isDark ? Colors.grey[400] : Colors.grey[600])),
+                          ),
                         ),
                       ),
                     ],
                   ),
                   const SizedBox(height: 12),
-                  SliderTheme(
-                    data: SliderTheme.of(context).copyWith(
-                      activeTrackColor: sliderColor,
-                      thumbColor: sliderColor,
-                      inactiveTrackColor: sliderColor.withOpacity(0.2),
-                      trackHeight: 6,
-                      thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 10),
-                      overlayShape: const RoundSliderOverlayShape(overlayRadius: 20),
+                  if (isAbsent)
+                    Container(
+                      width: double.infinity,
+                      padding: const EdgeInsets.symmetric(vertical: 8, horizontal: 12),
+                      decoration: BoxDecoration(
+                        color: Colors.red.withOpacity(0.08),
+                        borderRadius: BorderRadius.circular(8),
+                      ),
+                      child: Row(
+                        children: [
+                          Icon(Icons.person_off_rounded, size: 16, color: Colors.red[700]),
+                          const SizedBox(width: 8),
+                          Expanded(
+                            child: Text(
+                              "Student marked as ABSENT for this test",
+                              style: TextStyle(color: Colors.red[700], fontSize: 12, fontWeight: FontWeight.w600),
+                            ),
+                          ),
+                        ],
+                      ),
+                    )
+                  else
+                    SliderTheme(
+                      data: SliderTheme.of(context).copyWith(
+                        activeTrackColor: sliderColor,
+                        thumbColor: sliderColor,
+                        inactiveTrackColor: sliderColor.withOpacity(0.2),
+                        trackHeight: 6,
+                        thumbShape: const RoundSliderThumbShape(enabledThumbRadius: 10),
+                        overlayShape: const RoundSliderOverlayShape(overlayRadius: 20),
+                      ),
+                      child: Slider(
+                        value: currentScore,
+                        min: 0,
+                        max: maxM.toDouble(),
+                        divisions: maxM > 0 ? maxM : 1,
+                        onChanged: (val) {
+                          notifier.updateTestScore(studentId, val.toInt());
+                        },
+                      ),
                     ),
-                    child: Slider(
-                      value: currentScore,
-                      min: 0,
-                      max: maxM.toDouble(),
-                      divisions: maxM > 0 ? maxM : 1,
-                      onChanged: (val) {
-                        notifier.updateTestScore(studentId, val.toInt());
-                      },
-                    ),
-                  ),
                 ],
               ),
             );
@@ -1280,7 +2686,8 @@ class NextClassScreen extends ConsumerWidget {
               bool allScoresSet = true;
               if (state.students.isEmpty) allScoresSet = false;
               for (var student in state.students) {
-                if (!state.testScores.containsKey(student['id'])) {
+                final sId = student['id'];
+                if (!state.testScores.containsKey(sId) && !state.absentTestStudents.contains(sId)) {
                   allScoresSet = false;
                   break;
                 }
@@ -1294,6 +2701,7 @@ class NextClassScreen extends ConsumerWidget {
                     testData: test,
                     students: state.students,
                     testScores: state.testScores,
+                    absentStudents: state.absentTestStudents,
                   );
                   await Share.shareXFiles([XFile(file.path)], text: "Test Report for ${test['subject']}");
                 },
@@ -1388,26 +2796,58 @@ class NextClassScreen extends ConsumerWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
                     mainAxisAlignment: MainAxisAlignment.spaceBetween,
                     children: [
-                      Container(
-                        padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 4),
-                        decoration: BoxDecoration(
-                          color: Colors.white.withOpacity(0.25),
-                          borderRadius: BorderRadius.circular(12),
-                        ),
-                        child: Row(
-                          children: const [
-                            Icon(Icons.push_pin, color: Colors.white, size: 14),
-                            SizedBox(width: 4),
-                            Text(
-                              "Active Homework",
-                              style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 12),
+                      Expanded(
+                        child: Wrap(
+                          spacing: 6,
+                          runSpacing: 6,
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          children: [
+                            Container(
+                              padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                              decoration: BoxDecoration(
+                                color: Colors.white.withOpacity(0.25),
+                                borderRadius: BorderRadius.circular(10),
+                              ),
+                              child: Row(
+                                mainAxisSize: MainAxisSize.min,
+                                children: const [
+                                  Icon(Icons.push_pin, color: Colors.white, size: 12),
+                                  SizedBox(width: 4),
+                                  Text(
+                                    "Active Homework",
+                                    style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11),
+                                  ),
+                                ],
+                              ),
                             ),
+                            if (activeHw['isPendingSync'] == true)
+                              Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                                decoration: BoxDecoration(
+                                  color: Colors.white.withOpacity(0.3),
+                                  borderRadius: BorderRadius.circular(10),
+                                ),
+                                child: Row(
+                                  mainAxisSize: MainAxisSize.min,
+                                  children: const [
+                                    Icon(Icons.sync, color: Colors.white, size: 12),
+                                    SizedBox(width: 4),
+                                    Text(
+                                      "Saved Offline",
+                                      style: TextStyle(color: Colors.white, fontWeight: FontWeight.bold, fontSize: 11),
+                                    ),
+                                  ],
+                                ),
+                              ),
                           ],
                         ),
                       ),
+                      const SizedBox(width: 8),
                       Row(
+                        mainAxisSize: MainAxisSize.min,
                         children: [
                           GestureDetector(
                             onTap: () {
@@ -1646,11 +3086,13 @@ class NextClassScreen extends ConsumerWidget {
               }
 
               try {
-                await notifier.saveHomework();
+                final synced = await notifier.saveHomework();
                 if (context.mounted) {
                   ScaffoldMessenger.of(context).showSnackBar(
                     SnackBar(
-                      content: Text("Homework saved successfully for ${state.selectedClass?['name']}!"),
+                      content: Text(synced 
+                          ? "Homework saved successfully for ${state.selectedClass?['name']}!" 
+                          : "Homework saved offline! Will sync automatically once online."),
                       backgroundColor: const Color(0xFF10B981),
                     ),
                   );
@@ -1774,13 +3216,35 @@ class NextClassScreen extends ConsumerWidget {
                                 ),
                               ),
                             const SizedBox(height: 4),
-                            Text(
-                              "Assigned: ${hw['assignedDate'] ?? '-'}  •  Due: ${hw['dueDate'] ?? '-'}",
-                              style: TextStyle(
-                                color: const Color(0xFF10b981),
-                                fontSize: 12,
-                                fontWeight: FontWeight.w500,
-                              ),
+                            Row(
+                              children: [
+                                Expanded(
+                                  child: Text(
+                                    "Assigned: ${hw['assignedDate'] ?? '-'}  •  Due: ${hw['dueDate'] ?? '-'}",
+                                    style: const TextStyle(
+                                      color: Color(0xFF10b981),
+                                      fontSize: 12,
+                                      fontWeight: FontWeight.w500,
+                                    ),
+                                  ),
+                                ),
+                                if (hw['isPendingSync'] == true)
+                                  Container(
+                                    padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 2),
+                                    decoration: BoxDecoration(
+                                      color: const Color(0xFFF59E0B).withOpacity(0.15),
+                                      borderRadius: BorderRadius.circular(6),
+                                    ),
+                                    child: const Text(
+                                      "Saved Offline",
+                                      style: TextStyle(
+                                        color: Color(0xFFD97706),
+                                        fontSize: 10,
+                                        fontWeight: FontWeight.bold,
+                                      ),
+                                    ),
+                                  ),
+                              ],
                             ),
                           ],
                         ),

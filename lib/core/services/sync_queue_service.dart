@@ -108,6 +108,134 @@ class SyncQueueService {
     return list;
   }
 
+  /// Retrieve pending offline marks for a class, exam, and subject
+  static Map<String, dynamic>? getPendingMarksFor({
+    required String schoolId,
+    required String classId,
+    required String examId,
+    required String subject,
+  }) {
+    if (!Hive.isBoxOpen(boxName) || _box.isEmpty) return null;
+    try {
+      for (var key in _box.keys) {
+        final raw = _box.get(key);
+        if (raw == null) continue;
+        final item = Map<String, dynamic>.from(jsonDecode(raw));
+        if (item['type'] == 'exam_marks_save') {
+          final payload = Map<String, dynamic>.from(item['payload'] ?? {});
+          if (payload['schoolId'] == schoolId &&
+              payload['classId'] == classId &&
+              payload['examId'] == examId &&
+              payload['subject'] == subject) {
+            return payload;
+          }
+        }
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  /// Retrieve pending offline homework for a class and subject
+  static List<Map<String, dynamic>> getPendingHomeworkFor({
+    required String schoolId,
+    required String classId,
+    required String subject,
+  }) {
+    if (!Hive.isBoxOpen(boxName) || _box.isEmpty) return [];
+    final list = <Map<String, dynamic>>[];
+    try {
+      for (var key in _box.keys) {
+        final raw = _box.get(key);
+        if (raw == null) continue;
+        final item = Map<String, dynamic>.from(jsonDecode(raw));
+        if (item['type'] == 'homework_save') {
+          final payload = Map<String, dynamic>.from(item['payload'] ?? {});
+          if (payload['schoolId'] == schoolId && payload['classId'] == classId) {
+            final hwData = Map<String, dynamic>.from(payload['homeworkData'] ?? {});
+            if (hwData['subject'] == subject) {
+              hwData['isPendingSync'] = true;
+              list.add(hwData);
+            }
+          }
+        }
+      }
+    } catch (_) {}
+    return list;
+  }
+
+  /// Retrieve pending offline scheduled test for a class and subject
+  static Map<String, dynamic>? getPendingScheduledTestFor({
+    required String schoolId,
+    required String classId,
+    required String subject,
+  }) {
+    if (!Hive.isBoxOpen(boxName) || _box.isEmpty) return null;
+    try {
+      for (var key in _box.keys) {
+        final raw = _box.get(key);
+        if (raw == null) continue;
+        final item = Map<String, dynamic>.from(jsonDecode(raw));
+        if (item['type'] == 'test_schedule') {
+          final payload = Map<String, dynamic>.from(item['payload'] ?? {});
+          if (payload['schoolId'] == schoolId && payload['classId'] == classId) {
+            final testData = Map<String, dynamic>.from(payload['testData'] ?? {});
+            if (testData['subject'] == subject && testData['status'] == 'scheduled') {
+              testData['isPendingSync'] = true;
+              return testData;
+            }
+          }
+        }
+      }
+    } catch (_) {}
+    return null;
+  }
+
+  /// Remove or cancel a pending homework item directly from SyncQueue
+  static Future<void> removePendingHomework(String homeworkId) async {
+    if (!Hive.isBoxOpen(boxName) || _box.isEmpty) return;
+    try {
+      final keysToDelete = <dynamic>[];
+      for (var key in _box.keys) {
+        final raw = _box.get(key);
+        if (raw == null) continue;
+        final item = Map<String, dynamic>.from(jsonDecode(raw));
+        if (item['type'] == 'homework_save') {
+          final payload = Map<String, dynamic>.from(item['payload'] ?? {});
+          if (payload['homeworkId'] == homeworkId) {
+            keysToDelete.add(key);
+          }
+        }
+      }
+      for (var k in keysToDelete) {
+        await _box.delete(k);
+      }
+      _updatePendingCount();
+    } catch (_) {}
+  }
+
+  /// Remove or cancel a pending test item directly from SyncQueue
+  static Future<void> removePendingScheduledTest(String testId) async {
+    if (!Hive.isBoxOpen(boxName) || _box.isEmpty) return;
+    try {
+      final keysToDelete = <dynamic>[];
+      for (var key in _box.keys) {
+        final raw = _box.get(key);
+        if (raw == null) continue;
+        final item = Map<String, dynamic>.from(jsonDecode(raw));
+        if (item['type'] == 'test_schedule') {
+          final payload = Map<String, dynamic>.from(item['payload'] ?? {});
+          if (payload['testId'] == testId) {
+            keysToDelete.add(key);
+          }
+        }
+      }
+      for (var k in keysToDelete) {
+        await _box.delete(k);
+      }
+      _updatePendingCount();
+    } catch (_) {}
+  }
+
   /// Check internet reachability
   static Future<bool> isOnline() async {
     try {
@@ -124,6 +252,20 @@ class SyncQueueService {
     }
   }
 
+  static dynamic _sanitize(dynamic data) {
+    if (data == null) return null;
+    if (data is Timestamp) return data.toDate().toIso8601String();
+    if (data is DateTime) return data.toIso8601String();
+    if (data is FieldValue) return null;
+    if (data is Map) {
+      return data.map((key, value) => MapEntry(key.toString(), _sanitize(value)));
+    }
+    if (data is List) {
+      return data.map((e) => _sanitize(e)).toList();
+    }
+    return data;
+  }
+
   /// Add an action to the persistent queue
   static Future<String> enqueue({
     required String type,
@@ -131,10 +273,11 @@ class SyncQueueService {
     String? filePath,
   }) async {
     final String id = const Uuid().v4();
+    final sanitizedPayload = Map<String, dynamic>.from(_sanitize(payload) as Map);
     final item = {
       'id': id,
       'type': type,
-      'payload': payload,
+      'payload': sanitizedPayload,
       'filePath': filePath,
       'status': 'pending',
       'createdAt': DateTime.now().toIso8601String(),
@@ -153,9 +296,7 @@ class SyncQueueService {
 
   /// Trigger sync if online
   static Future<void> checkAndSync() async {
-    if (await isOnline()) {
-      await processQueue();
-    }
+    await processQueue();
   }
 
   /// Sequentially process all pending items in the queue
@@ -213,8 +354,32 @@ class SyncQueueService {
             case 'exam_result_upload':
               success = await _processExamResultUpload(payload, filePath);
               break;
+            case 'exam_marks_save':
+              success = await _processExamMarksSave(payload);
+              break;
             case 'class_broadcast':
               success = await _processClassBroadcast(payload, filePath);
+              break;
+            case 'homework_save':
+              success = await _processHomeworkSave(payload);
+              break;
+            case 'homework_delete':
+              success = await _processHomeworkDelete(payload);
+              break;
+            case 'test_schedule':
+              success = await _processTestSchedule(payload);
+              break;
+            case 'test_cancel':
+              success = await _processTestCancel(payload);
+              break;
+            case 'test_complete':
+              success = await _processTestComplete(payload);
+              break;
+            case 'test_scores_save':
+              success = await _processTestScoresSave(payload);
+              break;
+            case 'daily_scores_save':
+              success = await _processDailyScoresSave(payload);
               break;
             default:
               debugPrint('⚠️ [SyncQueue] Unknown task type: $type, discarding.');
@@ -236,7 +401,7 @@ class SyncQueueService {
           } else {
             item['retryCount'] = retries;
             item['status'] = 'failed';
-            await _box.put(key, jsonEncode(item));
+            await _box.put(key, jsonEncode(_sanitize(item)));
           }
         }
       }
@@ -704,6 +869,96 @@ class SyncQueueService {
     return true;
   }
 
+  static Future<bool> _processExamMarksSave(Map<String, dynamic> payload) async {
+    final schoolId = (payload['schoolId'] ?? '').toString();
+    final classId = (payload['classId'] ?? '').toString();
+    final className = (payload['className'] ?? '').toString();
+    final examId = (payload['examId'] ?? '').toString();
+    final examTitle = (payload['examTitle'] ?? '').toString();
+    final subject = (payload['subject'] ?? '').toString();
+    final teacherId = (payload['teacherId'] ?? '').toString();
+    final teacherName = (payload['teacherName'] ?? '').toString();
+    final totalMarks = (payload['totalMarks'] as num?)?.toInt() ?? 100;
+    final passingMarks = (payload['passingMarks'] as num?)?.toInt() ?? 33;
+    final Map<String, dynamic> marksData = Map<String, dynamic>.from(payload['marksData'] ?? {});
+
+    if (schoolId.isEmpty || classId.isEmpty || examId.isEmpty || subject.isEmpty) {
+      debugPrint('⚠️ [SyncQueue] Invalid exam marks payload, discarding.');
+      return true;
+    }
+
+    final marksDocId = '${examId}_$subject'.replaceAll('/', '_').replaceAll(' ', '_');
+    final batch = FirebaseFirestore.instance.batch();
+
+    // 1. Save to Class Exam Marks Collection
+    final classMarksRef = FirebaseFirestore.instance
+        .collection('schools')
+        .doc(schoolId)
+        .collection('classes')
+        .doc(classId)
+        .collection('exam_marks')
+        .doc(marksDocId);
+
+    batch.set(
+      classMarksRef,
+      {
+        'examId': examId,
+        'examTitle': examTitle,
+        'classId': classId,
+        'className': className,
+        'subject': subject,
+        'teacherId': teacherId,
+        'teacherName': teacherName,
+        'totalMarks': totalMarks,
+        'passingMarks': passingMarks,
+        'updatedAt': FieldValue.serverTimestamp(),
+        'marks': marksData,
+      },
+      SetOptions(merge: true),
+    );
+
+    // 2. Also merge into each student's exam_results subcollection
+    for (final entry in marksData.entries) {
+      final studentId = entry.key;
+      if (entry.value is! Map) continue;
+      final sData = Map<String, dynamic>.from(entry.value as Map);
+
+      final studentResultRef = FirebaseFirestore.instance
+          .collection('schools')
+          .doc(schoolId)
+          .collection('classes')
+          .doc(classId)
+          .collection('students')
+          .doc(studentId)
+          .collection('exam_results')
+          .doc(examId);
+
+      batch.set(
+        studentResultRef,
+        {
+          'examId': examId,
+          'examTitle': examTitle,
+          'updatedAt': FieldValue.serverTimestamp(),
+          'subjects': {
+            subject: {
+              'subject': subject,
+              'totalMarks': totalMarks,
+              'obtainedMarks': sData['isAbsent'] == true ? null : sData['obtainedMarks'],
+              'isAbsent': sData['isAbsent'] == true,
+              'grade': sData['grade'] ?? 'N/A',
+              'remarks': sData['remarks'] ?? '',
+            }
+          }
+        },
+        SetOptions(merge: true),
+      );
+    }
+
+    await batch.commit();
+    debugPrint('✅ [SyncQueue] Successfully synced exam marks for $className - $subject ($examTitle)');
+    return true;
+  }
+
   static Future<bool> _processClassBroadcast(Map<String, dynamic> payload, String? filePath) async {
     final schoolId = payload['schoolId'] as String;
     final classId = payload['classId'] as String;
@@ -819,6 +1074,428 @@ class SyncQueueService {
       } catch (_) {}
     }
 
+    return true;
+  }
+
+  static Future<bool> _processHomeworkSave(Map<String, dynamic> payload) async {
+    final schoolId = (payload['schoolId'] ?? '').toString();
+    final classId = (payload['classId'] ?? '').toString();
+    final homeworkId = (payload['homeworkId'] ?? '').toString();
+    final Map<String, dynamic> hwData = Map<String, dynamic>.from(payload['homeworkData'] ?? {});
+
+    if (schoolId.isEmpty || classId.isEmpty || homeworkId.isEmpty) {
+      debugPrint('⚠️ [SyncQueue] Invalid homework payload, discarding.');
+      return true;
+    }
+
+    hwData.remove('isPendingSync');
+
+    if (hwData['dueDateTime'] is String) {
+      final dt = DateTime.tryParse(hwData['dueDateTime'] as String);
+      if (dt != null) {
+        hwData['dueDateTime'] = Timestamp.fromDate(dt);
+      }
+    }
+    hwData['updatedAt'] = FieldValue.serverTimestamp();
+    if (!hwData.containsKey('createdAt') || hwData['createdAt'] == null) {
+      hwData['createdAt'] = FieldValue.serverTimestamp();
+    }
+
+    final hwRef = FirebaseFirestore.instance
+        .collection('schools')
+        .doc(schoolId)
+        .collection('classes')
+        .doc(classId)
+        .collection('homework')
+        .doc(homeworkId);
+
+    await hwRef.set(hwData, SetOptions(merge: true));
+    debugPrint('✅ [SyncQueue] Successfully synced homework ($homeworkId) for class $classId');
+    return true;
+  }
+
+  static Future<bool> _processHomeworkDelete(Map<String, dynamic> payload) async {
+    final schoolId = (payload['schoolId'] ?? '').toString();
+    final classId = (payload['classId'] ?? '').toString();
+    final homeworkId = (payload['homeworkId'] ?? '').toString();
+
+    if (schoolId.isEmpty || classId.isEmpty || homeworkId.isEmpty) return true;
+
+    await FirebaseFirestore.instance
+        .collection('schools')
+        .doc(schoolId)
+        .collection('classes')
+        .doc(classId)
+        .collection('homework')
+        .doc(homeworkId)
+        .delete();
+
+    debugPrint('✅ [SyncQueue] Successfully synced homework deletion ($homeworkId)');
+    return true;
+  }
+
+  static Future<bool> _processTestSchedule(Map<String, dynamic> payload) async {
+    final schoolId = (payload['schoolId'] ?? '').toString();
+    final classId = (payload['classId'] ?? '').toString();
+    final className = (payload['className'] ?? '').toString();
+    final testId = (payload['testId'] ?? '').toString();
+    final Map<String, dynamic> testData = Map<String, dynamic>.from(payload['testData'] ?? {});
+    final List<dynamic> students = payload['students'] ?? [];
+    final String testMessage = (payload['testMessage'] ?? '').toString();
+
+    if (schoolId.isEmpty || classId.isEmpty || testId.isEmpty) {
+      debugPrint('⚠️ [SyncQueue] Invalid test schedule payload, discarding.');
+      return true;
+    }
+
+    testData.remove('isPendingSync');
+    testData['createdAt'] = FieldValue.serverTimestamp();
+
+    final testRef = FirebaseFirestore.instance
+        .collection('schools')
+        .doc(schoolId)
+        .collection('classes')
+        .doc(classId)
+        .collection('scheduled_tests')
+        .doc(testId);
+
+    await testRef.set(testData, SetOptions(merge: true));
+
+    // Send Parent Notifications safely
+    if (students.isNotEmpty && testMessage.isNotEmpty) {
+      try {
+        final processedParents = <String>{};
+        var batch = FirebaseFirestore.instance.batch();
+        int batchCount = 0;
+
+        for (var sRaw in students) {
+          if (sRaw is! Map) continue;
+          final student = Map<String, dynamic>.from(sRaw);
+          String? parentId;
+          if (student['parentDetails'] != null && student['parentDetails']['parentId'] != null) {
+            parentId = student['parentDetails']['parentId']?.toString();
+          }
+          if (parentId != null && parentId.isNotEmpty && !processedParents.contains(parentId)) {
+            processedParents.add(parentId);
+            final alertRef = FirebaseFirestore.instance
+                .collection('schools')
+                .doc(schoolId)
+                .collection('notifications')
+                .doc();
+
+            batch.set(alertRef, {
+              'parentId': parentId,
+              'studentId': student['id'] ?? '',
+              'studentName': student['name'] ?? 'Student',
+              'title': 'Test Scheduled: ${testData['subject'] ?? 'Test'}',
+              'message': testMessage,
+              'type': 'academic',
+              'read': false,
+              'className': className,
+              'createdAt': FieldValue.serverTimestamp(),
+            });
+            batchCount++;
+
+            if (batchCount >= 400) {
+              await batch.commit();
+              batch = FirebaseFirestore.instance.batch();
+              batchCount = 0;
+            }
+          }
+        }
+        if (batchCount > 0) {
+          await batch.commit();
+        }
+      } catch (e) {
+        debugPrint('⚠️ [SyncQueue] Error dispatching scheduled test parent alerts: $e');
+      }
+    }
+
+    debugPrint('✅ [SyncQueue] Successfully synced scheduled test ($testId) and alerted parents');
+    return true;
+  }
+
+  static Future<bool> _processTestCancel(Map<String, dynamic> payload) async {
+    final schoolId = (payload['schoolId'] ?? '').toString();
+    final classId = (payload['classId'] ?? '').toString();
+    final className = (payload['className'] ?? '').toString();
+    final testId = (payload['testId'] ?? '').toString();
+    final subject = (payload['subject'] ?? '').toString();
+    final List<dynamic> students = payload['students'] ?? [];
+    final String cancelMessage = (payload['cancelMessage'] ?? '').toString();
+
+    if (schoolId.isEmpty || classId.isEmpty || testId.isEmpty) return true;
+
+    final testRef = FirebaseFirestore.instance
+        .collection('schools')
+        .doc(schoolId)
+        .collection('classes')
+        .doc(classId)
+        .collection('scheduled_tests')
+        .doc(testId);
+
+    await testRef.delete();
+
+    if (students.isNotEmpty && cancelMessage.isNotEmpty) {
+      try {
+        final processedParents = <String>{};
+        var batch = FirebaseFirestore.instance.batch();
+        int batchCount = 0;
+
+        for (var sRaw in students) {
+          if (sRaw is! Map) continue;
+          final student = Map<String, dynamic>.from(sRaw);
+          String? parentId;
+          if (student['parentDetails'] != null && student['parentDetails']['parentId'] != null) {
+            parentId = student['parentDetails']['parentId']?.toString();
+          }
+          if (parentId != null && parentId.isNotEmpty && !processedParents.contains(parentId)) {
+            processedParents.add(parentId);
+            final alertRef = FirebaseFirestore.instance
+                .collection('schools')
+                .doc(schoolId)
+                .collection('notifications')
+                .doc();
+
+            batch.set(alertRef, {
+              'parentId': parentId,
+              'studentId': student['id'] ?? '',
+              'studentName': student['name'] ?? 'Student',
+              'title': 'Test Cancelled: $subject',
+              'message': cancelMessage,
+              'type': 'academic',
+              'read': false,
+              'className': className,
+              'createdAt': FieldValue.serverTimestamp(),
+            });
+            batchCount++;
+
+            if (batchCount >= 400) {
+              await batch.commit();
+              batch = FirebaseFirestore.instance.batch();
+              batchCount = 0;
+            }
+          }
+        }
+        if (batchCount > 0) {
+          await batch.commit();
+        }
+      } catch (e) {
+        debugPrint('⚠️ [SyncQueue] Error sending cancel test alerts: $e');
+      }
+    }
+
+    debugPrint('✅ [SyncQueue] Successfully synced cancelled test ($testId)');
+    return true;
+  }
+
+  static Future<bool> _processTestComplete(Map<String, dynamic> payload) async {
+    final schoolId = (payload['schoolId'] ?? '').toString();
+    final classId = (payload['classId'] ?? '').toString();
+    final testId = (payload['testId'] ?? '').toString();
+
+    if (schoolId.isEmpty || classId.isEmpty || testId.isEmpty) return true;
+
+    final testRef = FirebaseFirestore.instance
+        .collection('schools')
+        .doc(schoolId)
+        .collection('classes')
+        .doc(classId)
+        .collection('scheduled_tests')
+        .doc(testId);
+
+    await testRef.update({'status': 'completed'});
+    debugPrint('✅ [SyncQueue] Successfully synced test completion ($testId)');
+    return true;
+  }
+
+  static Future<bool> _processTestScoresSave(Map<String, dynamic> payload) async {
+    final schoolId = (payload['schoolId'] ?? '').toString();
+    final classId = (payload['classId'] ?? '').toString();
+    final className = (payload['className'] ?? '').toString();
+    final testId = (payload['testId'] ?? '').toString();
+    final subject = (payload['subject'] ?? '').toString();
+    final testType = (payload['testType'] ?? 'Written').toString();
+    final maxMarks = (payload['maxMarks'] as num?)?.toInt() ?? 10;
+    final dateStr = (payload['dateStr'] ?? '').toString();
+    final String testMessage = (payload['testMessage'] ?? '').toString();
+    final Map<String, dynamic> testScores = Map<String, dynamic>.from(payload['testScores'] ?? {});
+    final List<dynamic> absentStudentsRaw = payload['absentStudents'] ?? [];
+    final Set<String> absentStudents = absentStudentsRaw.map((e) => e.toString()).toSet();
+    final List<dynamic> students = payload['students'] ?? [];
+
+    if (schoolId.isEmpty || classId.isEmpty || testId.isEmpty) return true;
+
+    var batch = FirebaseFirestore.instance.batch();
+    int batchCount = 0;
+    final processedParents = <String>{};
+
+    for (var sRaw in students) {
+      if (sRaw is! Map) continue;
+      final student = Map<String, dynamic>.from(sRaw);
+      final studentId = student['id']?.toString() ?? '';
+      if (studentId.isEmpty) continue;
+      final bool isAbsent = absentStudents.contains(studentId);
+
+      String? parentId;
+      if (student['parentDetails'] != null && student['parentDetails']['parentId'] != null) {
+        parentId = student['parentDetails']['parentId']?.toString();
+      }
+
+      if (parentId != null && parentId.isNotEmpty && !processedParents.contains(parentId)) {
+        processedParents.add(parentId);
+        final alertRef = FirebaseFirestore.instance
+            .collection('schools')
+            .doc(schoolId)
+            .collection('notifications')
+            .doc();
+
+        final sName = student['name'] ?? 'Student';
+        final notifTitle = isAbsent ? 'Test Absence: $subject' : 'Test Results: $subject';
+        final notifMsg = isAbsent
+            ? '$sName was marked ABSENT for the $testType test in $subject on $dateStr.'
+            : testMessage;
+
+        batch.set(alertRef, {
+          'parentId': parentId,
+          'studentId': studentId,
+          'studentName': sName,
+          'title': notifTitle,
+          'message': notifMsg,
+          'type': 'academic',
+          'read': false,
+          'className': className,
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+        batchCount++;
+      }
+
+      if (testScores.containsKey(studentId) || isAbsent) {
+        final score = isAbsent ? null : (int.tryParse(testScores[studentId]?.toString() ?? '') ?? 0);
+        final studentRef = FirebaseFirestore.instance
+            .collection('schools')
+            .doc(schoolId)
+            .collection('classes')
+            .doc(classId)
+            .collection('students')
+            .doc(studentId);
+
+        final scoreRef = studentRef.collection('testScores').doc(testId);
+        batch.set(scoreRef, {
+          'subject': subject,
+          'testType': testType,
+          'score': score,
+          'isAbsent': isAbsent,
+          'maxMarks': maxMarks,
+          'date': dateStr,
+          'createdAt': FieldValue.serverTimestamp(),
+        });
+        batchCount++;
+      }
+
+      if (batchCount >= 400) {
+        await batch.commit();
+        batch = FirebaseFirestore.instance.batch();
+        batchCount = 0;
+      }
+    }
+
+    final testDocRef = FirebaseFirestore.instance
+        .collection('schools')
+        .doc(schoolId)
+        .collection('classes')
+        .doc(classId)
+        .collection('scheduled_tests')
+        .doc(testId);
+
+    batch.update(testDocRef, {
+      'status': 'completed',
+      'scores': testScores,
+      'absentStudents': absentStudents.toList(),
+      'completedAt': FieldValue.serverTimestamp(),
+      'presentCount': testScores.length,
+      'absentCount': absentStudents.length,
+    });
+
+    await batch.commit();
+
+    debugPrint('✅ [SyncQueue] Successfully synced test scores and report for $testId');
+    return true;
+  }
+
+  static Future<bool> _processDailyScoresSave(Map<String, dynamic> payload) async {
+    final schoolId = (payload['schoolId'] ?? '').toString();
+    final classId = (payload['classId'] ?? '').toString();
+    final subject = (payload['subject'] ?? '').toString();
+    final Map<String, dynamic> scoreUpdates = Map<String, dynamic>.from(payload['scoreUpdates'] ?? {});
+    final List<dynamic> students = payload['students'] ?? [];
+
+    if (schoolId.isEmpty || classId.isEmpty || scoreUpdates.isEmpty) return true;
+
+    var batch = FirebaseFirestore.instance.batch();
+    int batchCount = 0;
+
+    for (var entry in scoreUpdates.entries) {
+      final studentId = entry.key;
+      if (entry.value is! Map) continue;
+      final updates = Map<String, dynamic>.from(entry.value as Map);
+
+      final studentRaw = students.firstWhere(
+        (s) => s is Map && s['id'] == studentId,
+        orElse: () => <String, dynamic>{},
+      );
+      if (studentRaw is! Map || studentRaw.isEmpty) continue;
+      final student = Map<String, dynamic>.from(studentRaw);
+
+      final studentRef = FirebaseFirestore.instance
+          .collection('schools')
+          .doc(schoolId)
+          .collection('classes')
+          .doc(classId)
+          .collection('students')
+          .doc(studentId);
+
+      List<dynamic> newAcademicScores = List<dynamic>.from(student['academicScores'] ?? []);
+      List<dynamic> newHomeworkScores = List<dynamic>.from(student['homeworkScores'] ?? []);
+
+      if (updates.containsKey('academic')) {
+        final scoreVal = int.tryParse(updates['academic']?.toString() ?? '') ?? 0;
+        final idx = newAcademicScores.indexWhere((s) => s is Map && s['subject'] == subject);
+        if (idx >= 0) {
+          newAcademicScores[idx] = { ...Map<String, dynamic>.from(newAcademicScores[idx] as Map), 'score': scoreVal };
+        } else {
+          newAcademicScores.add({ 'subject': subject, 'score': scoreVal });
+        }
+      }
+
+      if (updates.containsKey('homework')) {
+        final scoreVal = int.tryParse(updates['homework']?.toString() ?? '') ?? 0;
+        final idx = newHomeworkScores.indexWhere((s) => s is Map && s['subject'] == subject);
+        if (idx >= 0) {
+          newHomeworkScores[idx] = { ...Map<String, dynamic>.from(newHomeworkScores[idx] as Map), 'score': scoreVal };
+        } else {
+          newHomeworkScores.add({ 'subject': subject, 'score': scoreVal });
+        }
+      }
+
+      batch.update(studentRef, {
+        'academicScores': newAcademicScores,
+        'homeworkScores': newHomeworkScores,
+      });
+      batchCount++;
+
+      if (batchCount >= 400) {
+        await batch.commit();
+        batch = FirebaseFirestore.instance.batch();
+        batchCount = 0;
+      }
+    }
+
+    if (batchCount > 0) {
+      await batch.commit();
+    }
+
+    debugPrint('✅ [SyncQueue] Successfully synced daily scores for class $classId ($subject)');
     return true;
   }
 }

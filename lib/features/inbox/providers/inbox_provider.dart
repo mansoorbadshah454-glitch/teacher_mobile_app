@@ -3,6 +3,18 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:teacher_mobile_app/core/providers/user_data_provider.dart';
 import 'package:teacher_mobile_app/features/auth/auth_provider.dart';
 
+int _getMillis(dynamic val) {
+  if (val == null) return DateTime.now().millisecondsSinceEpoch;
+  if (val is Timestamp) return val.millisecondsSinceEpoch;
+  if (val is DateTime) return val.millisecondsSinceEpoch;
+  if (val is String) {
+    final dt = DateTime.tryParse(val);
+    if (dt != null) return dt.millisecondsSinceEpoch;
+  }
+  if (val is num) return val.toInt();
+  return DateTime.now().millisecondsSinceEpoch;
+}
+
 // Provides a real-time list of messages intended for the current teacher
 final inboxProvider = StreamProvider<List<Map<String, dynamic>>>((ref) {
   final userAsync = ref.watch(teacherDataProvider);
@@ -45,8 +57,8 @@ final inboxProvider = StreamProvider<List<Map<String, dynamic>>>((ref) {
 
             // Sort in-memory to avoid composite index requirement
             messages.sort((a, b) {
-              final aTime = (a['timestamp'] as Timestamp?)?.millisecondsSinceEpoch ?? DateTime.now().millisecondsSinceEpoch;
-              final bTime = (b['timestamp'] as Timestamp?)?.millisecondsSinceEpoch ?? DateTime.now().millisecondsSinceEpoch;
+              final aTime = _getMillis(a['timestamp']);
+              final bTime = _getMillis(b['timestamp']);
               return bTime.compareTo(aTime); // Descending (Newest first)
             });
 

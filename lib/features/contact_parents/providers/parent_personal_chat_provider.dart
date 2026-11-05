@@ -37,14 +37,19 @@ DateTime? _parseTimestamp(dynamic val) {
   return null;
 }
 
+/// Refresh trigger to force instant local echo on offline/online message dispatch
+final parentChatRefreshTriggerProvider = StateProvider.autoDispose<int>((ref) => 0);
+
 /// Stream provider for 1-on-1 personal messages between teacher and a specific parent for a student.
 /// Implements:
-/// 1. Instant offline retrieval from LocalDbService
+/// 1. Instant offline retrieval from LocalDbService (1 page / 40 messages max)
 /// 2. 14-day window in-memory filter and Firestore auto-purge
 /// 3. Zero Composite Index Requirement (uses direct equality filters supported out-of-the-box)
 /// 4. Merging with offline-queued pending items from SyncQueueService
+/// 5. Instant local echo on offline/online message submission
 final parentPersonalChatMessagesProvider =
     StreamProvider.family.autoDispose<List<Map<String, dynamic>>, ParentPersonalChatParams>((ref, params) async* {
+  ref.watch(parentChatRefreshTriggerProvider);
   final cacheKey = 'chat_${params.schoolId}_${params.parentId}_${params.studentId}';
   final fourteenDaysAgo = DateTime.now().subtract(const Duration(days: 14));
 
@@ -70,7 +75,7 @@ final parentPersonalChatMessagesProvider =
     return combined;
   }
 
-  // 1. Immediately yield cached messages (pruning any older than 14 days)
+  // 1. Immediately yield cached messages (capped to 40 items / 1 page)
   final cached = LocalDbService.getCache(cacheKey);
   if (cached is List) {
     final filteredCache = cached
@@ -80,7 +85,8 @@ final parentPersonalChatMessagesProvider =
           return time == null || time.isAfter(fourteenDaysAgo);
         })
         .toList();
-    yield mergeWithPending(filteredCache);
+    final pageCapped = filteredCache.length > 40 ? filteredCache.sublist(0, 40) : filteredCache;
+    yield mergeWithPending(pageCapped);
   } else {
     // Even if cache is empty, check for pending items
     final pendingOnly = mergeWithPending([]);
@@ -151,9 +157,10 @@ final parentPersonalChatMessagesProvider =
       } catch (_) {}
     }
 
-    // Cache locally for offline availability
-    await LocalDbService.saveCache(cacheKey, serverMessages);
+    // Limit cache to 1 page (40 recent messages) to keep device memory fast & lean
+    final pageCapped = serverMessages.length > 40 ? serverMessages.sublist(0, 40) : serverMessages;
+    await LocalDbService.saveCache(cacheKey, pageCapped);
 
-    yield mergeWithPending(serverMessages);
+    yield mergeWithPending(pageCapped);
   }
 });

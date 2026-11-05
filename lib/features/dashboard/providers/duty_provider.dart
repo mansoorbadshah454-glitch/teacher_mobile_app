@@ -3,13 +3,24 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:teacher_mobile_app/features/auth/auth_provider.dart';
 import 'package:teacher_mobile_app/core/providers/user_data_provider.dart';
 
+import 'package:teacher_mobile_app/core/services/local_db_service.dart';
+
 /// Helper to check if a timestamp is from yesterday or earlier
-bool _isNewDay(Timestamp? lastUpdate) {
+bool _isNewDay(dynamic lastUpdate) {
   if (lastUpdate == null) return false;
   
-  final lastDate = lastUpdate.toDate();
-  final now = DateTime.now();
+  DateTime? lastDate;
+  if (lastUpdate is Timestamp) {
+    lastDate = lastUpdate.toDate();
+  } else if (lastUpdate is DateTime) {
+    lastDate = lastUpdate;
+  } else if (lastUpdate is String) {
+    lastDate = DateTime.tryParse(lastUpdate);
+  }
   
+  if (lastDate == null) return false;
+
+  final now = DateTime.now();
   final lastDay = DateTime(lastDate.year, lastDate.month, lastDate.day);
   final currentDay = DateTime(now.year, now.month, now.day);
   
@@ -38,10 +49,22 @@ class DutyStatusNotifier extends AutoDisposeStreamNotifier<bool> {
       return;
     }
 
+    final cacheKey = 'teacher_duty_status_${user.uid}';
+    final cached = LocalDbService.getCache(cacheKey);
+    if (cached is Map) {
+      final bool dutyStatus = cached['isOnDuty'] ?? false;
+      final dynamic lastUpdate = cached['lastDutyUpdate'];
+      if (!_isNewDay(lastUpdate) && dutyStatus) {
+        yield true;
+      } else {
+        yield false;
+      }
+    }
+
     // Await global user data to get schoolId
     final teacherData = await ref.watch(teacherDataProvider.future);
     if (teacherData == null || !teacherData.containsKey('schoolId')) {
-      yield false;
+      if (cached == null) yield false;
       return;
     }
 
@@ -60,7 +83,12 @@ class DutyStatusNotifier extends AutoDisposeStreamNotifier<bool> {
 
       final data = snapshot.data()!;
       final bool dutyStatus = data['isOnDuty'] ?? false;
-      final Timestamp? lastUpdate = data['lastDutyUpdate'] as Timestamp?;
+      final dynamic lastUpdate = data['lastDutyUpdate'];
+
+      LocalDbService.saveCache(cacheKey, {
+        'isOnDuty': dutyStatus,
+        'lastDutyUpdate': lastUpdate != null ? lastUpdate.toString() : null,
+      });
 
       if (_isNewDay(lastUpdate) || !dutyStatus) {
         return false;

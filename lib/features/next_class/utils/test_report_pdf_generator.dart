@@ -18,14 +18,22 @@ class TestReportPdfGenerator {
     required Map<String, dynamic> testData,
     required List<Map<String, dynamic>> students,
     required Map<String, int> testScores,
+    Set<String> absentStudents = const {},
   }) async {
     final pdf = pw.Document();
 
-    // Ranking Logic
+    // Ranking Logic (excluding absent students)
     List<Map<String, dynamic>> rankedStudents = [];
+    List<Map<String, dynamic>> absentList = [];
+
     for (var s in students) {
-      int score = testScores[s['id']] ?? 0;
-      rankedStudents.add({...s, 'score': score});
+      final sId = s['id']?.toString() ?? '';
+      if (absentStudents.contains(sId)) {
+        absentList.add({...s, 'isAbsent': true, 'rank': -1});
+      } else {
+        int score = testScores[sId] ?? 0;
+        rankedStudents.add({...s, 'score': score, 'isAbsent': false});
+      }
     }
     rankedStudents.sort((a, b) => (b['score'] as int).compareTo(a['score'] as int));
 
@@ -42,6 +50,8 @@ class TestReportPdfGenerator {
       prevScore = score;
       trueRank++;
     }
+
+    final allReportStudents = [...rankedStudents, ...absentList];
 
     final maxMarks = testData['maxMarks'] ?? 10;
     int maxM = (maxMarks is int) ? maxMarks : int.tryParse(maxMarks.toString()) ?? 10;
@@ -131,7 +141,20 @@ class TestReportPdfGenerator {
                     pw.Padding(padding: const pw.EdgeInsets.all(8), child: pw.Text('Percentage', style: pw.TextStyle(fontWeight: pw.FontWeight.bold))),
                   ],
                 ),
-                ...rankedStudents.map((s) {
+                ...allReportStudents.map((s) {
+                  final bool isAbsent = s['isAbsent'] == true;
+                  if (isAbsent) {
+                    return pw.TableRow(
+                      children: [
+                        pw.Padding(padding: const pw.EdgeInsets.all(8), child: pw.Text('-', style: const pw.TextStyle(color: PdfColors.grey600))),
+                        pw.Padding(padding: const pw.EdgeInsets.all(8), child: pw.Text(s['rollNo']?.toString() ?? '-')),
+                        pw.Padding(padding: const pw.EdgeInsets.all(8), child: pw.Text(s['name'] ?? 'Unknown')),
+                        pw.Padding(padding: const pw.EdgeInsets.all(8), child: pw.Text('ABS', style: pw.TextStyle(color: PdfColors.red, fontWeight: pw.FontWeight.bold))),
+                        pw.Padding(padding: const pw.EdgeInsets.all(8), child: pw.Text('-', style: const pw.TextStyle(color: PdfColors.grey600))),
+                      ],
+                    );
+                  }
+
                   int rank = s['rank'];
                   String rankStr = rank.toString();
                   if (rank == 1) rankStr += 'st';

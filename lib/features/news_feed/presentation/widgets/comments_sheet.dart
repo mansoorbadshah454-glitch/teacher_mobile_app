@@ -152,8 +152,12 @@ class _CommentsSheetState extends ConsumerState<CommentsSheet> {
           crossAxisAlignment: CrossAxisAlignment.start,
           children: replies.map((doc) {
             final data = doc.data() as Map<String, dynamic>;
-            final time = data['timestamp'] as Timestamp?;
-            final tString = time != null ? timeago.format(time.toDate()) : 'Now';
+            final rawTime = data['timestamp'];
+            DateTime? dt;
+            if (rawTime is Timestamp) dt = rawTime.toDate();
+            else if (rawTime is DateTime) dt = rawTime;
+            else if (rawTime is String) dt = DateTime.tryParse(rawTime);
+            final tString = dt != null ? timeago.format(dt) : 'Now';
             
             return Padding(
                padding: const EdgeInsets.only(top: 6),
@@ -295,8 +299,12 @@ class _CommentsSheetState extends ConsumerState<CommentsSheet> {
                   itemCount: comments.length,
                   itemBuilder: (context, index) {
                     final data = comments[index].data() as Map<String, dynamic>;
-                    final timestamp = data['timestamp'] as Timestamp?;
-                    final timeString = timestamp != null ? timeago.format(timestamp.toDate()) : 'Just now';
+                    final rawTimestamp = data['timestamp'];
+                    DateTime? dt;
+                    if (rawTimestamp is Timestamp) dt = rawTimestamp.toDate();
+                    else if (rawTimestamp is DateTime) dt = rawTimestamp;
+                    else if (rawTimestamp is String) dt = DateTime.tryParse(rawTimestamp);
+                    final timeString = dt != null ? timeago.format(dt) : 'Just now';
                     
                     final likesList = List<String>.from(data['likes'] ?? []);
                     final isLiked = user != null && likesList.contains(user.uid);

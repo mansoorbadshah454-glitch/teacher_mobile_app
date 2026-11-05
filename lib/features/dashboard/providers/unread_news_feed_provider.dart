@@ -30,7 +30,13 @@ final _teacherLastReadProvider = StreamProvider<Timestamp?>((ref) {
         if (teacherSnapshot.exists && teacherSnapshot.data() != null) {
           final data = teacherSnapshot.data()!;
             if (data.containsKey('lastReadNewsFeed')) {
-              return data['lastReadNewsFeed'] as Timestamp?;
+              final raw = data['lastReadNewsFeed'];
+              if (raw is Timestamp) return raw;
+              if (raw is DateTime) return Timestamp.fromDate(raw);
+              if (raw is String) {
+                final dt = DateTime.tryParse(raw);
+                if (dt != null) return Timestamp.fromDate(dt);
+              }
             }
           }
           return null;

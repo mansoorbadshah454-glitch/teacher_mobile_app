@@ -12,7 +12,8 @@ import 'package:image_picker/image_picker.dart';
 import 'package:permission_handler/permission_handler.dart';
 import 'package:cached_network_image/cached_network_image.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
-import 'package:teacher_mobile_app/core/theme/app_theme.dart';
+import 'package:teacher_mobile_app/core/app_theme.dart';
+import 'package:teacher_mobile_app/core/services/sync_queue_service.dart';
 import 'package:teacher_mobile_app/features/attendance/presentation/screens/attendance_screen.dart';
 import 'package:teacher_mobile_app/features/contact_parents/providers/contact_parents_provider.dart';
 import 'package:teacher_mobile_app/features/contact_parents/providers/parent_personal_chat_provider.dart';
@@ -253,6 +254,8 @@ class _ParentPersonalChatScreenState extends ConsumerState<ParentPersonalChatScr
         audioFile: file,
       );
       await _deletePreview();
+      // Instant local echo in chat stream
+      ref.read(parentChatRefreshTriggerProvider.notifier).state++;
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text("Voice note sent successfully")),
@@ -466,6 +469,8 @@ class _ParentPersonalChatScreenState extends ConsumerState<ParentPersonalChatScr
         messageText: caption,
         attachedFile: file,
       );
+      // Instant local echo in chat stream
+      ref.read(parentChatRefreshTriggerProvider.notifier).state++;
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
           const SnackBar(content: Text("Attachment sent successfully")),
@@ -496,6 +501,8 @@ class _ParentPersonalChatScreenState extends ConsumerState<ParentPersonalChatScr
         parent: widget.parentData!,
         messageText: text,
       );
+      // Instant local echo in chat stream
+      ref.read(parentChatRefreshTriggerProvider.notifier).state++;
     } catch (e) {
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(
@@ -659,27 +666,66 @@ class _ParentPersonalChatScreenState extends ConsumerState<ParentPersonalChatScr
               ],
             ),
           ),
-          Container(
-            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
-            decoration: BoxDecoration(
-              color: isLinked ? Colors.green.shade600 : Colors.red.shade400,
-              borderRadius: BorderRadius.circular(12),
-            ),
-            child: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                Icon(
-                  isLinked ? Icons.link : Icons.link_off,
-                  color: Colors.white,
-                  size: 12,
-                ),
-                const SizedBox(width: 4),
-                Text(
-                  isLinked ? "Linked" : "Unlinked",
-                  style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
-                ),
-              ],
-            ),
+          ValueListenableBuilder<int>(
+            valueListenable: SyncQueueService.pendingCountNotifier,
+            builder: (context, pendingCount, _) {
+              final studentId = widget.student['id'] as String? ?? '';
+              final parentId = widget.parentData?['id'] as String? ?? '';
+              final chatPending = SyncQueueService.getPendingMessagesFor(
+                schoolId: widget.schoolId,
+                parentId: parentId,
+                studentId: studentId,
+              ).length;
+
+              return Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  if (chatPending > 0) ...[
+                    Container(
+                      padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 4),
+                      margin: const EdgeInsets.only(right: 6),
+                      decoration: BoxDecoration(
+                        color: Colors.amber.shade700,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Row(
+                        mainAxisSize: MainAxisSize.min,
+                        children: [
+                          const Icon(Icons.access_time, color: Colors.white, size: 11),
+                          const SizedBox(width: 3),
+                          Text(
+                            "$chatPending queued",
+                            style: const TextStyle(color: Colors.white, fontSize: 10.5, fontWeight: FontWeight.bold),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ],
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: BoxDecoration(
+                      color: isLinked ? Colors.green.shade600 : Colors.red.shade400,
+                      borderRadius: BorderRadius.circular(12),
+                    ),
+                    child: Row(
+                      mainAxisSize: MainAxisSize.min,
+                      children: [
+                        Icon(
+                          isLinked ? Icons.link : Icons.link_off,
+                          color: Colors.white,
+                          size: 12,
+                        ),
+                        const SizedBox(width: 4),
+                        Text(
+                          isLinked ? "Linked" : "Unlinked",
+                          style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
+                        ),
+                      ],
+                    ),
+                  ),
+                ],
+              );
+            },
           ),
         ],
       ),

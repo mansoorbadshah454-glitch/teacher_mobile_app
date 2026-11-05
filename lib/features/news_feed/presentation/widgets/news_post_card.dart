@@ -461,8 +461,12 @@ class _NewsPostCardState extends ConsumerState<NewsPostCard> {
   Widget build(BuildContext context) {
     final user = ref.watch(currentUserProvider);
     final data = widget.data;
-    final timestamp = data['timestamp'] as Timestamp?;
-    final timeString = timestamp != null ? timeago.format(timestamp.toDate()) : 'Recently';
+    final rawTimestamp = data['timestamp'];
+    DateTime? dt;
+    if (rawTimestamp is Timestamp) dt = rawTimestamp.toDate();
+    else if (rawTimestamp is DateTime) dt = rawTimestamp;
+    else if (rawTimestamp is String) dt = DateTime.tryParse(rawTimestamp);
+    final timeString = dt != null ? timeago.format(dt) : 'Recently';
     final authorName = data['authorName'] ?? 'Unknown';
     final authorImage = data['authorImage'] ?? '';
     final role = data['role'] ?? 'Teacher';
@@ -570,9 +574,9 @@ class _NewsPostCardState extends ConsumerState<NewsPostCard> {
                            ),
                       ],
                     ),
-                    if (timestamp != null)
+                    if (dt != null)
                       Text(
-                        "Expires ${timestamp.toDate().add(const Duration(days: 7)).toString().substring(0, 10)}",
+                        "Expires ${dt.add(const Duration(days: 7)).toString().substring(0, 10)}",
                         style: Theme.of(context).textTheme.labelSmall?.copyWith(color: Colors.redAccent, fontSize: 10),
                       ),
                   ],
