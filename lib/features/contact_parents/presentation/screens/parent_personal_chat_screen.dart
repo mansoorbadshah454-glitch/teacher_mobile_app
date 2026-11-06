@@ -896,9 +896,9 @@ class _ParentPersonalChatScreenState extends ConsumerState<ParentPersonalChatScr
                   if (isPending)
                     const Icon(Icons.access_time, size: 12, color: Colors.white70)
                   else if (isRead)
-                    const Icon(Icons.done_all, size: 14, color: Color(0xFFE0F2FE)) // Bright cyan double tick
+                    const Icon(Icons.done_all, size: 15, color: Color(0xFF38BDF8)) // Vivid cyan-blue double tick (Seen)
                   else
-                    const Icon(Icons.done_all, size: 14, color: Colors.white70), // Grey double tick
+                    const Icon(Icons.done, size: 14, color: Colors.white70), // Single tick (Sent / Unread)
                 ],
               ],
             ),
