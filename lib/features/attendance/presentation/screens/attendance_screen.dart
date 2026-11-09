@@ -493,11 +493,11 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
                                             bool isLeaveGranted = status == 'leave_granted';
 
                                             if (!isLeaveGranted && activeLeave != null && activeLeave['status'] == 'pending') {
-                                              final startStr = activeLeave['startDate'].toString().split('T')[0];
                                               final endStr = activeLeave['endDate'].toString().split('T')[0];
                                               final todayStr = DateFormat('yyyy-MM-dd').format(DateTime.now());
 
-                                              if (todayStr.compareTo(startStr) >= 0 && todayStr.compareTo(endStr) <= 0) {
+                                              // Show pending action if leave has not expired yet
+                                              if (todayStr.compareTo(endStr) <= 0) {
                                                 hasPendingLeaveToday = true;
                                               }
                                             }
@@ -523,14 +523,28 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
                                                       // Grant
                                                       ref.read(attendanceProvider.notifier).setStatus(sId, 'leave_granted');
                                                       final todayStr = DateFormat('yyyy-MM-dd').format(DateTime.now());
+                                                      final Map<String, dynamic> updatePayload = {
+                                                        'activeLeave.status': 'granted',
+                                                        'attendanceHistory.$todayStr': 'leave_granted',
+                                                      };
+
+                                                      // Pre-populate all dates in range for multi-day leaves
+                                                      try {
+                                                        final start = DateTime.parse(activeLeave['startDate'].toString().split('T')[0]);
+                                                        final end = DateTime.parse(activeLeave['endDate'].toString().split('T')[0]);
+                                                        var curr = start;
+                                                        while (!curr.isAfter(end)) {
+                                                          final dStr = DateFormat('yyyy-MM-dd').format(curr);
+                                                          updatePayload['attendanceHistory.$dStr'] = 'leave_granted';
+                                                          curr = curr.add(const Duration(days: 1));
+                                                        }
+                                                      } catch (_) {}
+
                                                       await FirebaseFirestore.instance
                                                         .collection('schools').doc(schoolId)
                                                         .collection('classes').doc(assignedClass['id'])
                                                         .collection('students').doc(sId)
-                                                        .update({
-                                                          'activeLeave.status': 'granted',
-                                                          'attendanceHistory.$todayStr': 'leave_granted'
-                                                        });
+                                                        .update(updatePayload);
                                                     },
                                                   ),
                                                   IconButton(
