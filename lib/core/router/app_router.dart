@@ -27,6 +27,8 @@ import 'package:teacher_mobile_app/features/syllabus/providers/syllabus_provider
 import 'package:teacher_mobile_app/features/exam/presentation/screens/exam_classes_screen.dart';
 import 'package:teacher_mobile_app/features/exam/presentation/screens/marks_entry_screen.dart';
 import 'package:teacher_mobile_app/features/exam/models/exam_model.dart';
+import 'package:teacher_mobile_app/features/paper_exam/presentation/screens/paper_exam_hub_screen.dart';
+import 'package:teacher_mobile_app/features/paper_exam/presentation/screens/slo_paper_builder_screen.dart';
 final GlobalKey<ScaffoldMessengerState> rootScaffoldMessengerKey = GlobalKey<ScaffoldMessengerState>();
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
@@ -166,6 +168,14 @@ final appRouter = GoRouter(
         final classItem = state.extra as ExamClassSubject;
         return MarksEntryScreen(classItem: classItem);
       },
+    ),
+    GoRoute(
+      path: '/paper-exam',
+      builder: (context, state) => const PaperExamHubScreen(),
+    ),
+    GoRoute(
+      path: '/paper-exam/generator',
+      builder: (context, state) => const SloPaperBuilderScreen(),
     ),
   ],
 );

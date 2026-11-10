@@ -126,10 +126,10 @@ class AppDrawer extends ConsumerWidget {
           ),
           _DrawerItem(
             icon: Icons.assignment_turned_in_outlined,
-            title: 'Exam',
+            title: 'Paper & Exam',
             onTap: () {
               Navigator.pop(context);
-              context.push('/teacher-exams');
+              context.push('/paper-exam');
             },
           ),
           _DrawerItem(

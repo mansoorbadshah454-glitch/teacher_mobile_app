@@ -6,7 +6,6 @@ import 'package:teacher_mobile_app/core/providers/user_data_provider.dart';
 import 'package:teacher_mobile_app/features/next_class/providers/next_class_provider.dart';
 import 'package:teacher_mobile_app/features/next_class/presentation/widgets/student_score_card.dart';
 import 'package:teacher_mobile_app/features/next_class/presentation/widgets/class_card.dart';
-import 'package:teacher_mobile_app/features/next_class/services/pdf_generator_service.dart';
 import 'package:teacher_mobile_app/features/timetable/providers/timetable_provider.dart';
 import 'package:teacher_mobile_app/features/next_class/utils/test_report_pdf_generator.dart';
 import 'package:share_plus/share_plus.dart';

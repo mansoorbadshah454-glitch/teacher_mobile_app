@@ -207,11 +207,11 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
                     onTap: () => context.push('/next-class'),
                   ),
                   StatCard(
-                    title: "Notebook",
-                    description: "Private notes",
-                    icon: Icons.book,
-                    color: const Color(0xFFec4899), // Pink
-                    onTap: () => context.push('/notebook'),
+                    title: "Paper & Exam",
+                    description: "Papers & marks",
+                    icon: Icons.assignment_outlined,
+                    color: const Color(0xFF06b6d4), // Cyan
+                    onTap: () => context.push('/paper-exam'),
                   ),
                    StatCard(
                     title: "Parents Chat",
