@@ -88,7 +88,22 @@ class _PaperExamHubScreenState extends State<PaperExamHubScreen> {
             child: ListView(
               padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 20),
               children: [
-                // 1. Exam & Marks Menu Card
+                // 1. AI Paper Generator Menu Card
+                _HubOptionCard(
+                  title: "AI Paper Generator",
+                  subtitle: "Generate Board standard SLO question papers with AI & crowdsourced cache",
+                  icon: Icons.auto_awesome_rounded,
+                  iconGradient: const [Color(0xFFF59E0B), Color(0xFFEF4444)],
+                  badgeText: "AI Powered",
+                  badgeColor: const Color(0xFFF59E0B),
+                  onTap: () {
+                    context.push('/paper-exam/generator');
+                  },
+                ),
+
+                const SizedBox(height: 16),
+
+                // 2. Exam & Marks Menu Card
                 _HubOptionCard(
                   title: "Exams & Marks",
                   subtitle: "Enter and review student examination marks by class & subject",
@@ -98,21 +113,6 @@ class _PaperExamHubScreenState extends State<PaperExamHubScreen> {
                   badgeColor: const Color(0xFF10B981),
                   onTap: () {
                     context.push('/teacher-exams');
-                  },
-                ),
-
-                const SizedBox(height: 16),
-
-                // 2. AI Paper Generator Menu Card
-                _HubOptionCard(
-                  title: "AI Paper Generator",
-                  subtitle: "Generate Pakistani Board standard SLO question papers with AI & crowdsourced cache",
-                  icon: Icons.auto_awesome_rounded,
-                  iconGradient: const [Color(0xFFF59E0B), Color(0xFFEF4444)],
-                  badgeText: "AI Powered",
-                  badgeColor: const Color(0xFFF59E0B),
-                  onTap: () {
-                    context.push('/paper-exam/generator');
                   },
                 ),
               ],

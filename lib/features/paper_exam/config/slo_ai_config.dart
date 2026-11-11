@@ -5,8 +5,8 @@ class SloAiConfig {
   /// for a remote `gemini_api_key` if available.
   static const String fallbackGeminiApiKey = "YOUR_GEMINI_API_KEY_HERE";
 
-  /// The Gemini model used for generation (Standard stable model across all Google AI accounts)
-  static const String geminiModel = "gemini-1.5-flash";
+  /// The Gemini model used for generation (Fastest & most accurate Vision/OCR flash model)
+  static const String geminiModel = "gemini-2.5-flash";
 
   /// 30-Second cooldown lock duration to prevent accidental double-tap or spam
   static const Duration generationCooldown = Duration(seconds: 30);

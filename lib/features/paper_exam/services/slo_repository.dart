@@ -1,7 +1,6 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
 import 'package:teacher_mobile_app/features/paper_exam/models/slo_paper_models.dart';
-import 'package:teacher_mobile_app/features/paper_exam/services/slo_dummy_data_seeder.dart';
 
 class SloRepository {
   static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
@@ -12,26 +11,11 @@ class SloRepository {
     try {
       final docSnap = await _firestore.collection(collectionPath).doc(docId).get();
       if (!docSnap.exists || docSnap.data() == null) {
-        // Auto-seed built-in sample demo chapters if requested
-        if (docId == SloDummyDataSeeder.getEnglishDemoChapter().docId) {
-          final englishDemo = SloDummyDataSeeder.getEnglishDemoChapter();
-          saveOrMergeChapterBank(englishDemo).catchError((e) => debugPrint("Seed error: $e"));
-          return englishDemo;
-        } else if (docId == SloDummyDataSeeder.getUrduDemoChapter().docId) {
-          final urduDemo = SloDummyDataSeeder.getUrduDemoChapter();
-          saveOrMergeChapterBank(urduDemo).catchError((e) => debugPrint("Seed error: $e"));
-          return urduDemo;
-        }
         return null;
       }
       return ChapterBankDoc.fromJson(docSnap.data()!);
     } catch (e) {
       debugPrint('⚠️ Error fetching chapter bank ($docId): $e');
-      if (docId == SloDummyDataSeeder.getEnglishDemoChapter().docId) {
-        return SloDummyDataSeeder.getEnglishDemoChapter();
-      } else if (docId == SloDummyDataSeeder.getUrduDemoChapter().docId) {
-        return SloDummyDataSeeder.getUrduDemoChapter();
-      }
       return null;
     }
   }

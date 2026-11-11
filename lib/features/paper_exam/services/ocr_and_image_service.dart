@@ -39,10 +39,13 @@ class OcrAndImageService {
   }
 
   /// Processes multiple pages (from camera loop or multi-image gallery pick).
-  /// Runs on-device OCR for English/Science/Math.
-  /// Compresses images for RTL subjects (Urdu/Islamiyat) or when OCR text < 50 characters.
+  /// - English / Theory subjects: Runs Free On-Device OCR first (0 Image Tokens).
+  /// - Math / Physics / Chemistry: Uses Vision + OCR Hybrid so formulas, fractions,
+  ///   equations, and diagrams are read with 100% accuracy.
+  /// - RTL subjects (Urdu / Islamiyat): Sends crisp compressed images directly to Gemini Vision.
   Future<ExtractedBookContent> captureAndProcessPages({
     required bool isRtlSubject,
+    String subject = '',
     ImageSource source = ImageSource.camera,
     List<XFile>? preCapturedFiles,
   }) async {
@@ -78,6 +81,11 @@ class OcrAndImageService {
       return const ExtractedBookContent(text: '', compressedImages: [], pageCount: 0);
     }
 
+    final normalizedSub = subject.trim().toLowerCase();
+    final bool isEquationHeavySubject = normalizedSub.contains('math') ||
+        normalizedSub.contains('physics') ||
+        normalizedSub.contains('chemistry');
+
     final StringBuffer fullExtractedText = StringBuffer();
     final List<Uint8List> compressedImages = [];
 
@@ -91,22 +99,33 @@ class OcrAndImageService {
     }
 
     try {
+      int pageIdx = 1;
       for (final file in pickedFiles) {
         final filePath = file.path;
         final fileObj = File(filePath);
 
         if (!isRtlSubject && textRecognizer != null) {
-          // Free On-Device OCR First
+          // Run Free On-Device OCR First
           try {
             final inputImage = InputImage.fromFilePath(filePath);
             final RecognizedText recognizedText = await textRecognizer.processImage(inputImage);
             final pageText = recognizedText.text.trim();
 
             if (pageText.length >= 50) {
+              fullExtractedText.writeln('--- PAGE $pageIdx ---');
               fullExtractedText.writeln(pageText);
-              fullExtractedText.writeln('\n--- PAGE BREAK ---\n');
+              fullExtractedText.writeln();
+
+              // For Math/Physics/Chemistry, also include compressed image so formulas,
+              // superscripts, fractions, and chemical equations are 100% accurate
+              if (isEquationHeavySubject) {
+                final compressedBytes = await _compressImageFile(fileObj);
+                if (compressedBytes != null) {
+                  compressedImages.add(compressedBytes);
+                }
+              }
             } else {
-              // OCR text is too short (< 50 chars), fallback to compressed image for this page
+              // OCR text is too short (< 50 chars) or diagram page -> fallback to compressed image
               final compressedBytes = await _compressImageFile(fileObj);
               if (compressedBytes != null) {
                 compressedImages.add(compressedBytes);
@@ -114,14 +133,13 @@ class OcrAndImageService {
             }
           } catch (e) {
             debugPrint('⚠️ ML Kit OCR error on $filePath: $e');
-            // Graceful fallback to compressed image
             final compressedBytes = await _compressImageFile(fileObj);
             if (compressedBytes != null) {
               compressedImages.add(compressedBytes);
             }
           }
         } else {
-          // RTL Subject (Urdu, Islamiyat, Arabic) -> Direct compressed image to Gemini
+          // RTL Subject (Urdu, Islamiyat, Arabic) -> Direct crisp compressed image to Gemini Vision
           final compressedBytes = await _compressImageFile(fileObj);
           if (compressedBytes != null) {
             compressedImages.add(compressedBytes);
@@ -136,6 +154,7 @@ class OcrAndImageService {
         } catch (e) {
           debugPrint('⚠️ Could not delete temp file: $e');
         }
+        pageIdx++;
       }
     } finally {
       textRecognizer?.close();
@@ -148,14 +167,14 @@ class OcrAndImageService {
     );
   }
 
-  /// Compress image file to max 1024px width with 65% quality
+  /// Compress image file to 1440px with 76% quality (Crystal-clear Urdu Nastaliq & Math formulas, fixed 258 Gemini tokens)
   Future<Uint8List?> _compressImageFile(File file) async {
     try {
       final result = await FlutterImageCompress.compressWithFile(
         file.absolute.path,
-        minWidth: 1024,
-        minHeight: 1024,
-        quality: 65,
+        minWidth: 1440,
+        minHeight: 1440,
+        quality: 76,
         format: CompressFormat.jpeg,
       );
       if (result != null) return result;

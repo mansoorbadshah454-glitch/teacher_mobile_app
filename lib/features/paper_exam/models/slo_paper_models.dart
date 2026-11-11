@@ -1,3 +1,5 @@
+import 'dart:convert';
+import 'dart:typed_data';
 import 'package:cloud_firestore/cloud_firestore.dart';
 
 /// Represents a single Student Learning Outcome (SLO)
@@ -42,6 +44,7 @@ class SloQuestion {
   final List<String> options; // Empty for SHORT & LONG
   final String correctAnswer;
   final String rubric;
+  final String? diagramBase64; // Optional cropped diagram image (base64 JPEG/PNG)
 
   const SloQuestion({
     required this.id,
@@ -52,7 +55,17 @@ class SloQuestion {
     this.options = const [],
     required this.correctAnswer,
     required this.rubric,
+    this.diagramBase64,
   });
+
+  Uint8List? get diagramBytes {
+    if (diagramBase64 == null || diagramBase64!.isEmpty) return null;
+    try {
+      return base64Decode(diagramBase64!);
+    } catch (_) {
+      return null;
+    }
+  }
 
   factory SloQuestion.fromJson(Map<String, dynamic> json) {
     final rawOptions = json['options'];
@@ -60,6 +73,8 @@ class SloQuestion {
     if (rawOptions is List) {
       parsedOptions = rawOptions.map((e) => e.toString()).toList();
     }
+
+    final rawDiagram = (json['diagram_base64'] ?? json['diagramBase64'] ?? '').toString();
 
     return SloQuestion(
       id: (json['id'] ?? '').toString(),
@@ -70,6 +85,7 @@ class SloQuestion {
       options: parsedOptions,
       correctAnswer: (json['correct_answer'] ?? json['correctAnswer'] ?? '').toString(),
       rubric: (json['rubric'] ?? '').toString(),
+      diagramBase64: rawDiagram.isNotEmpty ? rawDiagram : null,
     );
   }
 
@@ -83,6 +99,7 @@ class SloQuestion {
       'options': options,
       'correct_answer': correctAnswer,
       'rubric': rubric,
+      if (diagramBase64 != null && diagramBase64!.isNotEmpty) 'diagram_base64': diagramBase64,
     };
   }
 
@@ -95,6 +112,8 @@ class SloQuestion {
     List<String>? options,
     String? correctAnswer,
     String? rubric,
+    String? diagramBase64,
+    bool clearDiagram = false,
   }) {
     return SloQuestion(
       id: id ?? this.id,
@@ -105,6 +124,7 @@ class SloQuestion {
       options: options ?? this.options,
       correctAnswer: correctAnswer ?? this.correctAnswer,
       rubric: rubric ?? this.rubric,
+      diagramBase64: clearDiagram ? null : (diagramBase64 ?? this.diagramBase64),
     );
   }
 }
@@ -235,6 +255,11 @@ class PaperBlueprintConfig {
   final int mcqCount;
   final int shortCount;
   final int longCount;
+  final int shortAttemptCount; // 0 or == shortCount means attempt all
+  final int longAttemptCount; // 0 or == longCount means attempt all
+  final int mcqMarksEach; // Default 1
+  final int shortMarksEach; // Default 3 (can be 2, 3, 4, 5)
+  final int longMarksEach; // Default 6 (can be 4, 5, 6, 8, 10)
   final double knowledgeRatio; // Default 0.30
   final double understandingRatio; // Default 0.50
   final double applicationRatio; // Default 0.20
@@ -249,10 +274,24 @@ class PaperBlueprintConfig {
     this.mcqCount = 10,
     this.shortCount = 8,
     this.longCount = 3,
+    this.shortAttemptCount = 8,
+    this.longAttemptCount = 3,
+    this.mcqMarksEach = 1,
+    this.shortMarksEach = 3,
+    this.longMarksEach = 6,
     this.knowledgeRatio = 0.30,
     this.understandingRatio = 0.50,
     this.applicationRatio = 0.20,
   });
+
+  int get effectiveShortAttempt =>
+      (shortAttemptCount > 0 && shortAttemptCount <= shortCount) ? shortAttemptCount : shortCount;
+
+  int get effectiveLongAttempt =>
+      (longAttemptCount > 0 && longAttemptCount <= longCount) ? longAttemptCount : longCount;
+
+  int get computedTotalMarks =>
+      (mcqCount * mcqMarksEach) + (effectiveShortAttempt * shortMarksEach) + (effectiveLongAttempt * longMarksEach);
 
   PaperBlueprintConfig copyWith({
     String? schoolName,
@@ -264,6 +303,11 @@ class PaperBlueprintConfig {
     int? mcqCount,
     int? shortCount,
     int? longCount,
+    int? shortAttemptCount,
+    int? longAttemptCount,
+    int? mcqMarksEach,
+    int? shortMarksEach,
+    int? longMarksEach,
     double? knowledgeRatio,
     double? understandingRatio,
     double? applicationRatio,
@@ -278,6 +322,11 @@ class PaperBlueprintConfig {
       mcqCount: mcqCount ?? this.mcqCount,
       shortCount: shortCount ?? this.shortCount,
       longCount: longCount ?? this.longCount,
+      shortAttemptCount: shortAttemptCount ?? this.shortAttemptCount,
+      longAttemptCount: longAttemptCount ?? this.longAttemptCount,
+      mcqMarksEach: mcqMarksEach ?? this.mcqMarksEach,
+      shortMarksEach: shortMarksEach ?? this.shortMarksEach,
+      longMarksEach: longMarksEach ?? this.longMarksEach,
       knowledgeRatio: knowledgeRatio ?? this.knowledgeRatio,
       understandingRatio: understandingRatio ?? this.understandingRatio,
       applicationRatio: applicationRatio ?? this.applicationRatio,

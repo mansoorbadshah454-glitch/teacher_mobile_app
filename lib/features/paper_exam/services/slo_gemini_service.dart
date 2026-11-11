@@ -98,45 +98,50 @@ class SloGeminiService {
       chapterNumber: chapterNumber,
     );
 
-    const String systemInstruction =
-        "You are an official Pakistani Board Exam Setter (KPK BISE / FBISE / Single National Curriculum). "
-        "Extract Student Learning Outcomes (SLOs) from the provided textbook pages/text and generate a comprehensive bank of exam questions strictly bound to the provided text. "
-        "Do NOT hallucinate outside the curriculum. Strictly categorize each question into Bloom's Taxonomy: 'Knowledge' (recall/define), 'Understanding' (why/how/compare/explain), or 'Application' (solve/real-world scenario). "
-        "Generate clear marking rubrics and answer keys.";
+    final String systemInstruction =
+        "You are an official Board Exam Setter and Curriculum Specialist. "
+        "Your job is to carefully read the scanned textbook pages/text, extract the REAL Student Learning Outcomes (SLOs) and core sub-topics directly from those pages, and build a 100% accurate, textbook-verified question bank. "
+        "STRICT RULES:\n"
+        "1. REAL SLO EXTRACTION: If an explicit SLO box ('Student Learning Outcomes' / 'تدریسی مقاصد' / 'After studying this chapter, students will be able to...') is present on the page, extract those exact SLOs verbatim. Otherwise, derive precise SLOs directly from the exact headings, definitions, theorems, and exercises visible on the scanned pages using codes like 'SLO-$chapterNumber.1', 'SLO-$chapterNumber.2', etc.\n"
+        "2. ZERO HALLUCINATION: Every single question, option, formula, numerical, and answer MUST come strictly from the provided textbook pages.\n"
+        "3. URDU / ISLAMIYAT / RTL RULE: When Subject Language is Urdu/RTL, write ALL chapter_title, slo statements, question_text, options, correct_answer, and rubric in 100% pure, authentic Urdu script (اردو). Do NOT write questions or options in English.\n"
+        "4. MATH / PHYSICS / CHEMISTRY FORMATTING RULE: Format all mathematical expressions, fractions, powers, roots, and chemical equations using clean, printable Unicode characters (e.g., x², y³, √(a+b), π, θ, Δ, ÷, ×, ≤, ≥, →, H₂SO₄, (a+b)/(c+d)). NEVER output raw LaTeX commands like \\frac, \\sqrt, or \$...\$, because the output is printed directly onto an A4 PDF exam paper.\n"
+        "5. BLOOM'S TAXONOMY: Categorize each question strictly as 'Knowledge' (recall/define), 'Understanding' (explain/differentiate/why/how), or 'Application' (solve numerical/analyze/apply concept).";
 
     final String userPrompt = """
-Generate a comprehensive Student Learning Outcome (SLO) Question Bank for:
+Generate a 100% accurate, textbook-bound Student Learning Outcome (SLO) Question Bank from the provided pages for:
 - Publisher/Board: $publisher
 - Grade/Class: $grade
 - Subject: $subject
 - Chapter Number: $chapterNumber
 - Chapter Title: ${chapterTitle.isEmpty ? 'Chapter $chapterNumber' : chapterTitle}
-- Subject Language/RTL: ${isRtlSubject ? 'Urdu/RTL' : 'English/LTR'}
+- Subject Language/Direction: ${isRtlSubject ? 'Urdu / RTL (Write all SLOs, questions, options, and answers in pure Urdu script)' : 'English / LTR'}
 
 CRITICAL REQUIREMENT:
-Generate at least:
-- 15 Multiple Choice Questions (MCQs) with 4 realistic options (A, B, C, D) and correct_answer.
-- 12 Short Questions with clear expected answer rubric (2-4 marks each).
-- 5 Long / Detailed Questions with breakdown marking rubric (5-8 marks each).
+1. Extract all real SLOs covered in the scanned pages (use codes like SLO-$chapterNumber.1, SLO-$chapterNumber.2, ...).
+2. Generate at least:
+   - 15 Multiple Choice Questions (MCQs) with 4 realistic options (${isRtlSubject ? 'الف) ..., ب) ..., ج) ..., د) ...' : 'A) ..., B) ..., C) ..., D) ...'}) and exact correct_answer.
+   - 12 Short Questions (including definitions, conceptual reasons, or short numericals/exercises from the pages) with clear expected answer rubric (3 marks each).
+   - 5 Long / Detailed Questions (comprehensive explanations, theorems, derivations, or multi-step problems from the pages) with step-by-step marking rubric (6 marks each).
 
-Return your response in STRICT JSON format adhering to this structure:
+Return your response in STRICT JSON format adhering to this exact structure:
 {
-  "chapter_title": "String",
+  "chapter_title": "Exact chapter title from the textbook page",
   "slos": [
     {
-      "slo_code": "SLO-1.1",
-      "statement": "Specific learning outcome statement"
+      "slo_code": "SLO-$chapterNumber.1",
+      "statement": "Exact learning outcome statement from the textbook"
     }
   ],
   "questions": [
     {
       "id": "q1",
-      "slo_code": "SLO-1.1",
-      "type": "MCQ", // Exactly "MCQ" or "SHORT" or "LONG"
-      "cognitive_level": "Knowledge", // Exactly "Knowledge" or "Understanding" or "Application"
+      "slo_code": "SLO-$chapterNumber.1",
+      "type": "MCQ",
+      "cognitive_level": "Knowledge",
       "question_text": "The text of the question",
-      "options": ["A) Option 1", "B) Option 2", "C) Option 3", "D) Option 4"], // Empty array for SHORT & LONG
-      "correct_answer": "Option 1",
+      "options": ["A) Option 1", "B) Option 2", "C) Option 3", "D) Option 4"],
+      "correct_answer": "A) Option 1",
       "rubric": "Marking criteria or model answer"
     }
   ]
@@ -188,9 +193,10 @@ Return your response in STRICT JSON format adhering to this structure:
     };
 
     final candidateModels = [
-      SloAiConfig.geminiModel, // "gemini-1.5-flash"
+      SloAiConfig.geminiModel, // "gemini-2.5-flash"
       "gemini-2.0-flash",
-      "gemini-1.5-flash-8b",
+      "gemini-2.0-flash-lite",
+      "gemini-1.5-flash",
       "gemini-1.5-pro",
     ];
 
@@ -212,8 +218,8 @@ Return your response in STRICT JSON format adhering to this structure:
         if (response.statusCode == 200) {
           debugPrint("✅ Gemini model $modelName succeeded!");
           break;
-        } else if (response.statusCode == 404) {
-          debugPrint("⚠️ Model $modelName not found (404), trying next model...");
+        } else if (response.statusCode == 404 || response.statusCode == 429 || response.statusCode == 503) {
+          debugPrint("⚠️ Model $modelName returned ${response.statusCode}, trying next model...");
           lastError = response.body;
           continue;
         } else {
@@ -245,7 +251,13 @@ Return your response in STRICT JSON format adhering to this structure:
       throw Exception("Empty content in Gemini AI response.");
     }
 
-    final rawJsonText = candidateParts.first['text'] as String? ?? "{}";
+    String rawJsonText = (candidateParts.first['text'] as String? ?? "{}").trim();
+    if (rawJsonText.startsWith('```')) {
+      rawJsonText = rawJsonText
+          .replaceFirst(RegExp(r'^```(?:json)?\s*'), '')
+          .replaceFirst(RegExp(r'\s*```$'), '')
+          .trim();
+    }
     final Map<String, dynamic> parsedData = jsonDecode(rawJsonText);
 
     final resolvedTitle = (parsedData['chapter_title'] ?? chapterTitle).toString().trim();

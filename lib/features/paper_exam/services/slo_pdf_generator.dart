@@ -20,9 +20,16 @@ class SloPdfGenerator {
     return text;
   }
 
+  static pw.ThemeData? _cachedRtlTheme;
+  static pw.ThemeData? _cachedLtrTheme;
+
   /// Loads authentic font theme for Urdu (Amiri TTF offline asset with network fallback)
   static Future<pw.ThemeData> _loadTheme(bool isRtl) async {
-    if (!isRtl) return pw.ThemeData.base();
+    if (!isRtl) {
+      _cachedLtrTheme ??= pw.ThemeData.base();
+      return _cachedLtrTheme!;
+    }
+    if (_cachedRtlTheme != null) return _cachedRtlTheme!;
 
     try {
       // 1. First try bundled offline TTF font from assets (instant, 100% offline)
@@ -30,15 +37,18 @@ class SloPdfGenerator {
       final fontBoldData = await rootBundle.load('assets/fonts/Amiri-Bold.ttf');
       final font = pw.Font.ttf(fontData);
       final fontBold = pw.Font.ttf(fontBoldData);
-      return pw.ThemeData.withFont(base: font, bold: fontBold);
+      _cachedRtlTheme = pw.ThemeData.withFont(base: font, bold: fontBold);
+      return _cachedRtlTheme!;
     } catch (_) {
       try {
         // 2. Fallback to Google Fonts Amiri over network if asset bundle is missing
         final font = await PdfGoogleFonts.amiriRegular();
         final fontBold = await PdfGoogleFonts.amiriBold();
-        return pw.ThemeData.withFont(base: font, bold: fontBold);
+        _cachedRtlTheme = pw.ThemeData.withFont(base: font, bold: fontBold);
+        return _cachedRtlTheme!;
       } catch (_) {
-        return pw.ThemeData.base();
+        _cachedRtlTheme = pw.ThemeData.base();
+        return _cachedRtlTheme!;
       }
     }
   }
@@ -58,6 +68,22 @@ class SloPdfGenerator {
     final longs = questions.where((q) => q.type == 'LONG').toList();
     final isRtl = chapterBank.isRtl;
     final theme = await _loadTheme(isRtl);
+
+    final mcqMarksEach = blueprint.mcqMarksEach;
+    final shortMarksEach = blueprint.shortMarksEach;
+    final longMarksEach = blueprint.longMarksEach;
+
+    final attemptShorts = (blueprint.shortAttemptCount > 0 && blueprint.shortAttemptCount < shorts.length)
+        ? blueprint.shortAttemptCount
+        : shorts.length;
+    final hasShortChoice = attemptShorts < shorts.length;
+    final secBMarks = attemptShorts * shortMarksEach;
+
+    final attemptLongs = (blueprint.longAttemptCount > 0 && blueprint.longAttemptCount < longs.length)
+        ? blueprint.longAttemptCount
+        : longs.length;
+    final hasLongChoice = attemptLongs < longs.length;
+    final secCMarks = attemptLongs * longMarksEach;
 
     pdf.addPage(
       pw.MultiPage(
@@ -81,11 +107,11 @@ class SloPdfGenerator {
                   ? _fmt("حصہ اوّل: معروضی سوالات (MCQs)", true)
                   : "SECTION 'A' (Multiple Choice Questions - MCQs)",
               marks: isRtl
-                  ? _fmt("کل نمبر: ${mcqs.length} | وقت: ۱۵ منٹ", true)
-                  : "Marks: ${mcqs.length} | Time: 15 Mins",
+                  ? _fmt("کل نمبر: ${mcqs.length * mcqMarksEach} | وقت: ۱۵ منٹ", true)
+                  : "Marks: ${mcqs.length * mcqMarksEach} | Time: 15 Mins",
               instructions: isRtl
                   ? _fmt("نوٹ: تمام سوالات لازمی ہیں۔ دیئے گئے اختیارات میں سے درست جواب کا انتخاب کریں۔ کاٹ کر یا دوبارہ لکھنے پر نمبر نہیں ملیں گے۔", true)
-                  : "NOTE: Attempt all questions. Each question carries 1 Mark. Encircle the correct option (A / B / C / D). Overwriting, cutting or using lead pencil will result in zero marks.",
+                  : "NOTE: Attempt all questions. Each question carries $mcqMarksEach ${mcqMarksEach == 1 ? 'Mark' : 'Marks'}. Encircle the correct option (A / B / C / D). Overwriting or cutting will result in zero marks.",
               isRtl: isRtl,
             ),
             pw.SizedBox(height: 6),
@@ -115,18 +141,32 @@ class SloPdfGenerator {
                   ? _fmt("حصہ دوم: مختصر جواب کے سوالات (Short Questions)", true)
                   : "SECTION 'B' (Short Answer Questions)",
               marks: isRtl
-                  ? _fmt("کل نمبر: ${shorts.length * 3}", true)
-                  : "Marks: ${shorts.length * 3}",
+                  ? _fmt("کل نمبر: $secBMarks", true)
+                  : "Marks: $secBMarks",
               instructions: isRtl
-                  ? _fmt("نوٹ: تمام (${shorts.length}) سوالات کے مختصر جوابات تحریر کریں۔ تمام سوالات کے نمبر مساوی ہیں (${shorts.length} x ۳ = ${shorts.length * 3} نمبر)۔", true)
-                  : "NOTE: Attempt all (${shorts.length}) questions. All questions carry equal marks (${shorts.length} x 3 = ${shorts.length * 3} Marks). Answer briefly on your answer sheet.",
+                  ? _fmt(
+                      hasShortChoice
+                          ? "نوٹ: دیئے گئے (${shorts.length}) میں سے کوئی سے ($attemptShorts) سوالات کے مختصر جوابات تحریر کریں۔ تمام سوالات کے نمبر مساوی ہیں ($attemptShorts x $shortMarksEach = $secBMarks نمبر)۔"
+                          : "نوٹ: تمام (${shorts.length}) سوالات کے مختصر جوابات تحریر کریں۔ تمام سوالات کے نمبر مساوی ہیں (${shorts.length} x $shortMarksEach = $secBMarks نمبر)۔",
+                      true,
+                    )
+                  : hasShortChoice
+                      ? "NOTE: Attempt any ($attemptShorts) out of (${shorts.length}) questions. All questions carry equal marks ($attemptShorts x $shortMarksEach = $secBMarks Marks). Answer briefly on your answer sheet."
+                      : "NOTE: Attempt all (${shorts.length}) questions. All questions carry equal marks (${shorts.length} x $shortMarksEach = $secBMarks Marks). Answer briefly on your answer sheet.",
               isRtl: isRtl,
             ),
             pw.SizedBox(height: 6),
             pw.Text(
               isRtl
-                  ? _fmt("سوال نمبر ۲: مندرجہ ذیل سوالات کے مختصر جوابات تحریر کریں:", true)
-                  : "Q.2  Answer the following short questions:",
+                  ? _fmt(
+                      hasShortChoice
+                          ? "سوال نمبر ۲: مندرجہ ذیل میں سے کوئی سے ($attemptShorts) سوالات کے مختصر جوابات تحریر کریں:"
+                          : "سوال نمبر ۲: مندرجہ ذیل سوالات کے مختصر جوابات تحریر کریں:",
+                      true,
+                    )
+                  : hasShortChoice
+                      ? "Q.2  Answer any ($attemptShorts) of the following short questions:"
+                      : "Q.2  Answer the following short questions:",
               style: pw.TextStyle(
                 fontSize: isRtl ? 10.5 : 9.5,
                 fontWeight: pw.FontWeight.bold,
@@ -137,7 +177,7 @@ class SloPdfGenerator {
             ...shorts.asMap().entries.map((entry) {
               final index = entry.key + 1;
               final q = entry.value;
-              return _buildShortQuestionItem(index, q, showCognitiveTags, isRtl);
+              return _buildShortQuestionItem(index, q, showCognitiveTags, isRtl, shortMarksEach);
             }),
             pw.SizedBox(height: 10),
           ],
@@ -149,18 +189,25 @@ class SloPdfGenerator {
                   ? _fmt("حصہ سوم: تفصیلی سوالات (Long Questions)", true)
                   : "SECTION 'C' (Detailed / Long Questions)",
               marks: isRtl
-                  ? _fmt("کل نمبر: ${longs.length * 6}", true)
-                  : "Marks: ${longs.length * 6}",
+                  ? _fmt("کل نمبر: $secCMarks", true)
+                  : "Marks: $secCMarks",
               instructions: isRtl
-                  ? _fmt("نوٹ: تمام (${longs.length}) سوالات کے تفصیلی جوابات تحریر کریں۔ جہاں ضروری ہو لیبل شدہ خاکے بنائیں۔ (${longs.length} x ۶ = ${longs.length * 6} نمبر)۔", true)
-                  : "NOTE: Attempt all (${longs.length}) questions in detail. Draw neat and labelled diagrams where necessary (${longs.length} x 6 = ${longs.length * 6} Marks).",
+                  ? _fmt(
+                      hasLongChoice
+                          ? "نوٹ: دیئے گئے (${longs.length}) میں سے کوئی سے ($attemptLongs) سوالات کے تفصیلی جوابات تحریر کریں۔ جہاں ضروری ہو لیبل شدہ خاکے بنائیں۔ ($attemptLongs x $longMarksEach = $secCMarks نمبر)۔"
+                          : "نوٹ: تمام (${longs.length}) سوالات کے تفصیلی جوابات تحریر کریں۔ جہاں ضروری ہو لیبل شدہ خاکے بنائیں۔ (${longs.length} x $longMarksEach = $secCMarks نمبر)۔",
+                      true,
+                    )
+                  : hasLongChoice
+                      ? "NOTE: Attempt any ($attemptLongs) out of (${longs.length}) questions in detail. Draw neat and labelled diagrams where necessary ($attemptLongs x $longMarksEach = $secCMarks Marks)."
+                      : "NOTE: Attempt all (${longs.length}) questions in detail. Draw neat and labelled diagrams where necessary (${longs.length} x $longMarksEach = $secCMarks Marks).",
               isRtl: isRtl,
             ),
             pw.SizedBox(height: 6),
             ...longs.asMap().entries.map((entry) {
               final index = entry.key + 1;
               final q = entry.value;
-              return _buildLongQuestionItem(index, q, showCognitiveTags, isRtl);
+              return _buildLongQuestionItem(index, q, showCognitiveTags, isRtl, longMarksEach);
             }),
             pw.SizedBox(height: 16),
           ],
@@ -175,7 +222,7 @@ class SloPdfGenerator {
             mainAxisAlignment: pw.MainAxisAlignment.spaceBetween,
             children: [
               pw.Text(
-                "Smart SLO Paper Engine  •  Pakistani Curriculum Standard",
+                "Smart SLO Paper Engine  •  Board Curriculum Standard",
                 style: const pw.TextStyle(fontSize: 8, color: PdfColors.grey700),
               ),
               pw.Text(
@@ -302,6 +349,7 @@ class SloPdfGenerator {
             ...shorts.asMap().entries.map((entry) {
               final idx = entry.key + 1;
               final q = entry.value;
+              final diagWidget = _buildDiagramPdfWidget(q, isRtl);
               return pw.Container(
                 margin: const pw.EdgeInsets.only(bottom: 8),
                 padding: const pw.EdgeInsets.all(6),
@@ -316,6 +364,7 @@ class SloPdfGenerator {
                       "Q.2 ($idx): ${_fmt(q.questionText, isRtl)} [${q.cognitiveLevel}]",
                       style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold),
                     ),
+                    if (diagWidget != null) diagWidget,
                     pw.SizedBox(height: 2),
                     pw.Text(
                       "Expected Answer / Rubric: ${_fmt(q.rubric.isNotEmpty ? q.rubric : q.correctAnswer, isRtl)}",
@@ -340,6 +389,7 @@ class SloPdfGenerator {
             ...longs.asMap().entries.map((entry) {
               final idx = entry.key + 1;
               final q = entry.value;
+              final diagWidget = _buildDiagramPdfWidget(q, isRtl);
               return pw.Container(
                 margin: const pw.EdgeInsets.only(bottom: 8),
                 padding: const pw.EdgeInsets.all(6),
@@ -354,6 +404,7 @@ class SloPdfGenerator {
                       "Q.${idx + 2}: ${_fmt(q.questionText, isRtl)} [${q.cognitiveLevel}]",
                       style: pw.TextStyle(fontSize: 9, fontWeight: pw.FontWeight.bold),
                     ),
+                    if (diagWidget != null) diagWidget,
                     pw.SizedBox(height: 2),
                     pw.Text(
                       "Model Solution / Rubric: ${_fmt(q.rubric.isNotEmpty ? q.rubric : q.correctAnswer, isRtl)}",
@@ -620,7 +671,31 @@ class SloPdfGenerator {
     );
   }
 
+  static pw.Widget? _buildDiagramPdfWidget(SloQuestion q, bool isRtl) {
+    final bytes = q.diagramBytes;
+    if (bytes == null || bytes.isEmpty) return null;
+    return pw.Container(
+      margin: pw.EdgeInsets.only(
+        top: 4,
+        bottom: 4,
+        left: isRtl ? 0 : 18,
+        right: isRtl ? 18 : 0,
+      ),
+      padding: const pw.EdgeInsets.all(4),
+      decoration: pw.BoxDecoration(
+        border: pw.Border.all(color: PdfColors.grey400, width: 0.6),
+        borderRadius: pw.BorderRadius.circular(4),
+      ),
+      child: pw.Image(
+        pw.MemoryImage(bytes),
+        height: 95,
+        fit: pw.BoxFit.contain,
+      ),
+    );
+  }
+
   static pw.Widget _buildMcqItem(int index, SloQuestion q, bool showTags, bool isRtl) {
+    final diagramWidget = _buildDiagramPdfWidget(q, isRtl);
     return pw.Container(
       margin: const pw.EdgeInsets.only(bottom: 6),
       child: pw.Column(
@@ -652,6 +727,7 @@ class SloPdfGenerator {
                 ),
             ],
           ),
+          if (diagramWidget != null) diagramWidget,
           pw.SizedBox(height: 3),
           // Clean horizontal row of 4 options
           pw.Padding(
@@ -679,70 +755,84 @@ class SloPdfGenerator {
     );
   }
 
-  static pw.Widget _buildShortQuestionItem(int index, SloQuestion q, bool showTags, bool isRtl) {
+  static pw.Widget _buildShortQuestionItem(int index, SloQuestion q, bool showTags, bool isRtl, int marksEach) {
     final label = index <= _romanNumerals.length ? _romanNumerals[index - 1] : "($index)";
+    final diagramWidget = _buildDiagramPdfWidget(q, isRtl);
     return pw.Container(
       margin: const pw.EdgeInsets.only(bottom: 5),
-      child: pw.Row(
-        crossAxisAlignment: pw.CrossAxisAlignment.start,
+      child: pw.Column(
+        crossAxisAlignment: isRtl ? pw.CrossAxisAlignment.end : pw.CrossAxisAlignment.start,
         children: [
-          pw.SizedBox(
-            width: 26,
-            child: pw.Text(
-              label,
-              style: pw.TextStyle(
-                fontSize: isRtl ? 10 : 9.5,
-                fontWeight: pw.FontWeight.bold,
+          pw.Row(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              pw.SizedBox(
+                width: 26,
+                child: pw.Text(
+                  label,
+                  style: pw.TextStyle(
+                    fontSize: isRtl ? 10 : 9.5,
+                    fontWeight: pw.FontWeight.bold,
+                  ),
+                ),
               ),
-            ),
-          ),
-          pw.Expanded(
-            child: pw.Text(
-              _fmt(q.questionText, isRtl),
-              style: pw.TextStyle(
-                fontSize: isRtl ? 10 : 9.5,
-                lineSpacing: isRtl ? 4 : 1,
+              pw.Expanded(
+                child: pw.Text(
+                  _fmt(q.questionText, isRtl),
+                  style: pw.TextStyle(
+                    fontSize: isRtl ? 10 : 9.5,
+                    lineSpacing: isRtl ? 4 : 1,
+                  ),
+                ),
               ),
-            ),
+              pw.SizedBox(width: 8),
+              pw.Text(
+                isRtl ? _fmt("($marksEach نمبر)", true) : "($marksEach Marks)${showTags ? " [${q.cognitiveLevel[0]}]" : ""}",
+                style: const pw.TextStyle(fontSize: 8.5, color: PdfColors.grey800),
+              ),
+            ],
           ),
-          pw.SizedBox(width: 8),
-          pw.Text(
-            isRtl ? _fmt("(۳ نمبر)", true) : "(3 Marks)${showTags ? " [${q.cognitiveLevel[0]}]" : ""}",
-            style: const pw.TextStyle(fontSize: 8.5, color: PdfColors.grey800),
-          ),
+          if (diagramWidget != null) diagramWidget,
         ],
       ),
     );
   }
 
-  static pw.Widget _buildLongQuestionItem(int index, SloQuestion q, bool showTags, bool isRtl) {
+  static pw.Widget _buildLongQuestionItem(int index, SloQuestion q, bool showTags, bool isRtl, int marksEach) {
     final qNum = index + 2; // Q.3, Q.4, Q.5 ...
+    final diagramWidget = _buildDiagramPdfWidget(q, isRtl);
     return pw.Container(
       margin: const pw.EdgeInsets.only(bottom: 6),
-      child: pw.Row(
-        crossAxisAlignment: pw.CrossAxisAlignment.start,
+      child: pw.Column(
+        crossAxisAlignment: isRtl ? pw.CrossAxisAlignment.end : pw.CrossAxisAlignment.start,
         children: [
-          pw.Text(
-            isRtl ? _fmt("سوال نمبر $qNum:  ", true) : "Q.$qNum  ",
-            style: pw.TextStyle(
-              fontSize: isRtl ? 10 : 9.5,
-              fontWeight: pw.FontWeight.bold,
-            ),
-          ),
-          pw.Expanded(
-            child: pw.Text(
-              _fmt(q.questionText, isRtl),
-              style: pw.TextStyle(
-                fontSize: isRtl ? 10 : 9.5,
-                lineSpacing: isRtl ? 4 : 1,
+          pw.Row(
+            crossAxisAlignment: pw.CrossAxisAlignment.start,
+            children: [
+              pw.Text(
+                isRtl ? _fmt("سوال نمبر $qNum:  ", true) : "Q.$qNum  ",
+                style: pw.TextStyle(
+                  fontSize: isRtl ? 10 : 9.5,
+                  fontWeight: pw.FontWeight.bold,
+                ),
               ),
-            ),
+              pw.Expanded(
+                child: pw.Text(
+                  _fmt(q.questionText, isRtl),
+                  style: pw.TextStyle(
+                    fontSize: isRtl ? 10 : 9.5,
+                    lineSpacing: isRtl ? 4 : 1,
+                  ),
+                ),
+              ),
+              pw.SizedBox(width: 8),
+              pw.Text(
+                isRtl ? _fmt("($marksEach نمبر)", true) : "($marksEach Marks)${showTags ? " [${q.cognitiveLevel[0]}]" : ""}",
+                style: const pw.TextStyle(fontSize: 8.5, color: PdfColors.grey800),
+              ),
+            ],
           ),
-          pw.SizedBox(width: 8),
-          pw.Text(
-            isRtl ? _fmt("(۶ نمبر)", true) : "(6 Marks)${showTags ? " [${q.cognitiveLevel[0]}]" : ""}",
-            style: const pw.TextStyle(fontSize: 8.5, color: PdfColors.grey800),
-          ),
+          if (diagramWidget != null) diagramWidget,
         ],
       ),
     );
