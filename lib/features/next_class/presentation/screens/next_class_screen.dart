@@ -8,6 +8,8 @@ import 'package:teacher_mobile_app/features/next_class/presentation/widgets/stud
 import 'package:teacher_mobile_app/features/next_class/presentation/widgets/class_card.dart';
 import 'package:teacher_mobile_app/features/timetable/providers/timetable_provider.dart';
 import 'package:teacher_mobile_app/features/next_class/utils/test_report_pdf_generator.dart';
+import 'package:teacher_mobile_app/features/syllabus/presentation/screens/syllabus_detail_screen.dart';
+import 'package:teacher_mobile_app/features/syllabus/providers/syllabus_provider.dart';
 import 'package:share_plus/share_plus.dart';
 
 class NextClassScreen extends ConsumerWidget {
@@ -129,6 +131,9 @@ class NextClassScreen extends ConsumerWidget {
     } else if (state.viewMode == NextClassViewMode.activeTestScore) {
       title = "Record Scores";
       subtitle = "${state.selectedSubject} • ${state.activeScheduledTest?['testType'] ?? ''} Test";
+    } else if (state.viewMode == NextClassViewMode.syllabus) {
+      title = state.selectedSubject ?? "Syllabus";
+      subtitle = "${state.selectedClass?['name'] ?? ''} • Chapters & Progress";
     }
     return Container(
       padding: EdgeInsets.only(
@@ -209,7 +214,7 @@ class NextClassScreen extends ConsumerWidget {
                   child: GestureDetector(
                     onTap: () => notifier.goToHomeworkMode(),
                     child: Container(
-                      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+                      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
                       decoration: BoxDecoration(
                         color: Colors.white.withOpacity(0.22),
                         borderRadius: BorderRadius.circular(12),
@@ -218,14 +223,18 @@ class NextClassScreen extends ConsumerWidget {
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: const [
-                          Icon(Icons.assignment_outlined, color: Colors.white, size: 18),
-                          SizedBox(width: 6),
-                          Text(
-                            "Homework",
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 13,
+                          Icon(Icons.assignment_outlined, color: Colors.white, size: 17),
+                          SizedBox(width: 5),
+                          Flexible(
+                            child: Text(
+                              "Homework",
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 12.5,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                             ),
                           ),
                         ],
@@ -233,12 +242,12 @@ class NextClassScreen extends ConsumerWidget {
                     ),
                   ),
                 ),
-                const SizedBox(width: 10),
+                const SizedBox(width: 8),
                 Expanded(
                   child: GestureDetector(
                     onTap: () => notifier.goToScheduleTestMode(),
                     child: Container(
-                      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 12),
+                      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
                       decoration: BoxDecoration(
                         color: Colors.white.withOpacity(0.22),
                         borderRadius: BorderRadius.circular(12),
@@ -247,14 +256,51 @@ class NextClassScreen extends ConsumerWidget {
                       child: Row(
                         mainAxisAlignment: MainAxisAlignment.center,
                         children: const [
-                          Icon(Icons.quiz_outlined, color: Colors.white, size: 18),
-                          SizedBox(width: 6),
-                          Text(
-                            "Test",
-                            style: TextStyle(
-                              color: Colors.white,
-                              fontWeight: FontWeight.bold,
-                              fontSize: 13,
+                          Icon(Icons.quiz_outlined, color: Colors.white, size: 17),
+                          SizedBox(width: 5),
+                          Flexible(
+                            child: Text(
+                              "Test",
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 12.5,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
+                            ),
+                          ),
+                        ],
+                      ),
+                    ),
+                  ),
+                ),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: GestureDetector(
+                    onTap: () => notifier.goToSyllabusMode(),
+                    child: Container(
+                      padding: const EdgeInsets.symmetric(vertical: 10, horizontal: 8),
+                      decoration: BoxDecoration(
+                        color: Colors.white.withOpacity(0.22),
+                        borderRadius: BorderRadius.circular(12),
+                        border: Border.all(color: Colors.white.withOpacity(0.35)),
+                      ),
+                      child: Row(
+                        mainAxisAlignment: MainAxisAlignment.center,
+                        children: const [
+                          Icon(Icons.auto_stories_outlined, color: Colors.white, size: 17),
+                          SizedBox(width: 5),
+                          Flexible(
+                            child: Text(
+                              "Syllabus",
+                              style: TextStyle(
+                                color: Colors.white,
+                                fontWeight: FontWeight.bold,
+                                fontSize: 12.5,
+                              ),
+                              maxLines: 1,
+                              overflow: TextOverflow.ellipsis,
                             ),
                           ),
                         ],
@@ -293,6 +339,15 @@ class NextClassScreen extends ConsumerWidget {
         return _buildScheduleTestFormView(context, state, notifier);
       case NextClassViewMode.activeTestScore:
         return _buildActiveTestScoreView(context, state, notifier, teacherData, schoolData);
+      case NextClassViewMode.syllabus:
+        final className = (state.selectedClass?['name'] ?? '').toString();
+        final subject = (state.selectedSubject ?? '').toString();
+        return SyllabusPaperView(
+          assignment: SyllabusAssignment(
+            className: className,
+            subject: subject,
+          ),
+        );
     }
   }
 

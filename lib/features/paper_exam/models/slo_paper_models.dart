@@ -172,8 +172,8 @@ class ChapterBankDoc {
     List<SloItem> parsedSlos = [];
     if (rawSlos is List) {
       parsedSlos = rawSlos
-          .whereType<Map<String, dynamic>>()
-          .map((e) => SloItem.fromJson(e))
+          .whereType<Map>()
+          .map((e) => SloItem.fromJson(Map<String, dynamic>.from(e)))
           .toList();
     }
 
@@ -181,8 +181,8 @@ class ChapterBankDoc {
     List<SloQuestion> parsedQuestions = [];
     if (rawQuestions is List) {
       parsedQuestions = rawQuestions
-          .whereType<Map<String, dynamic>>()
-          .map((e) => SloQuestion.fromJson(e))
+          .whereType<Map>()
+          .map((e) => SloQuestion.fromJson(Map<String, dynamic>.from(e)))
           .toList();
     }
 

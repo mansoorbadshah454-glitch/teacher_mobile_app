@@ -8,10 +8,10 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:http/http.dart' as http;
 import 'package:image_picker/image_picker.dart';
-import 'package:printing/printing.dart';
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:firebase_storage/firebase_storage.dart';
 import 'package:teacher_mobile_app/core/providers/user_data_provider.dart';
+import 'package:teacher_mobile_app/core/services/local_db_service.dart';
 import 'package:teacher_mobile_app/features/auth/auth_provider.dart';
 import 'package:teacher_mobile_app/features/paper_exam/config/slo_ai_config.dart';
 import 'package:teacher_mobile_app/features/paper_exam/models/slo_paper_models.dart';
@@ -57,6 +57,150 @@ class _SloPaperDraftState {
   Map<int, int> slotHistoryIndex = {};
   Uint8List? cachedPaperPdfBytes;
   Uint8List? cachedAnswerKeyPdfBytes;
+
+  Map<String, dynamic> toJson() {
+    return <String, dynamic>{
+      'currentStep': currentStep,
+      'selectedPublisher': selectedPublisher,
+      'selectedGrade': selectedGrade,
+      'selectedSubject': selectedSubject,
+      'chapterNumber': chapterNumber,
+      'selectedChapters': selectedChapters.toList(),
+      'cachedBanksByChapter': {
+        for (final e in cachedBanksByChapter.entries) e.key.toString(): e.value.toJson(),
+      },
+      'chapterTitle': chapterTitle,
+      'customPublisher': customPublisher,
+      'isRtlSubject': isRtlSubject,
+      'isCustomPublisher': isCustomPublisher,
+      'loadedBank': loadedBank?.toJson(),
+      'selectedSloCodes': selectedSloCodes.toList(),
+      'mcqCount': mcqCount,
+      'shortCount': shortCount,
+      'longCount': longCount,
+      'shortAttemptCount': shortAttemptCount,
+      'longAttemptCount': longAttemptCount,
+      'mcqMarksEach': mcqMarksEach,
+      'shortMarksEach': shortMarksEach,
+      'longMarksEach': longMarksEach,
+      'schoolName': schoolName,
+      'campus': campus,
+      'board': board,
+      'examTitle': examTitle,
+      'timeAllowed': timeAllowed,
+      'totalMarks': totalMarks,
+      'activePaperQuestions': activePaperQuestions.map((q) => q.toJson()).toList(),
+      'submittedPaperId': submittedPaperId,
+      'step3ViewMode': step3ViewMode,
+      'previewIsAnswerKey': previewIsAnswerKey,
+      'activePaperDocId': activePaperDocId,
+      'slotHistory': {
+        for (final e in slotHistory.entries)
+          e.key.toString(): e.value.map((q) => q.toJson()).toList(),
+      },
+      'slotHistoryIndex': {
+        for (final e in slotHistoryIndex.entries) e.key.toString(): e.value,
+      },
+    };
+  }
+
+  static _SloPaperDraftState? fromJson(Map<String, dynamic> json) {
+    try {
+      final d = _SloPaperDraftState();
+      d.currentStep = (json['currentStep'] as num?)?.toInt() ?? 0;
+      d.selectedPublisher = (json['selectedPublisher'] ?? d.selectedPublisher).toString();
+      d.selectedGrade = (json['selectedGrade'] ?? d.selectedGrade).toString();
+      d.selectedSubject = (json['selectedSubject'] ?? d.selectedSubject).toString();
+      d.chapterNumber = (json['chapterNumber'] as num?)?.toInt() ?? 1;
+
+      final rawChs = json['selectedChapters'];
+      if (rawChs is List && rawChs.isNotEmpty) {
+        d.selectedChapters = rawChs
+            .map((e) => int.tryParse(e.toString()) ?? 1)
+            .toSet();
+      }
+
+      final rawBanks = json['cachedBanksByChapter'];
+      if (rawBanks is Map) {
+        rawBanks.forEach((k, v) {
+          final chKey = int.tryParse(k.toString());
+          if (chKey != null && v is Map) {
+            d.cachedBanksByChapter[chKey] = ChapterBankDoc.fromJson(Map<String, dynamic>.from(v));
+          }
+        });
+      }
+
+      d.chapterTitle = (json['chapterTitle'] ?? '').toString();
+      d.customPublisher = (json['customPublisher'] ?? '').toString();
+      d.isRtlSubject = json['isRtlSubject'] == true;
+      d.isCustomPublisher = json['isCustomPublisher'] == true;
+
+      if (json['loadedBank'] is Map) {
+        d.loadedBank = ChapterBankDoc.fromJson(Map<String, dynamic>.from(json['loadedBank']));
+      }
+
+      final rawSlos = json['selectedSloCodes'];
+      if (rawSlos is List) {
+        d.selectedSloCodes = rawSlos.map((e) => e.toString()).toSet();
+      }
+
+      d.mcqCount = (json['mcqCount'] as num?)?.toInt() ?? 10;
+      d.shortCount = (json['shortCount'] as num?)?.toInt() ?? 8;
+      d.longCount = (json['longCount'] as num?)?.toInt() ?? 3;
+      d.shortAttemptCount = (json['shortAttemptCount'] as num?)?.toInt() ?? 5;
+      d.longAttemptCount = (json['longAttemptCount'] as num?)?.toInt() ?? 2;
+      d.mcqMarksEach = (json['mcqMarksEach'] as num?)?.toInt() ?? 1;
+      d.shortMarksEach = (json['shortMarksEach'] as num?)?.toInt() ?? 3;
+      d.longMarksEach = (json['longMarksEach'] as num?)?.toInt() ?? 6;
+      d.schoolName = (json['schoolName'] ?? d.schoolName).toString();
+      d.campus = (json['campus'] ?? d.campus).toString();
+      d.board = (json['board'] ?? d.board).toString();
+      d.examTitle = (json['examTitle'] ?? d.examTitle).toString();
+      d.timeAllowed = (json['timeAllowed'] ?? d.timeAllowed).toString();
+      d.totalMarks = (json['totalMarks'] as num?)?.toInt() ?? 37;
+
+      final rawQs = json['activePaperQuestions'];
+      if (rawQs is List) {
+        d.activePaperQuestions = rawQs
+            .whereType<Map>()
+            .map((e) => SloQuestion.fromJson(Map<String, dynamic>.from(e)))
+            .toList();
+      }
+
+      d.submittedPaperId = json['submittedPaperId']?.toString();
+      d.step3ViewMode = (json['step3ViewMode'] as num?)?.toInt() ?? 0;
+      d.previewIsAnswerKey = json['previewIsAnswerKey'] == true;
+      d.activePaperDocId = json['activePaperDocId']?.toString();
+
+      final rawHist = json['slotHistory'];
+      if (rawHist is Map) {
+        rawHist.forEach((k, v) {
+          final slotKey = int.tryParse(k.toString());
+          if (slotKey != null && v is List) {
+            d.slotHistory[slotKey] = v
+                .whereType<Map>()
+                .map((e) => SloQuestion.fromJson(Map<String, dynamic>.from(e)))
+                .toList();
+          }
+        });
+      }
+
+      final rawHistIdx = json['slotHistoryIndex'];
+      if (rawHistIdx is Map) {
+        rawHistIdx.forEach((k, v) {
+          final slotKey = int.tryParse(k.toString());
+          final idxVal = int.tryParse(v.toString());
+          if (slotKey != null && idxVal != null) {
+            d.slotHistoryIndex[slotKey] = idxVal;
+          }
+        });
+      }
+
+      return d;
+    } catch (_) {
+      return null;
+    }
+  }
 }
 
 class SloPaperBuilderScreen extends ConsumerStatefulWidget {
@@ -68,6 +212,11 @@ class SloPaperBuilderScreen extends ConsumerStatefulWidget {
 
 class _SloPaperBuilderScreenState extends ConsumerState<SloPaperBuilderScreen> {
   static _SloPaperDraftState? _savedDraft;
+  static Uint8List? _cachedLogoBytesStatic;
+  static const String _localDraftCacheKey = 'slo_paper_builder_draft_v2';
+  static const String _localLogoCacheKey = 'slo_school_logo_b64_v1';
+  static const String _localBrandingCacheKey = 'slo_school_branding_v1';
+  Timer? _draftSaveDebounce;
 
   int _currentStep = 0; // 0 = Chapter, 1 = Blueprint, 2 = Live Preview
 
@@ -152,7 +301,6 @@ class _SloPaperBuilderScreenState extends ConsumerState<SloPaperBuilderScreen> {
   int _step3ViewMode = 0; // 0 = Edit Paper, 1 = Preview
   bool _previewIsAnswerKey = false;
   Uint8List? _schoolLogoBytes;
-  Key _pdfPreviewKey = UniqueKey();
   final TransformationController _zoomController = TransformationController();
   final PageController _pagePreviewController = PageController();
   int _currentPreviewPageIndex = 0;
@@ -202,6 +350,15 @@ class _SloPaperBuilderScreenState extends ConsumerState<SloPaperBuilderScreen> {
   @override
   void initState() {
     super.initState();
+    _restoreOfflineBrandingAndLogoSync();
+
+    if (_savedDraft == null) {
+      final rawLocalDraft = LocalDbService.getCache(_localDraftCacheKey);
+      if (rawLocalDraft is Map) {
+        _savedDraft = _SloPaperDraftState.fromJson(Map<String, dynamic>.from(rawLocalDraft));
+      }
+    }
+
     if (_savedDraft != null) {
       _restoreFromDraft(_savedDraft!);
     } else {
@@ -209,6 +366,30 @@ class _SloPaperBuilderScreenState extends ConsumerState<SloPaperBuilderScreen> {
       _checkFirestoreCache();
     }
     _zoomController.addListener(_onZoomChanged);
+  }
+
+  void _restoreOfflineBrandingAndLogoSync() {
+    try {
+      if (_cachedLogoBytesStatic != null) {
+        _schoolLogoBytes = _cachedLogoBytesStatic;
+      } else {
+        final cachedLogoB64 = LocalDbService.getCache(_localLogoCacheKey);
+        if (cachedLogoB64 is String && cachedLogoB64.isNotEmpty) {
+          _schoolLogoBytes = base64Decode(cachedLogoB64);
+          _cachedLogoBytesStatic = _schoolLogoBytes;
+        }
+      }
+
+      final cachedBranding = LocalDbService.getCache(_localBrandingCacheKey);
+      if (cachedBranding is Map) {
+        final name = (cachedBranding['name'] ?? '').toString();
+        final campus = (cachedBranding['campus'] ?? '').toString();
+        final board = (cachedBranding['board'] ?? '').toString();
+        if (name.isNotEmpty) _schoolNameCtrl.text = name;
+        if (campus.isNotEmpty) _campusCtrl.text = campus;
+        if (board.isNotEmpty) _boardCtrl.text = board;
+      }
+    } catch (_) {}
   }
 
   void _restoreFromDraft(_SloPaperDraftState d) {
@@ -264,12 +445,10 @@ class _SloPaperBuilderScreenState extends ConsumerState<SloPaperBuilderScreen> {
 
     if (_loadedBank == null) {
       _checkFirestoreCache();
-    } else if (_activePaperQuestions.isNotEmpty && _cachedPaperPdfBytes == null) {
-      _invalidateAndPrewarmPdf();
     }
   }
 
-  void _persistToDraft() {
+  void _persistToDraft({bool flushImmediately = false}) {
     final d = _SloPaperDraftState()
       ..currentStep = _currentStep
       ..selectedPublisher = _selectedPublisher
@@ -310,26 +489,24 @@ class _SloPaperBuilderScreenState extends ConsumerState<SloPaperBuilderScreen> {
       ..cachedPaperPdfBytes = _cachedPaperPdfBytes
       ..cachedAnswerKeyPdfBytes = _cachedAnswerKeyPdfBytes;
     _savedDraft = d;
+
+    _draftSaveDebounce?.cancel();
+    if (flushImmediately) {
+      LocalDbService.saveCache(_localDraftCacheKey, d.toJson());
+    } else {
+      _draftSaveDebounce = Timer(const Duration(milliseconds: 300), () {
+        LocalDbService.saveCache(_localDraftCacheKey, d.toJson());
+      });
+    }
   }
 
   Future<void> _invalidateAndPrewarmPdf() async {
     _cachedPaperPdfBytes = null;
     _cachedAnswerKeyPdfBytes = null;
     if (mounted) {
-      setState(() {
-        _pdfPreviewKey = UniqueKey();
-      });
+      setState(() {});
     }
-    if (_loadedBank == null || _activePaperQuestions.isEmpty) return;
-    try {
-      final paperBytes = await _generatePdfBytesInternal(isAnswerKey: false);
-      final keyBytes = await _generatePdfBytesInternal(isAnswerKey: true);
-      if (mounted) {
-        _cachedPaperPdfBytes = paperBytes;
-        _cachedAnswerKeyPdfBytes = keyBytes;
-        _persistToDraft();
-      }
-    } catch (_) {}
+    _persistToDraft();
   }
 
   void _handleBackNavigation() {
@@ -397,7 +574,8 @@ class _SloPaperBuilderScreenState extends ConsumerState<SloPaperBuilderScreen> {
 
   @override
   void dispose() {
-    _persistToDraft();
+    _draftSaveDebounce?.cancel();
+    _persistToDraft(flushImmediately: true);
     _chapterTitleCtrl.dispose();
     _customPublisherCtrl.dispose();
     _schoolNameCtrl.dispose();
@@ -427,22 +605,116 @@ class _SloPaperBuilderScreenState extends ConsumerState<SloPaperBuilderScreen> {
     });
   }
 
+  void _applyFetchedBanksToState(List<int> sortedChs, Map<int, ChapterBankDoc> fetchedBanks, {required bool isChecking}) {
+    _isCheckingCache = isChecking;
+    _cachedBanksByChapter
+      ..clear()
+      ..addAll(fetchedBanks);
+
+    if (fetchedBanks.isNotEmpty) {
+      final mergedSlos = <String, SloItem>{};
+      final mergedQuestions = <String, SloQuestion>{};
+      final titles = <String>[];
+
+      for (final ch in sortedChs) {
+        final b = fetchedBanks[ch];
+        if (b != null) {
+          if (b.chapterTitle.isNotEmpty) titles.add("Ch $ch: ${b.chapterTitle}");
+          for (final s in b.slos) {
+            mergedSlos[s.sloCode] = s;
+          }
+          for (final q in b.questions) {
+            mergedQuestions["ch${ch}_${q.id}"] = q.copyWith(id: "ch${ch}_${q.id}");
+          }
+        }
+      }
+
+      final combinedDocId = ChapterBankDoc.generateDocId(
+            publisher: _effectivePublisher,
+            grade: _selectedGrade,
+            subject: _selectedSubject,
+            chapterNumber: sortedChs.first,
+          ) +
+          (sortedChs.length > 1 ? "_CHS_${sortedChs.join('_')}" : "");
+
+      _loadedBank = ChapterBankDoc(
+        docId: combinedDocId,
+        publisher: _effectivePublisher,
+        grade: _selectedGrade,
+        subject: _selectedSubject,
+        chapterNumber: sortedChs.first,
+        chapterTitle: titles.isNotEmpty ? titles.join(" • ") : "Chapters ${sortedChs.join(', ')}",
+        isRtl: _isRtlSubject,
+        slos: mergedSlos.values.toList(),
+        questions: mergedQuestions.values.toList(),
+      );
+      _isCacheAvailable = true;
+      _selectedSloCodes
+        ..clear()
+        ..addAll(_loadedBank!.slos.map((s) => s.sloCode));
+
+      final missingChs = sortedChs.where((c) => !fetchedBanks.containsKey(c)).toList();
+      if (missingChs.isEmpty) {
+        _statusMessage =
+            "⚡ SLO Bank Ready (${_loadedBank!.questions.length} Qs from Ch ${sortedChs.join(', ')})";
+      } else {
+        _statusMessage =
+            "⚡ ${fetchedBanks.length}/${sortedChs.length} Chapters Ready (${_loadedBank!.questions.length} Qs) • Tap Ch ${missingChs.join(', ')} to scan";
+      }
+    } else if (!isChecking) {
+      _loadedBank = null;
+      _isCacheAvailable = false;
+      _statusMessage = "No bank found for Ch ${sortedChs.join(', ')}. Scan chapter pages to generate.";
+    }
+  }
+
   Future<void> _checkFirestoreCache() async {
     if (_selectedChapters.isEmpty) {
       _selectedChapters.add(_chapterNumber);
     }
 
+    final sortedChs = _selectedChapters.toList()..sort();
+    final Map<int, ChapterBankDoc> localBanks = {};
+
+    // 1. 0ms Synchronous Check in Local Offline Cache (RAM + Hive)
+    for (final ch in sortedChs) {
+      final docId = ChapterBankDoc.generateDocId(
+        publisher: _effectivePublisher,
+        grade: _selectedGrade,
+        subject: _selectedSubject,
+        chapterNumber: ch,
+      );
+      final local = SloRepository.getChapterBankLocalSync(docId);
+      if (local != null && local.questions.isNotEmpty) {
+        localBanks[ch] = local;
+      }
+    }
+
+    // If all selected chapters are already in local offline cache, populate immediately in 0ms!
+    if (localBanks.length == sortedChs.length) {
+      setState(() {
+        _applyFetchedBanksToState(sortedChs, localBanks, isChecking: false);
+      });
+      _persistToDraft();
+      return;
+    }
+
+    // Otherwise show any partially cached local chapters immediately while checking remote for remaining
     setState(() {
-      _isCheckingCache = true;
-      _isCacheAvailable = false;
-      _statusMessage = "Checking SLO question bank...";
+      if (localBanks.isNotEmpty) {
+        _applyFetchedBanksToState(sortedChs, localBanks, isChecking: true);
+      } else {
+        _isCheckingCache = true;
+        _isCacheAvailable = false;
+        _statusMessage = "Checking SLO question bank...";
+      }
     });
 
     try {
-      final sortedChs = _selectedChapters.toList()..sort();
-      final Map<int, ChapterBankDoc> fetchedBanks = {};
+      final Map<int, ChapterBankDoc> fetchedBanks = Map<int, ChapterBankDoc>.from(localBanks);
 
       await Future.wait(sortedChs.map((ch) async {
+        if (fetchedBanks.containsKey(ch)) return;
         final docId = ChapterBankDoc.generateDocId(
           publisher: _effectivePublisher,
           grade: _selectedGrade,
@@ -458,74 +730,13 @@ class _SloPaperBuilderScreenState extends ConsumerState<SloPaperBuilderScreen> {
       if (!mounted) return;
 
       setState(() {
-        _isCheckingCache = false;
-        _cachedBanksByChapter
-          ..clear()
-          ..addAll(fetchedBanks);
-
-        if (fetchedBanks.isNotEmpty) {
-          final mergedSlos = <String, SloItem>{};
-          final mergedQuestions = <String, SloQuestion>{};
-          final titles = <String>[];
-
-          for (final ch in sortedChs) {
-            final b = fetchedBanks[ch];
-            if (b != null) {
-              if (b.chapterTitle.isNotEmpty) titles.add("Ch $ch: ${b.chapterTitle}");
-              for (final s in b.slos) {
-                mergedSlos[s.sloCode] = s;
-              }
-              for (final q in b.questions) {
-                mergedQuestions["ch${ch}_${q.id}"] = q.copyWith(id: "ch${ch}_${q.id}");
-              }
-            }
-          }
-
-          final combinedDocId = ChapterBankDoc.generateDocId(
-                publisher: _effectivePublisher,
-                grade: _selectedGrade,
-                subject: _selectedSubject,
-                chapterNumber: sortedChs.first,
-              ) +
-              (sortedChs.length > 1 ? "_CHS_${sortedChs.join('_')}" : "");
-
-          _loadedBank = ChapterBankDoc(
-            docId: combinedDocId,
-            publisher: _effectivePublisher,
-            grade: _selectedGrade,
-            subject: _selectedSubject,
-            chapterNumber: sortedChs.first,
-            chapterTitle: titles.isNotEmpty ? titles.join(" • ") : "Chapters ${sortedChs.join(', ')}",
-            isRtl: _isRtlSubject,
-            slos: mergedSlos.values.toList(),
-            questions: mergedQuestions.values.toList(),
-          );
-          _isCacheAvailable = true;
-          _selectedSloCodes
-            ..clear()
-            ..addAll(_loadedBank!.slos.map((s) => s.sloCode));
-
-          final missingChs = sortedChs.where((c) => !fetchedBanks.containsKey(c)).toList();
-          if (missingChs.isEmpty) {
-            _statusMessage =
-                "⚡ SLO Bank Ready (${_loadedBank!.questions.length} Qs from Ch ${sortedChs.join(', ')})";
-          } else {
-            _statusMessage =
-                "⚡ ${fetchedBanks.length}/${sortedChs.length} Chapters Ready (${_loadedBank!.questions.length} Qs) • Tap Ch ${missingChs.join(', ')} to scan";
-          }
-        } else {
-          _loadedBank = null;
-          _isCacheAvailable = false;
-          _statusMessage = "No bank found for Ch ${sortedChs.join(', ')}. Scan chapter pages to generate.";
-        }
+        _applyFetchedBanksToState(sortedChs, fetchedBanks, isChecking: false);
       });
       _persistToDraft();
     } catch (e) {
       if (mounted) {
         setState(() {
-          _isCheckingCache = false;
-          _isCacheAvailable = false;
-          _statusMessage = "Ready to scan.";
+          _applyFetchedBanksToState(sortedChs, localBanks, isChecking: false);
         });
       }
     }
@@ -1460,6 +1671,13 @@ class _SloPaperBuilderScreenState extends ConsumerState<SloPaperBuilderScreen> {
     if (board.isNotEmpty) {
       _boardCtrl.text = board;
     }
+    if (name.isNotEmpty || campus.isNotEmpty || board.isNotEmpty) {
+      LocalDbService.saveCache(_localBrandingCacheKey, <String, dynamic>{
+        'name': _schoolNameCtrl.text,
+        'campus': _campusCtrl.text,
+        'board': _boardCtrl.text,
+      });
+    }
     if (_schoolLogoBytes == null && logoUrl.isNotEmpty) {
       _fetchLogoFromUrl(logoUrl);
     }
@@ -1470,31 +1688,39 @@ class _SloPaperBuilderScreenState extends ConsumerState<SloPaperBuilderScreen> {
     if (_schoolLogoBytes != null || url.isEmpty) return;
     try {
       if (url.startsWith('http://') || url.startsWith('https://')) {
-        final res = await http.get(Uri.parse(url)).timeout(const Duration(seconds: 5));
-        if (res.statusCode == 200 && mounted) {
-          setState(() {
-            _schoolLogoBytes = res.bodyBytes;
-            _pdfPreviewKey = UniqueKey();
-          });
+        final res = await http.get(Uri.parse(url)).timeout(const Duration(seconds: 4));
+        if (res.statusCode == 200) {
+          _schoolLogoBytes = res.bodyBytes;
+          _cachedLogoBytesStatic = res.bodyBytes;
+          await LocalDbService.saveCache(_localLogoCacheKey, base64Encode(res.bodyBytes));
+          if (mounted) {
+            setState(() {});
+          }
         }
       }
     } catch (_) {}
   }
 
-
   Future<Uint8List?> _getSchoolLogoBytes() async {
     if (_schoolLogoBytes != null) return _schoolLogoBytes;
+    if (_cachedLogoBytesStatic != null) {
+      _schoolLogoBytes = _cachedLogoBytesStatic;
+      return _schoolLogoBytes;
+    }
     try {
-      final schoolData = ref.read(schoolDataProvider).value;
-      final logoUrl = schoolData?['logo'] as String?;
-      if (logoUrl != null && (logoUrl.startsWith('http://') || logoUrl.startsWith('https://'))) {
-        final res = await http.get(Uri.parse(logoUrl)).timeout(const Duration(seconds: 4));
-        if (res.statusCode == 200) {
-          _schoolLogoBytes = res.bodyBytes;
-          return _schoolLogoBytes;
-        }
+      final cachedLogoB64 = LocalDbService.getCache(_localLogoCacheKey);
+      if (cachedLogoB64 is String && cachedLogoB64.isNotEmpty) {
+        _schoolLogoBytes = base64Decode(cachedLogoB64);
+        _cachedLogoBytesStatic = _schoolLogoBytes;
+        return _schoolLogoBytes;
       }
     } catch (_) {}
+    // Non-blocking background fetch so PDF / Preview never waits on network timeout
+    final schoolData = ref.read(schoolDataProvider).value;
+    final logoUrl = schoolData?['logo'] as String?;
+    if (logoUrl != null && logoUrl.isNotEmpty) {
+      _fetchLogoFromUrl(logoUrl);
+    }
     return null;
   }
 
@@ -3173,8 +3399,12 @@ class _SloPaperBuilderScreenState extends ConsumerState<SloPaperBuilderScreen> {
                                       if (_previewIsAnswerKey) {
                                         setState(() {
                                           _previewIsAnswerKey = false;
-                                          _pdfPreviewKey = UniqueKey();
+                                          _currentPreviewPageIndex = 0;
                                         });
+                                        if (_pagePreviewController.hasClients) {
+                                          _pagePreviewController.jumpToPage(0);
+                                        }
+                                        _resetZoom();
                                         _persistToDraft();
                                       }
                                     },
@@ -3202,8 +3432,12 @@ class _SloPaperBuilderScreenState extends ConsumerState<SloPaperBuilderScreen> {
                                       if (!_previewIsAnswerKey) {
                                         setState(() {
                                           _previewIsAnswerKey = true;
-                                          _pdfPreviewKey = UniqueKey();
+                                          _currentPreviewPageIndex = 0;
                                         });
+                                        if (_pagePreviewController.hasClients) {
+                                          _pagePreviewController.jumpToPage(0);
+                                        }
+                                        _resetZoom();
                                         _persistToDraft();
                                       }
                                     },
@@ -3296,34 +3530,13 @@ class _SloPaperBuilderScreenState extends ConsumerState<SloPaperBuilderScreen> {
                     ),
                   ),
 
-                  // Interactive PdfPreview Canvas with Pinch, Zoom, Pan & Page Navigation
+                  // Instant 0ms Offline Native A4 Paper & Answer Key Canvas
                   Expanded(
                     child: _activePaperQuestions.isEmpty || _loadedBank == null
                         ? const SizedBox.shrink()
-                        : PdfPreview.builder(
-                            key: _pdfPreviewKey,
-                            build: (format) => _generatePdfBytes(isAnswerKey: _previewIsAnswerKey),
-                            canChangeOrientation: false,
-                            canChangePageFormat: false,
-                            canDebug: false,
-                            dynamicLayout: false,
-                            useActions: false,
-                            dpi: 125,
-                            maxPageWidth: 650,
-                            pdfFileName: _previewIsAnswerKey
-                                ? "${_selectedSubject}_Class${_selectedGrade}_AnswerKey.pdf"
-                                : "${_selectedSubject}_Class${_selectedGrade}_QuestionPaper.pdf",
-                            loadingWidget: const Center(
-                              child: Column(
-                                mainAxisSize: MainAxisSize.min,
-                                children: [
-                                  CircularProgressIndicator(strokeWidth: 2.5),
-                                  SizedBox(height: 12),
-                                  Text("Preparing Preview...", style: TextStyle(fontSize: 12.5, color: Colors.grey)),
-                                ],
-                              ),
-                            ),
-                            pagesBuilder: (context, pages) => _buildGalleryInteractiveCanvas(context, pages),
+                        : _buildGalleryInteractiveCanvas(
+                            context,
+                            _buildDirectA4PreviewPages(isAnswerKey: _previewIsAnswerKey),
                           ),
                   ),
                 ],
@@ -3335,20 +3548,876 @@ class _SloPaperBuilderScreenState extends ConsumerState<SloPaperBuilderScreen> {
     );
   }
 
-  Widget _buildGalleryInteractiveCanvas(BuildContext context, List<PdfPreviewPageData> pages) {
-    if (pages.isEmpty) {
-      return const Center(
-        child: Column(
-          mainAxisSize: MainAxisSize.min,
-          children: [
-            CircularProgressIndicator(strokeWidth: 2.5),
-            SizedBox(height: 12),
-            Text("Rendering pages...", style: TextStyle(fontSize: 12.5, color: Colors.grey)),
-          ],
+  static const List<String> _romanNumerals = [
+    "(i)", "(ii)", "(iii)", "(iv)", "(v)", "(vi)", "(vii)", "(viii)", "(ix)", "(x)",
+    "(xi)", "(xii)", "(xiii)", "(xiv)", "(xv)", "(xvi)", "(xvii)", "(xviii)", "(xix)", "(xx)"
+  ];
+
+  /// Builds 100% offline, 0ms instant vector A4 pages for Question Paper or Answer Key
+  List<Widget> _buildDirectA4PreviewPages({required bool isAnswerKey}) {
+    final chapterBank = _loadedBank!;
+    final isRtl = chapterBank.isRtl;
+    final mcqs = _activePaperQuestions.where((q) => q.type == 'MCQ').toList();
+    final shorts = _activePaperQuestions.where((q) => q.type == 'SHORT').toList();
+    final longs = _activePaperQuestions.where((q) => q.type == 'LONG').toList();
+
+    final schoolName = _schoolNameCtrl.text.trim().isNotEmpty
+        ? _schoolNameCtrl.text.trim()
+        : "Smart Public School";
+    final campus = _campusCtrl.text.trim().isNotEmpty
+        ? _campusCtrl.text.trim()
+        : "Main Campus";
+    final board = _boardCtrl.text.trim().isNotEmpty
+        ? _boardCtrl.text.trim()
+        : "Affiliated with Board of Intermediate & Secondary Education";
+    final examTitle = _examTitleCtrl.text.trim().isNotEmpty
+        ? _examTitleCtrl.text.trim()
+        : "First Term Examination 2026";
+    final timeAllowed = _timeAllowedCtrl.text.trim().isNotEmpty
+        ? _timeAllowedCtrl.text.trim()
+        : "2 Hours";
+
+    final List<MapEntry<Widget, double>> blocks = [];
+
+    double estimateLines(String text, int charsPerLine, double lineHeight) {
+      if (text.isEmpty) return lineHeight;
+      final lines = (text.length / charsPerLine).ceil().clamp(1, 15);
+      return lines * lineHeight;
+    }
+
+    if (!isAnswerKey) {
+      final attemptShorts = _effectiveShortAttempt < shorts.length ? _effectiveShortAttempt : shorts.length;
+      final hasShortChoice = attemptShorts < shorts.length;
+      final secBMarks = attemptShorts * _shortMarksEach;
+
+      final attemptLongs = _effectiveLongAttempt < longs.length ? _effectiveLongAttempt : longs.length;
+      final hasLongChoice = attemptLongs < longs.length;
+      final secCMarks = attemptLongs * _longMarksEach;
+
+      // Section A: MCQs
+      if (mcqs.isNotEmpty) {
+        blocks.add(MapEntry(
+          _buildA4SectionHeader(
+            title: isRtl
+                ? "حصہ اوّل: معروضی سوالات (MCQs)"
+                : "SECTION 'A' (Multiple Choice Questions - MCQs)",
+            marks: isRtl
+                ? "کل نمبر: ${mcqs.length * _mcqMarksEach} | وقت: ۱۵ منٹ"
+                : "Marks: ${mcqs.length * _mcqMarksEach} | Time: 15 Mins",
+            instructions: isRtl
+                ? "نوٹ: تمام سوالات لازمی ہیں۔ دیئے گئے اختیارات میں سے درست جواب کا انتخاب کریں۔ کاٹ کر یا دوبارہ لکھنے پر نمبر نہیں ملیں گے۔"
+                : "NOTE: Attempt all questions. Each question carries $_mcqMarksEach ${_mcqMarksEach == 1 ? 'Mark' : 'Marks'}. Encircle the correct option (A / B / C / D). Overwriting or cutting will result in zero marks.",
+            isRtl: isRtl,
+          ),
+          46.0,
+        ));
+        blocks.add(MapEntry(
+          Padding(
+            padding: const EdgeInsets.only(top: 4, bottom: 4),
+            child: Text(
+              isRtl
+                  ? "سوال نمبر ۱: دیئے گئے اختیارات میں سے درست جواب کا انتخاب کریں:"
+                  : "Q.1  Choose the correct answer for each from the given options:",
+              style: TextStyle(
+                fontSize: isRtl ? 10.5 : 9.5,
+                fontWeight: FontWeight.bold,
+                color: Colors.black,
+              ),
+            ),
+          ),
+          20.0,
+        ));
+
+        for (int i = 0; i < mcqs.length; i++) {
+          final q = mcqs[i];
+          final diagH = q.diagramBytes != null ? 108.0 : 0.0;
+          final qH = estimateLines(q.questionText, 78, 13.5) + 22.0 + diagH;
+          blocks.add(MapEntry(_buildA4McqItem(i + 1, q, isRtl), qH));
+        }
+      }
+
+      // Section B: Short Questions
+      if (shorts.isNotEmpty) {
+        blocks.add(MapEntry(
+          Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: _buildA4SectionHeader(
+              title: isRtl
+                  ? "حصہ دوم: مختصر جواب کے سوالات (Short Questions)"
+                  : "SECTION 'B' (Short Answer Questions)",
+              marks: isRtl ? "کل نمبر: $secBMarks" : "Marks: $secBMarks",
+              instructions: isRtl
+                  ? (hasShortChoice
+                      ? "نوٹ: دیئے گئے (${shorts.length}) میں سے کوئی سے ($attemptShorts) سوالات کے مختصر جوابات تحریر کریں۔ تمام سوالات کے نمبر مساوی ہیں ($attemptShorts x $_shortMarksEach = $secBMarks نمبر)۔"
+                      : "نوٹ: تمام (${shorts.length}) سوالات کے مختصر جوابات تحریر کریں۔ تمام سوالات کے نمبر مساوی ہیں (${shorts.length} x $_shortMarksEach = $secBMarks نمبر)۔")
+                  : (hasShortChoice
+                      ? "NOTE: Attempt any ($attemptShorts) out of (${shorts.length}) questions. All questions carry equal marks ($attemptShorts x $_shortMarksEach = $secBMarks Marks). Answer briefly on your answer sheet."
+                      : "NOTE: Attempt all (${shorts.length}) questions. All questions carry equal marks (${shorts.length} x $_shortMarksEach = $secBMarks Marks). Answer briefly on your answer sheet."),
+              isRtl: isRtl,
+            ),
+          ),
+          52.0,
+        ));
+        blocks.add(MapEntry(
+          Padding(
+            padding: const EdgeInsets.only(top: 4, bottom: 4),
+            child: Text(
+              isRtl
+                  ? (hasShortChoice
+                      ? "سوال نمبر ۲: مندرجہ ذیل میں سے کوئی سے ($attemptShorts) سوالات کے مختصر جوابات تحریر کریں:"
+                      : "سوال نمبر ۲: مندرجہ ذیل سوالات کے مختصر جوابات تحریر کریں:")
+                  : (hasShortChoice
+                      ? "Q.2  Answer any ($attemptShorts) of the following short questions:"
+                      : "Q.2  Answer the following short questions:"),
+              style: TextStyle(
+                fontSize: isRtl ? 10.5 : 9.5,
+                fontWeight: FontWeight.bold,
+                color: Colors.black,
+              ),
+            ),
+          ),
+          20.0,
+        ));
+
+        for (int i = 0; i < shorts.length; i++) {
+          final q = shorts[i];
+          final diagH = q.diagramBytes != null ? 108.0 : 0.0;
+          final qH = estimateLines(q.questionText, 72, 14.0) + 7.0 + diagH;
+          blocks.add(MapEntry(_buildA4ShortItem(i + 1, q, isRtl, _shortMarksEach), qH));
+        }
+      }
+
+      // Section C: Long Questions
+      if (longs.isNotEmpty) {
+        blocks.add(MapEntry(
+          Padding(
+            padding: const EdgeInsets.only(top: 6),
+            child: _buildA4SectionHeader(
+              title: isRtl
+                  ? "حصہ سوم: تفصیلی سوالات (Long Questions)"
+                  : "SECTION 'C' (Detailed / Long Questions)",
+              marks: isRtl ? "کل نمبر: $secCMarks" : "Marks: $secCMarks",
+              instructions: isRtl
+                  ? (hasLongChoice
+                      ? "نوٹ: دیئے گئے (${longs.length}) میں سے کوئی سے ($attemptLongs) سوالات کے تفصیلی جوابات تحریر کریں۔ جہاں ضروری ہو لیبل شدہ خاکے بنائیں۔ ($attemptLongs x $_longMarksEach = $secCMarks نمبر)۔"
+                      : "نوٹ: تمام (${longs.length}) سوالات کے تفصیلی جوابات تحریر کریں۔ جہاں ضروری ہو لیبل شدہ خاکے بنائیں۔ (${longs.length} x $_longMarksEach = $secCMarks نمبر)۔")
+                  : (hasLongChoice
+                      ? "NOTE: Attempt any ($attemptLongs) out of (${longs.length}) questions in detail. Draw neat and labelled diagrams where necessary ($attemptLongs x $_longMarksEach = $secCMarks Marks)."
+                      : "NOTE: Attempt all (${longs.length}) questions in detail. Draw neat and labelled diagrams where necessary (${longs.length} x $_longMarksEach = $secCMarks Marks)."),
+              isRtl: isRtl,
+            ),
+          ),
+          52.0,
+        ));
+
+        for (int i = 0; i < longs.length; i++) {
+          final q = longs[i];
+          final diagH = q.diagramBytes != null ? 108.0 : 0.0;
+          final qH = estimateLines(q.questionText, 72, 14.0) + 8.0 + diagH;
+          blocks.add(MapEntry(_buildA4LongItem(i + 1, q, isRtl, _longMarksEach), qH));
+        }
+      }
+
+      // Signature block
+      blocks.add(MapEntry(_buildA4SignatureBlock(isRtl), 50.0));
+    } else {
+      // Answer Key & Rubrics Blocks
+      if (mcqs.isNotEmpty) {
+        blocks.add(MapEntry(
+          _buildA4SectionHeader(
+            title: "SECTION 'A' ANSWER KEY (MCQs)",
+            marks: "${mcqs.length} Questions",
+            instructions: "Official scoring options for objective sheet evaluation.",
+            isRtl: false,
+          ),
+          40.0,
+        ));
+        final rows = (mcqs.length / 4).ceil().clamp(1, 20);
+        blocks.add(MapEntry(
+          Padding(
+            padding: const EdgeInsets.only(top: 6, bottom: 10),
+            child: Wrap(
+              spacing: 8,
+              runSpacing: 6,
+              children: mcqs.asMap().entries.map((entry) {
+                final idx = entry.key + 1;
+                final q = entry.value;
+                return Container(
+                  width: 128,
+                  padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
+                  decoration: BoxDecoration(
+                    color: const Color(0xFFF3F4F6),
+                    borderRadius: BorderRadius.circular(4),
+                    border: Border.all(color: const Color(0xFF9CA3AF), width: 0.6),
+                  ),
+                  child: Text(
+                    "Q$idx: ${q.correctAnswer}",
+                    style: const TextStyle(fontSize: 8.5, fontWeight: FontWeight.bold, color: Colors.black),
+                  ),
+                );
+              }).toList(),
+            ),
+          ),
+          rows * 26.0 + 16.0,
+        ));
+      }
+
+      if (shorts.isNotEmpty) {
+        blocks.add(MapEntry(
+          _buildA4SectionHeader(
+            title: "SECTION 'B' MARKING RUBRIC (Short Questions)",
+            marks: "${shorts.length} Questions",
+            instructions: "Award marks based on core concepts and key terms.",
+            isRtl: false,
+          ),
+          40.0,
+        ));
+        for (int i = 0; i < shorts.length; i++) {
+          final q = shorts[i];
+          final ansText = q.rubric.isNotEmpty ? q.rubric : q.correctAnswer;
+          final diagH = q.diagramBytes != null ? 105.0 : 0.0;
+          final h = estimateLines(q.questionText, 75, 13.0) +
+              estimateLines(ansText, 80, 12.5) +
+              24.0 +
+              diagH;
+          blocks.add(MapEntry(_buildA4RubricCard("Q.2 (${i + 1})", q, ansText, "Expected Answer / Rubric", isRtl), h));
+        }
+      }
+
+      if (longs.isNotEmpty) {
+        blocks.add(MapEntry(
+          _buildA4SectionHeader(
+            title: "SECTION 'C' MARKING RUBRIC (Detailed Questions)",
+            marks: "${longs.length} Questions",
+            instructions: "Marking breakdown for comprehensive descriptive answers.",
+            isRtl: false,
+          ),
+          40.0,
+        ));
+        for (int i = 0; i < longs.length; i++) {
+          final q = longs[i];
+          final ansText = q.rubric.isNotEmpty ? q.rubric : q.correctAnswer;
+          final diagH = q.diagramBytes != null ? 105.0 : 0.0;
+          final h = estimateLines(q.questionText, 75, 13.0) +
+              estimateLines(ansText, 80, 12.5) +
+              24.0 +
+              diagH;
+          blocks.add(MapEntry(_buildA4RubricCard("Q.${i + 3}", q, ansText, "Model Solution / Rubric", isRtl), h));
+        }
+      }
+    }
+
+    // Paginate blocks across A4 pages (595 x 842 pt)
+    final List<List<Widget>> paginatedWidgetLists = [];
+    List<Widget> currentPageWidgets = [];
+    double currentHeight = 0.0;
+    int pageIndex = 0;
+
+    double maxBodyHeightForPage(int pIdx) {
+      if (isAnswerKey) return 710.0;
+      return pIdx == 0 ? 635.0 : 735.0;
+    }
+
+    for (final block in blocks) {
+      final limit = maxBodyHeightForPage(pageIndex);
+      if (currentPageWidgets.isNotEmpty && (currentHeight + block.value) > limit) {
+        paginatedWidgetLists.add(currentPageWidgets);
+        currentPageWidgets = [block.key];
+        currentHeight = block.value;
+        pageIndex++;
+      } else {
+        currentPageWidgets.add(block.key);
+        currentHeight += block.value;
+      }
+    }
+    if (currentPageWidgets.isNotEmpty || paginatedWidgetLists.isEmpty) {
+      paginatedWidgetLists.add(currentPageWidgets);
+    }
+
+    final totalPages = paginatedWidgetLists.length;
+
+    return List.generate(totalPages, (idx) {
+      final pageNum = idx + 1;
+      final bodyItems = paginatedWidgetLists[idx];
+
+      return AspectRatio(
+        aspectRatio: 595.0 / 842.0,
+        child: FittedBox(
+          fit: BoxFit.contain,
+          child: SizedBox(
+            width: 595.0,
+            height: 842.0,
+            child: DefaultTextStyle(
+              style: const TextStyle(color: Colors.black, fontFamily: 'Roboto'),
+              child: Directionality(
+                textDirection: isRtl ? TextDirection.rtl : TextDirection.ltr,
+                child: Container(
+                  color: Colors.white,
+                  padding: const EdgeInsets.symmetric(horizontal: 24, vertical: 18),
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.stretch,
+                    children: [
+                      // Page Header
+                      if (isAnswerKey)
+                        _buildA4AnswerKeyHeader(
+                          schoolName: schoolName,
+                          examTitle: examTitle,
+                          grade: chapterBank.grade,
+                          subject: chapterBank.subject,
+                        )
+                      else
+                        _buildA4OfficialHeader(
+                          schoolName: schoolName,
+                          campus: campus,
+                          board: board,
+                          examTitle: examTitle,
+                          timeAllowed: timeAllowed,
+                          totalMarks: _totalMarks,
+                          grade: chapterBank.grade,
+                          subject: chapterBank.subject,
+                          pageNumber: pageNum,
+                        ),
+
+                      // Page Body
+                      Expanded(
+                        child: ClipRect(
+                          child: Column(
+                            crossAxisAlignment: CrossAxisAlignment.stretch,
+                            mainAxisSize: MainAxisSize.min,
+                            children: bodyItems,
+                          ),
+                        ),
+                      ),
+
+                      // Page Footer
+                      Directionality(
+                        textDirection: TextDirection.ltr,
+                        child: Container(
+                          margin: const EdgeInsets.only(top: 6),
+                          child: Row(
+                            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                            children: [
+                              const Text(
+                                "Smart SLO Paper Engine  •  Board Curriculum Standard",
+                                style: TextStyle(fontSize: 8, color: Color(0xFF616161)),
+                              ),
+                              Text(
+                                isAnswerKey
+                                    ? "*** CONFIDENTIAL MARKING KEY ***"
+                                    : (pageNum < totalPages
+                                        ? "*** Please Turn Over (P.T.O.) ***"
+                                        : "*** END OF EXAMINATION PAPER ***"),
+                                style: const TextStyle(fontSize: 8, fontWeight: FontWeight.bold, color: Color(0xFF424242)),
+                              ),
+                              Text(
+                                "Page $pageNum of $totalPages",
+                                style: const TextStyle(fontSize: 8, color: Color(0xFF616161)),
+                              ),
+                            ],
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ),
+              ),
+            ),
+          ),
+        ),
+      );
+    });
+  }
+
+  Widget _buildA4OfficialHeader({
+    required String schoolName,
+    required String campus,
+    required String board,
+    required String examTitle,
+    required String timeAllowed,
+    required int totalMarks,
+    required String grade,
+    required String subject,
+    required int pageNumber,
+  }) {
+    if (pageNumber > 1) {
+      return Directionality(
+        textDirection: TextDirection.ltr,
+        child: Container(
+          margin: const EdgeInsets.only(bottom: 10),
+          padding: const EdgeInsets.only(bottom: 4),
+          decoration: const BoxDecoration(
+            border: Border(bottom: BorderSide(width: 0.8, color: Colors.black)),
+          ),
+          child: Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                "$schoolName  •  $examTitle",
+                style: const TextStyle(fontSize: 8.5, fontWeight: FontWeight.bold, color: Colors.black),
+              ),
+              Text(
+                "Subject: $subject  |  Class: ${grade}th",
+                style: const TextStyle(fontSize: 8.5, fontWeight: FontWeight.bold, color: Colors.black),
+              ),
+            ],
+          ),
         ),
       );
     }
 
+    Widget buildLogoBox(EdgeInsets margin) {
+      if (_schoolLogoBytes != null) {
+        return Container(
+          width: 56,
+          height: 56,
+          margin: margin,
+          child: Image.memory(_schoolLogoBytes!, fit: BoxFit.contain),
+        );
+      }
+      return Container(
+        width: 50,
+        height: 50,
+        margin: margin,
+        decoration: BoxDecoration(
+          shape: BoxShape.circle,
+          border: Border.all(color: Colors.black, width: 1.5),
+        ),
+        child: Center(
+          child: Text(
+            schoolName.isNotEmpty ? schoolName[0].toUpperCase() : "S",
+            style: const TextStyle(fontSize: 20, fontWeight: FontWeight.bold, color: Colors.black),
+          ),
+        ),
+      );
+    }
+
+    return Directionality(
+      textDirection: TextDirection.ltr,
+      child: Container(
+        margin: const EdgeInsets.only(bottom: 10),
+        child: Column(
+          children: [
+            Row(
+              crossAxisAlignment: CrossAxisAlignment.center,
+              children: [
+                buildLogoBox(const EdgeInsets.only(right: 12)),
+                Expanded(
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.center,
+                    children: [
+                      Text(
+                        schoolName.toUpperCase(),
+                        textAlign: TextAlign.center,
+                        style: const TextStyle(
+                          fontSize: 17.5,
+                          fontWeight: FontWeight.bold,
+                          letterSpacing: 0.6,
+                          color: Colors.black,
+                        ),
+                      ),
+                      if (campus.isNotEmpty) ...[
+                        const SizedBox(height: 1.5),
+                        Text(
+                          campus.toUpperCase(),
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(fontSize: 9.5, fontWeight: FontWeight.bold, color: Color(0xFF424242)),
+                        ),
+                      ],
+                      const SizedBox(height: 3),
+                      Container(
+                        padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 2),
+                        decoration: const BoxDecoration(
+                          border: Border(
+                            top: BorderSide(width: 1.2, color: Colors.black),
+                            bottom: BorderSide(width: 1.2, color: Colors.black),
+                          ),
+                        ),
+                        child: Text(
+                          examTitle.toUpperCase(),
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(
+                            fontSize: 11.5,
+                            fontWeight: FontWeight.bold,
+                            letterSpacing: 1.1,
+                            color: Colors.black,
+                          ),
+                        ),
+                      ),
+                      if (board.isNotEmpty) ...[
+                        const SizedBox(height: 2),
+                        Text(
+                          board,
+                          textAlign: TextAlign.center,
+                          style: const TextStyle(fontSize: 8, color: Color(0xFF616161)),
+                        ),
+                      ],
+                    ],
+                  ),
+                ),
+                buildLogoBox(const EdgeInsets.only(left: 12)),
+              ],
+            ),
+            const SizedBox(height: 8),
+            Container(
+              decoration: BoxDecoration(
+                border: Border.all(color: Colors.black, width: 1.0),
+              ),
+              child: Column(
+                children: [
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+                    decoration: const BoxDecoration(
+                      border: Border(bottom: BorderSide(color: Colors.black, width: 0.8)),
+                    ),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        const Row(
+                          children: [
+                            Text("Student Name: ", style: TextStyle(fontSize: 9.5, fontWeight: FontWeight.bold, color: Colors.black)),
+                            Text("___________________________________________", style: TextStyle(fontSize: 9.5, color: Colors.black)),
+                          ],
+                        ),
+                        Row(
+                          children: [
+                            const Text("Roll No: ", style: TextStyle(fontSize: 9.5, fontWeight: FontWeight.bold, color: Colors.black)),
+                            ...List.generate(
+                              5,
+                              (_) => Container(
+                                width: 15,
+                                height: 15,
+                                margin: const EdgeInsets.only(left: 2),
+                                decoration: BoxDecoration(border: Border.all(color: Colors.black, width: 0.8)),
+                              ),
+                            ),
+                          ],
+                        ),
+                      ],
+                    ),
+                  ),
+                  Container(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3.5),
+                    color: const Color(0xFFF5F5F5),
+                    child: Row(
+                      mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                      children: [
+                        Text("Class: ${grade}th", style: const TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.black)),
+                        Text("Subject: $subject", style: const TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.black)),
+                        Text("Time Allowed: $timeAllowed", style: const TextStyle(fontSize: 9, color: Colors.black)),
+                        Text("Total Marks: $totalMarks", style: const TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.black)),
+                        const Text("Marks Obtained: _______", style: TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.black)),
+                      ],
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildA4AnswerKeyHeader({
+    required String schoolName,
+    required String examTitle,
+    required String grade,
+    required String subject,
+  }) {
+    return Directionality(
+      textDirection: TextDirection.ltr,
+      child: Container(
+        padding: const EdgeInsets.only(bottom: 8),
+        margin: const EdgeInsets.only(bottom: 10),
+        decoration: const BoxDecoration(
+          border: Border(bottom: BorderSide(width: 1.5, color: Colors.black)),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceBetween,
+          children: [
+            Row(
+              children: [
+                if (_schoolLogoBytes != null)
+                  Container(
+                    margin: const EdgeInsets.only(right: 10),
+                    width: 36,
+                    height: 36,
+                    child: Image.memory(_schoolLogoBytes!, fit: BoxFit.contain),
+                  ),
+                Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    Text(
+                      schoolName.toUpperCase(),
+                      style: const TextStyle(fontSize: 13.5, fontWeight: FontWeight.bold, color: Colors.black),
+                    ),
+                    Text(
+                      "${examTitle.toUpperCase()}  •  TEACHER MARKING KEY (CONFIDENTIAL)",
+                      style: const TextStyle(fontSize: 9.5, fontWeight: FontWeight.bold, color: Color(0xFFB91C1C)),
+                    ),
+                  ],
+                ),
+              ],
+            ),
+            Text(
+              "Class: ${grade}th  |  $subject",
+              style: const TextStyle(fontSize: 9.5, fontWeight: FontWeight.bold, color: Colors.black),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+
+  Widget _buildA4SectionHeader({
+    required String title,
+    required String marks,
+    required String instructions,
+    required bool isRtl,
+  }) {
+    return Container(
+      margin: const EdgeInsets.symmetric(vertical: 3),
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+      decoration: const BoxDecoration(
+        color: Color(0xFFEEEEEE),
+        border: Border(
+          top: BorderSide(width: 1.2, color: Colors.black),
+          bottom: BorderSide(width: 1.2, color: Colors.black),
+        ),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            mainAxisAlignment: MainAxisAlignment.spaceBetween,
+            children: [
+              Text(
+                title,
+                style: const TextStyle(fontSize: 10, fontWeight: FontWeight.bold, color: Colors.black),
+              ),
+              Text(
+                marks,
+                style: const TextStyle(fontSize: 9.5, fontWeight: FontWeight.bold, color: Colors.black),
+              ),
+            ],
+          ),
+          const SizedBox(height: 2),
+          Text(
+            instructions,
+            style: const TextStyle(fontSize: 8, color: Color(0xFF424242)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget? _buildA4DiagramWidget(SloQuestion q, bool isRtl) {
+    final bytes = q.diagramBytes;
+    if (bytes == null || bytes.isEmpty) return null;
+    return Container(
+      margin: EdgeInsets.only(
+        top: 4,
+        bottom: 4,
+        left: isRtl ? 0 : 18,
+        right: isRtl ? 18 : 0,
+      ),
+      padding: const EdgeInsets.all(4),
+      decoration: BoxDecoration(
+        border: Border.all(color: const Color(0xFF9E9E9E), width: 0.6),
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Image.memory(
+        bytes,
+        height: 92,
+        fit: BoxFit.contain,
+      ),
+    );
+  }
+
+  Widget _buildA4McqItem(int index, SloQuestion q, bool isRtl) {
+    final diag = _buildA4DiagramWidget(q, isRtl);
+    return Container(
+      margin: const EdgeInsets.only(bottom: 5),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                "($index) ",
+                style: TextStyle(fontSize: isRtl ? 10 : 9.5, fontWeight: FontWeight.bold, color: Colors.black),
+              ),
+              Expanded(
+                child: Text(
+                  q.questionText,
+                  style: TextStyle(fontSize: isRtl ? 10 : 9.5, height: 1.25, color: Colors.black),
+                ),
+              ),
+            ],
+          ),
+          if (diag != null) diag,
+          const SizedBox(height: 2.5),
+          Padding(
+            padding: EdgeInsets.only(left: isRtl ? 0 : 18, right: isRtl ? 18 : 0),
+            child: Row(
+              mainAxisAlignment: MainAxisAlignment.spaceBetween,
+              children: q.options.map((opt) {
+                return Expanded(
+                  child: Text(
+                    opt,
+                    style: TextStyle(fontSize: isRtl ? 9.5 : 8.5, color: Colors.black),
+                  ),
+                );
+              }).toList(),
+            ),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildA4ShortItem(int index, SloQuestion q, bool isRtl, int marksEach) {
+    final label = index <= _romanNumerals.length ? _romanNumerals[index - 1] : "($index)";
+    final diag = _buildA4DiagramWidget(q, isRtl);
+    return Container(
+      margin: const EdgeInsets.only(bottom: 4.5),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              SizedBox(
+                width: 26,
+                child: Text(
+                  label,
+                  style: TextStyle(fontSize: isRtl ? 10 : 9.5, fontWeight: FontWeight.bold, color: Colors.black),
+                ),
+              ),
+              Expanded(
+                child: Text(
+                  q.questionText,
+                  style: TextStyle(fontSize: isRtl ? 10 : 9.5, height: 1.25, color: Colors.black),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                isRtl ? "($marksEach نمبر)" : "($marksEach Marks)",
+                style: const TextStyle(fontSize: 8.5, color: Color(0xFF424242)),
+              ),
+            ],
+          ),
+          if (diag != null) diag,
+        ],
+      ),
+    );
+  }
+
+  Widget _buildA4LongItem(int index, SloQuestion q, bool isRtl, int marksEach) {
+    final qNum = index + 2;
+    final diag = _buildA4DiagramWidget(q, isRtl);
+    return Container(
+      margin: const EdgeInsets.only(bottom: 5),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Text(
+                isRtl ? "سوال نمبر $qNum:  " : "Q.$qNum  ",
+                style: TextStyle(fontSize: isRtl ? 10 : 9.5, fontWeight: FontWeight.bold, color: Colors.black),
+              ),
+              Expanded(
+                child: Text(
+                  q.questionText,
+                  style: TextStyle(fontSize: isRtl ? 10 : 9.5, height: 1.25, color: Colors.black),
+                ),
+              ),
+              const SizedBox(width: 8),
+              Text(
+                isRtl ? "($marksEach نمبر)" : "($marksEach Marks)",
+                style: const TextStyle(fontSize: 8.5, color: Color(0xFF424242)),
+              ),
+            ],
+          ),
+          if (diag != null) diag,
+        ],
+      ),
+    );
+  }
+
+  Widget _buildA4RubricCard(String qPrefix, SloQuestion q, String ansText, String rubricLabel, bool isRtl) {
+    final diag = _buildA4DiagramWidget(q, isRtl);
+    return Container(
+      margin: const EdgeInsets.only(top: 5),
+      padding: const EdgeInsets.all(6),
+      decoration: BoxDecoration(
+        border: Border.all(color: const Color(0xFFD1D5DB)),
+        borderRadius: BorderRadius.circular(4),
+      ),
+      child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          Text(
+            "$qPrefix: ${q.questionText} [${q.cognitiveLevel}]",
+            style: const TextStyle(fontSize: 9, fontWeight: FontWeight.bold, color: Colors.black),
+          ),
+          if (diag != null) diag,
+          const SizedBox(height: 2),
+          Text(
+            "$rubricLabel: $ansText",
+            style: const TextStyle(fontSize: 8.5, color: Color(0xFF1E1B4B)),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildA4SignatureBlock(bool isRtl) {
+    return Container(
+      margin: const EdgeInsets.only(top: 14, bottom: 2),
+      padding: const EdgeInsets.only(top: 6),
+      decoration: const BoxDecoration(
+        border: Border(top: BorderSide(width: 0.8, color: Colors.black)),
+      ),
+      child: Row(
+        mainAxisAlignment: MainAxisAlignment.spaceBetween,
+        children: [
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              const Text("____________________________", style: TextStyle(fontSize: 9, color: Colors.black)),
+              const SizedBox(height: 2),
+              Text(
+                isRtl ? "دستخط متعلقہ استاد" : "Subject Teacher Signature",
+                style: const TextStyle(fontSize: 8.5, fontWeight: FontWeight.bold, color: Colors.black),
+              ),
+            ],
+          ),
+          Column(
+            crossAxisAlignment: CrossAxisAlignment.end,
+            children: [
+              const Text("____________________________", style: TextStyle(fontSize: 9, color: Colors.black)),
+              const SizedBox(height: 2),
+              Text(
+                isRtl ? "دستخط پرنسپل / کنٹرولر امتحانات" : "Principal / Exam Controller",
+                style: const TextStyle(fontSize: 8.5, fontWeight: FontWeight.bold, color: Colors.black),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Widget _buildGalleryInteractiveCanvas(BuildContext context, List<Widget> pages) {
+    if (pages.isEmpty) {
+      return const SizedBox.shrink();
+    }
+
+    final safePageIndex = _currentPreviewPageIndex.clamp(0, pages.length - 1);
     final isDark = Theme.of(context).brightness == Brightness.dark;
 
     return LayoutBuilder(
@@ -3413,10 +4482,7 @@ class _SloPaperBuilderScreenState extends ConsumerState<SloPaperBuilderScreen> {
                                       ),
                                     ],
                                   ),
-                                  child: Image(
-                                    image: pages[i].image,
-                                    fit: BoxFit.contain,
-                                  ),
+                                  child: pages[i],
                                 ),
                                 if (i < pages.length - 1) const SizedBox(height: 24),
                               ],
@@ -3436,7 +4502,7 @@ class _SloPaperBuilderScreenState extends ConsumerState<SloPaperBuilderScreen> {
                         });
                       },
                       itemBuilder: (context, idx) {
-                        final page = pages[idx];
+                        final pageWidget = pages[idx];
 
                         return GestureDetector(
                           onDoubleTap: _handleDoubleTap,
@@ -3463,10 +4529,7 @@ class _SloPaperBuilderScreenState extends ConsumerState<SloPaperBuilderScreen> {
                                       ),
                                     ],
                                   ),
-                                  child: Image(
-                                    image: page.image,
-                                    fit: BoxFit.contain, // 100% full paper fits from header to footer, ZERO CUTOFF!
-                                  ),
+                                  child: pageWidget,
                                 ),
                               ),
                             ),
@@ -3564,7 +4627,7 @@ class _SloPaperBuilderScreenState extends ConsumerState<SloPaperBuilderScreen> {
                             constraints: const BoxConstraints(),
                             padding: const EdgeInsets.all(3),
                             tooltip: "Previous Page",
-                            onPressed: _currentPreviewPageIndex > 0
+                            onPressed: safePageIndex > 0
                                 ? () {
                                     _pagePreviewController.previousPage(
                                       duration: const Duration(milliseconds: 250),
@@ -3576,7 +4639,7 @@ class _SloPaperBuilderScreenState extends ConsumerState<SloPaperBuilderScreen> {
                           Padding(
                             padding: const EdgeInsets.symmetric(horizontal: 2),
                             child: Text(
-                              "${_currentPreviewPageIndex + 1}/${pages.length}",
+                              "${safePageIndex + 1}/${pages.length}",
                               style: const TextStyle(color: Colors.white, fontSize: 11, fontWeight: FontWeight.bold),
                             ),
                           ),
@@ -3586,7 +4649,7 @@ class _SloPaperBuilderScreenState extends ConsumerState<SloPaperBuilderScreen> {
                             constraints: const BoxConstraints(),
                             padding: const EdgeInsets.all(3),
                             tooltip: "Next Page",
-                            onPressed: _currentPreviewPageIndex < pages.length - 1
+                            onPressed: safePageIndex < pages.length - 1
                                 ? () {
                                     _pagePreviewController.nextPage(
                                       duration: const Duration(milliseconds: 250),

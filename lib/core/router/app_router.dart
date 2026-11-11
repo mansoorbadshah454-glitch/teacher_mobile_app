@@ -23,6 +23,7 @@ import 'package:teacher_mobile_app/features/notebook/models/note_model.dart';
 import 'package:teacher_mobile_app/features/timetable/presentation/screens/timetable_screen.dart';
 import 'package:teacher_mobile_app/features/syllabus/presentation/screens/my_syllabuses_screen.dart';
 import 'package:teacher_mobile_app/features/syllabus/presentation/screens/syllabus_detail_screen.dart';
+import 'package:teacher_mobile_app/features/syllabus/presentation/screens/scan_book_index_screen.dart';
 import 'package:teacher_mobile_app/features/syllabus/providers/syllabus_provider.dart';
 import 'package:teacher_mobile_app/features/exam/presentation/screens/exam_classes_screen.dart';
 import 'package:teacher_mobile_app/features/exam/presentation/screens/marks_entry_screen.dart';
@@ -157,6 +158,10 @@ final appRouter = GoRouter(
         final assignment = state.extra as SyllabusAssignment;
         return SyllabusDetailScreen(assignment: assignment);
       },
+    ),
+    GoRoute(
+      path: '/scan-book-index',
+      builder: (context, state) => const ScanBookIndexScreen(),
     ),
     GoRoute(
       path: '/teacher-exams',

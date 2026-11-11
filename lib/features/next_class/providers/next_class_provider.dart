@@ -8,7 +8,7 @@ import 'package:teacher_mobile_app/core/services/local_db_service.dart';
 import 'package:teacher_mobile_app/core/services/sync_queue_service.dart';
 import 'package:uuid/uuid.dart';
 
-enum NextClassViewMode { classes, subjects, students, scheduleTest, test, activeTestScore, homework, assignHomework }
+enum NextClassViewMode { classes, subjects, students, scheduleTest, test, activeTestScore, homework, assignHomework, syllabus }
 
 class ScheduleTestDraft {
   final DateTime? date;
@@ -631,7 +631,7 @@ class NextClassNotifier extends StateNotifier<NextClassState> {
       state = state.copyWith(viewMode: NextClassViewMode.scheduleTest);
     } else if (state.viewMode == NextClassViewMode.assignHomework) {
       state = state.copyWith(viewMode: NextClassViewMode.homework);
-    } else if (state.viewMode == NextClassViewMode.scheduleTest || state.viewMode == NextClassViewMode.homework) {
+    } else if (state.viewMode == NextClassViewMode.scheduleTest || state.viewMode == NextClassViewMode.homework || state.viewMode == NextClassViewMode.syllabus) {
       state = state.copyWith(viewMode: NextClassViewMode.students);
     } else if (state.viewMode == NextClassViewMode.students) {
       state = state.copyWith(
@@ -665,6 +665,10 @@ class NextClassNotifier extends StateNotifier<NextClassState> {
 
   void goToHomeworkMode() {
     state = state.copyWith(viewMode: NextClassViewMode.homework, homeworkReportsPageIndex: 0);
+  }
+
+  void goToSyllabusMode() {
+    state = state.copyWith(viewMode: NextClassViewMode.syllabus);
   }
 
   void goToAssignHomeworkMode({Map<String, dynamic>? editHw}) {

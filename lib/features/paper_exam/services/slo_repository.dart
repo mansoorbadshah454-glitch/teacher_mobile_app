@@ -1,73 +1,182 @@
 import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/foundation.dart';
+import 'package:teacher_mobile_app/core/services/local_db_service.dart';
 import 'package:teacher_mobile_app/features/paper_exam/models/slo_paper_models.dart';
 
 class SloRepository {
   static final FirebaseFirestore _firestore = FirebaseFirestore.instance;
   static const String collectionPath = 'global_slo_chapter_banks';
+  static const String _localBankKeyPrefix = 'slo_bank_v1_';
 
-  /// 1 Read: Fetches the entire chapter bank from Firestore
-  static Future<ChapterBankDoc?> getChapterBank(String docId) async {
+  /// In-memory ultra-fast cache for 0ms synchronous access
+  static final Map<String, ChapterBankDoc> _memoryCache = <String, ChapterBankDoc>{};
+
+  /// 0ms Synchronous lookup from RAM or Hive Offline Storage
+  static ChapterBankDoc? getChapterBankLocalSync(String docId) {
+    if (_memoryCache.containsKey(docId)) {
+      return _memoryCache[docId];
+    }
     try {
-      final docSnap = await _firestore.collection(collectionPath).doc(docId).get();
-      if (!docSnap.exists || docSnap.data() == null) {
-        return null;
+      final raw = LocalDbService.getCache('$_localBankKeyPrefix$docId');
+      if (raw is Map) {
+        final bank = ChapterBankDoc.fromJson(Map<String, dynamic>.from(raw));
+        if (bank.questions.isNotEmpty) {
+          _memoryCache[docId] = bank;
+          return bank;
+        }
       }
-      return ChapterBankDoc.fromJson(docSnap.data()!);
     } catch (e) {
-      debugPrint('⚠️ Error fetching chapter bank ($docId): $e');
-      return null;
+      debugPrint('⚠️ [SloRepository] Local cache read error ($docId): $e');
+    }
+    return null;
+  }
+
+  /// Saves a chapter bank to RAM + Hive Offline Storage immediately
+  static Future<void> saveBankToLocalCache(ChapterBankDoc bank) async {
+    _memoryCache[bank.docId] = bank;
+    try {
+      await LocalDbService.saveCache('$_localBankKeyPrefix${bank.docId}', bank.toJson());
+    } catch (e) {
+      debugPrint('⚠️ [SloRepository] Local cache write error (${bank.docId}): $e');
     }
   }
 
-  /// Saves or merges newly generated SLOs and questions into the single Firestore document
+  /// Fetches the chapter bank:
+  /// 1. Returns instant local offline cache if available (unless [forceRemote] is true).
+  /// 2. Falls back to Firestore cache -> Firestore server with short timeout so offline never hangs.
+  static Future<ChapterBankDoc?> getChapterBank(String docId, {bool forceRemote = false}) async {
+    final localBank = getChapterBankLocalSync(docId);
+    if (localBank != null && !forceRemote) {
+      // Trigger a silent non-blocking background refresh from Firestore
+      _refreshBankInBackground(docId);
+      return localBank;
+    }
+
+    // Try Firestore local persistence cache first for instant offline response
+    if (!forceRemote) {
+      try {
+        final cacheSnap = await _firestore
+            .collection(collectionPath)
+            .doc(docId)
+            .get(const GetOptions(source: Source.cache));
+        if (cacheSnap.exists && cacheSnap.data() != null) {
+          final cachedBank = ChapterBankDoc.fromJson(cacheSnap.data()!);
+          if (cachedBank.questions.isNotEmpty) {
+            await saveBankToLocalCache(cachedBank);
+            _refreshBankInBackground(docId);
+            return cachedBank;
+          }
+        }
+      } catch (_) {}
+    }
+
+    // Try server with a fast 3-second timeout so weak/offline internet never freezes UI
+    try {
+      final docSnap = await _firestore
+          .collection(collectionPath)
+          .doc(docId)
+          .get()
+          .timeout(const Duration(seconds: 3));
+      if (!docSnap.exists || docSnap.data() == null) {
+        return localBank;
+      }
+      final remoteBank = ChapterBankDoc.fromJson(docSnap.data()!);
+      if (remoteBank.questions.isNotEmpty) {
+        await saveBankToLocalCache(remoteBank);
+      }
+      return remoteBank;
+    } catch (e) {
+      debugPrint('⚠️ [SloRepository] Offline or timeout fetching chapter bank ($docId): $e');
+      return localBank;
+    }
+  }
+
+  static Future<void> _refreshBankInBackground(String docId) async {
+    try {
+      final docSnap = await _firestore
+          .collection(collectionPath)
+          .doc(docId)
+          .get(const GetOptions(source: Source.server))
+          .timeout(const Duration(seconds: 4));
+      if (docSnap.exists && docSnap.data() != null) {
+        final remoteBank = ChapterBankDoc.fromJson(docSnap.data()!);
+        if (remoteBank.questions.isNotEmpty) {
+          await saveBankToLocalCache(remoteBank);
+        }
+      }
+    } catch (_) {
+      // Ignore background refresh errors when offline
+    }
+  }
+
+  /// Saves or merges newly generated SLOs and questions into both Local Offline Cache and Firestore
   /// without duplicating existing questions.
   static Future<void> saveOrMergeChapterBank(ChapterBankDoc newDoc) async {
+    // 1. Always merge with any existing local bank first so offline data is immediately ready
+    final existingLocal = getChapterBankLocalSync(newDoc.docId);
+    if (existingLocal != null) {
+      final mergedLocal = _mergeBanks(existingLocal, newDoc);
+      await saveBankToLocalCache(mergedLocal);
+    } else {
+      await saveBankToLocalCache(newDoc);
+    }
+
     try {
       final docRef = _firestore.collection(collectionPath).doc(newDoc.docId);
-      final existingDoc = await docRef.get();
+      DocumentSnapshot<Map<String, dynamic>>? existingDoc;
+      try {
+        existingDoc = await docRef.get().timeout(const Duration(seconds: 4));
+      } catch (_) {
+        existingDoc = null;
+      }
 
-      if (!existingDoc.exists || existingDoc.data() == null) {
-        // Document does not exist yet -> Write fresh
-        await docRef.set(newDoc.toJson());
-        debugPrint('✅ [SloRepository] Created new chapter bank: ${newDoc.docId}');
+      if (existingDoc == null || !existingDoc.exists || existingDoc.data() == null) {
+        final bankToSave = getChapterBankLocalSync(newDoc.docId) ?? newDoc;
+        await docRef.set(bankToSave.toJson(), SetOptions(merge: true)).timeout(
+          const Duration(seconds: 4),
+          onTimeout: () {},
+        );
+        debugPrint('✅ [SloRepository] Saved chapter bank: ${newDoc.docId}');
         return;
       }
 
-      // Merge with existing
       final currentBank = ChapterBankDoc.fromJson(existingDoc.data()!);
+      final updatedBank = _mergeBanks(currentBank, newDoc);
 
-      // Merge SLOs (by sloCode)
-      final Map<String, SloItem> mergedSlos = {
-        for (var s in currentBank.slos) s.sloCode: s,
-      };
-      for (var s in newDoc.slos) {
-        mergedSlos[s.sloCode] = s;
-      }
-
-      // Merge Questions (by id or normalized question text)
-      final Map<String, SloQuestion> mergedQuestions = {
-        for (var q in currentBank.questions) q.questionText.trim().toLowerCase(): q,
-      };
-      for (var q in newDoc.questions) {
-        mergedQuestions[q.questionText.trim().toLowerCase()] = q;
-      }
-
-      final updatedBank = currentBank.copyWith(
-        chapterTitle: currentBank.chapterTitle.isNotEmpty
-            ? currentBank.chapterTitle
-            : newDoc.chapterTitle,
-        slos: mergedSlos.values.toList(),
-        questions: mergedQuestions.values.toList(),
-        updatedAt: FieldValue.serverTimestamp(),
+      await saveBankToLocalCache(updatedBank);
+      await docRef.set(updatedBank.toJson(), SetOptions(merge: true)).timeout(
+        const Duration(seconds: 4),
+        onTimeout: () {},
       );
-
-      await docRef.set(updatedBank.toJson(), SetOptions(merge: true));
       debugPrint('✅ [SloRepository] Merged into chapter bank: ${newDoc.docId}');
     } catch (e) {
-      debugPrint('⚠️ Error saving chapter bank: $e');
-      rethrow;
+      debugPrint('⚠️ [SloRepository] Saved locally, Firestore sync deferred: $e');
     }
+  }
+
+  static ChapterBankDoc _mergeBanks(ChapterBankDoc currentBank, ChapterBankDoc newDoc) {
+    final Map<String, SloItem> mergedSlos = {
+      for (var s in currentBank.slos) s.sloCode: s,
+    };
+    for (var s in newDoc.slos) {
+      mergedSlos[s.sloCode] = s;
+    }
+
+    final Map<String, SloQuestion> mergedQuestions = {
+      for (var q in currentBank.questions) q.questionText.trim().toLowerCase(): q,
+    };
+    for (var q in newDoc.questions) {
+      mergedQuestions[q.questionText.trim().toLowerCase()] = q;
+    }
+
+    return currentBank.copyWith(
+      chapterTitle: currentBank.chapterTitle.isNotEmpty
+          ? currentBank.chapterTitle
+          : newDoc.chapterTitle,
+      slos: mergedSlos.values.toList(),
+      questions: mergedQuestions.values.toList(),
+      updatedAt: FieldValue.serverTimestamp(),
+    );
   }
 
   /// Builds a customized question paper based on selected SLOs and blueprint ratios
