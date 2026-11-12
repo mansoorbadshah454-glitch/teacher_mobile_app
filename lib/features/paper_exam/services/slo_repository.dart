@@ -11,18 +11,96 @@ class SloRepository {
   /// In-memory ultra-fast cache for 0ms synchronous access
   static final Map<String, ChapterBankDoc> _memoryCache = <String, ChapterBankDoc>{};
 
-  /// 0ms Synchronous lookup from RAM or Hive Offline Storage
+  /// Detects legacy dummy/template fallback questions so they can never pollute any paper again
+  static bool isDummyOrCorruptedQuestion(SloQuestion q) {
+    final text = q.questionText.trim();
+    final ans = q.correctAnswer.trim();
+    final rub = q.rubric.trim();
+    final opts = q.options.join(' ');
+
+    if (text.isEmpty) return true;
+
+    // Urdu dummy fallback signatures
+    if (text.contains('کے مطابق درست بیان کا انتخاب کریں') ||
+        text.contains('سے متعلق اہم نکتہ کیا ہے') ||
+        opts.contains('بنیادی اصول اور تعریف') ||
+        opts.contains('ثانوی عمل') ||
+        opts.contains('غیر متعلقہ عنصر') ||
+        ans == 'الف) بنیادی اصول اور تعریف' ||
+        ans == 'مختصر تعریف کے ۲ نمبر اور درست مثال کا ۱ نمبر۔' ||
+        rub == 'واضح تعریف اور درست تصور پیش کرنے پر پورے نمبر دیں۔') {
+      return true;
+    }
+
+    // English dummy fallback signatures
+    if (text.contains('which statement best aligns with:') ||
+        opts.contains('It represents a core principle of') ||
+        opts.contains('It contradicts the standard law') ||
+        (text.startsWith('Briefly explain the concept and significance of: "') &&
+            rub == 'Award 2 marks for accurate explanation and 1 mark for relevant textbook example.')) {
+      return true;
+    }
+
+    return false;
+  }
+
+  /// Detects legacy dummy SLO statements
+  static bool _isDummySlo(SloItem s) {
+    final st = s.statement.trim();
+    return st.contains('کے بنیادی تصورات اور تعریفات کو سمجھنا') ||
+        st == 'اہم اصولوں کی وضاحت اور مثالوں سے اطلاق کرنا' ||
+        st == 'تفصیلی سوالات اور عملی مسائل حل کرنا';
+  }
+
+  /// Cleans out any dummy questions from a bank; returns null if no authentic questions remain
+  static ChapterBankDoc? cleanAndValidateBank(ChapterBankDoc? bank) {
+    if (bank == null) return null;
+    final validQuestions = bank.questions.where((q) => !isDummyOrCorruptedQuestion(q)).toList();
+    if (validQuestions.isEmpty) {
+      return null;
+    }
+    final validSlos = bank.slos.where((s) => !_isDummySlo(s)).toList();
+    final cleanTitle = bank.chapterTitle.replaceAll(RegExp(r'\s*\(Urdu\)\s*', caseSensitive: false), '').trim();
+
+    return bank.copyWith(
+      chapterTitle: cleanTitle.isNotEmpty ? cleanTitle : bank.chapterTitle,
+      slos: validSlos.isNotEmpty ? validSlos : bank.slos,
+      questions: validQuestions,
+    );
+  }
+
+  /// Purges a corrupted/dummy bank from local cache and Firestore
+  static Future<void> purgeCorruptedBank(String docId) async {
+    _memoryCache.remove(docId);
+    try {
+      await LocalDbService.saveCache('$_localBankKeyPrefix$docId', <String, dynamic>{});
+    } catch (_) {}
+    try {
+      await _firestore.collection(collectionPath).doc(docId).delete().timeout(const Duration(seconds: 3));
+    } catch (_) {}
+  }
+
+  /// 0ms Synchronous lookup from RAM or Hive Offline Storage (with automatic dummy purge)
   static ChapterBankDoc? getChapterBankLocalSync(String docId) {
     if (_memoryCache.containsKey(docId)) {
-      return _memoryCache[docId];
+      final cleaned = cleanAndValidateBank(_memoryCache[docId]);
+      if (cleaned == null) {
+        _memoryCache.remove(docId);
+        return null;
+      }
+      return cleaned;
     }
     try {
       final raw = LocalDbService.getCache('$_localBankKeyPrefix$docId');
-      if (raw is Map) {
+      if (raw is Map && raw.isNotEmpty) {
         final bank = ChapterBankDoc.fromJson(Map<String, dynamic>.from(raw));
-        if (bank.questions.isNotEmpty) {
-          _memoryCache[docId] = bank;
-          return bank;
+        final cleaned = cleanAndValidateBank(bank);
+        if (cleaned != null && cleaned.questions.isNotEmpty) {
+          _memoryCache[docId] = cleaned;
+          return cleaned;
+        } else {
+          // Purge poisoned local cache
+          LocalDbService.saveCache('$_localBankKeyPrefix$docId', <String, dynamic>{});
         }
       }
     } catch (e) {
@@ -33,11 +111,13 @@ class SloRepository {
 
   /// Saves a chapter bank to RAM + Hive Offline Storage immediately
   static Future<void> saveBankToLocalCache(ChapterBankDoc bank) async {
-    _memoryCache[bank.docId] = bank;
+    final cleaned = cleanAndValidateBank(bank);
+    if (cleaned == null) return;
+    _memoryCache[cleaned.docId] = cleaned;
     try {
-      await LocalDbService.saveCache('$_localBankKeyPrefix${bank.docId}', bank.toJson());
+      await LocalDbService.saveCache('$_localBankKeyPrefix${cleaned.docId}', cleaned.toJson());
     } catch (e) {
-      debugPrint('⚠️ [SloRepository] Local cache write error (${bank.docId}): $e');
+      debugPrint('⚠️ [SloRepository] Local cache write error (${cleaned.docId}): $e');
     }
   }
 
@@ -60,8 +140,8 @@ class SloRepository {
             .doc(docId)
             .get(const GetOptions(source: Source.cache));
         if (cacheSnap.exists && cacheSnap.data() != null) {
-          final cachedBank = ChapterBankDoc.fromJson(cacheSnap.data()!);
-          if (cachedBank.questions.isNotEmpty) {
+          final cachedBank = cleanAndValidateBank(ChapterBankDoc.fromJson(cacheSnap.data()!));
+          if (cachedBank != null && cachedBank.questions.isNotEmpty) {
             await saveBankToLocalCache(cachedBank);
             _refreshBankInBackground(docId);
             return cachedBank;
@@ -80,11 +160,15 @@ class SloRepository {
       if (!docSnap.exists || docSnap.data() == null) {
         return localBank;
       }
-      final remoteBank = ChapterBankDoc.fromJson(docSnap.data()!);
-      if (remoteBank.questions.isNotEmpty) {
+      final remoteBank = cleanAndValidateBank(ChapterBankDoc.fromJson(docSnap.data()!));
+      if (remoteBank != null && remoteBank.questions.isNotEmpty) {
         await saveBankToLocalCache(remoteBank);
+        return remoteBank;
+      } else {
+        // Remote doc was dummy/corrupted -> purge it
+        purgeCorruptedBank(docId);
+        return localBank;
       }
-      return remoteBank;
     } catch (e) {
       debugPrint('⚠️ [SloRepository] Offline or timeout fetching chapter bank ($docId): $e');
       return localBank;
@@ -99,8 +183,8 @@ class SloRepository {
           .get(const GetOptions(source: Source.server))
           .timeout(const Duration(seconds: 4));
       if (docSnap.exists && docSnap.data() != null) {
-        final remoteBank = ChapterBankDoc.fromJson(docSnap.data()!);
-        if (remoteBank.questions.isNotEmpty) {
+        final remoteBank = cleanAndValidateBank(ChapterBankDoc.fromJson(docSnap.data()!));
+        if (remoteBank != null && remoteBank.questions.isNotEmpty) {
           await saveBankToLocalCache(remoteBank);
         }
       }
@@ -110,19 +194,35 @@ class SloRepository {
   }
 
   /// Saves or merges newly generated SLOs and questions into both Local Offline Cache and Firestore
-  /// without duplicating existing questions.
-  static Future<void> saveOrMergeChapterBank(ChapterBankDoc newDoc) async {
-    // 1. Always merge with any existing local bank first so offline data is immediately ready
-    final existingLocal = getChapterBankLocalSync(newDoc.docId);
+  /// without duplicating existing questions. When [replaceExisting] is true (e.g. fresh AI scan),
+  /// replaces old chapter bank cleanly.
+  static Future<void> saveOrMergeChapterBank(
+    ChapterBankDoc newDoc, {
+    bool replaceExisting = false,
+  }) async {
+    final cleanedNew = cleanAndValidateBank(newDoc);
+    if (cleanedNew == null) return;
+
+    // 1. Update local bank immediately
+    final existingLocal = replaceExisting ? null : getChapterBankLocalSync(cleanedNew.docId);
     if (existingLocal != null) {
-      final mergedLocal = _mergeBanks(existingLocal, newDoc);
+      final mergedLocal = _mergeBanks(existingLocal, cleanedNew);
       await saveBankToLocalCache(mergedLocal);
     } else {
-      await saveBankToLocalCache(newDoc);
+      await saveBankToLocalCache(cleanedNew);
     }
 
     try {
-      final docRef = _firestore.collection(collectionPath).doc(newDoc.docId);
+      final docRef = _firestore.collection(collectionPath).doc(cleanedNew.docId);
+      if (replaceExisting) {
+        await docRef.set(cleanedNew.toJson()).timeout(
+          const Duration(seconds: 5),
+          onTimeout: () {},
+        );
+        debugPrint('✅ [SloRepository] Replaced chapter bank with fresh AI scan: ${cleanedNew.docId}');
+        return;
+      }
+
       DocumentSnapshot<Map<String, dynamic>>? existingDoc;
       try {
         existingDoc = await docRef.get().timeout(const Duration(seconds: 4));
@@ -131,24 +231,24 @@ class SloRepository {
       }
 
       if (existingDoc == null || !existingDoc.exists || existingDoc.data() == null) {
-        final bankToSave = getChapterBankLocalSync(newDoc.docId) ?? newDoc;
+        final bankToSave = getChapterBankLocalSync(cleanedNew.docId) ?? cleanedNew;
         await docRef.set(bankToSave.toJson(), SetOptions(merge: true)).timeout(
           const Duration(seconds: 4),
           onTimeout: () {},
         );
-        debugPrint('✅ [SloRepository] Saved chapter bank: ${newDoc.docId}');
+        debugPrint('✅ [SloRepository] Saved chapter bank: ${cleanedNew.docId}');
         return;
       }
 
-      final currentBank = ChapterBankDoc.fromJson(existingDoc.data()!);
-      final updatedBank = _mergeBanks(currentBank, newDoc);
+      final currentBank = cleanAndValidateBank(ChapterBankDoc.fromJson(existingDoc.data()!));
+      final updatedBank = currentBank != null ? _mergeBanks(currentBank, cleanedNew) : cleanedNew;
 
       await saveBankToLocalCache(updatedBank);
-      await docRef.set(updatedBank.toJson(), SetOptions(merge: true)).timeout(
+      await docRef.set(updatedBank.toJson()).timeout(
         const Duration(seconds: 4),
         onTimeout: () {},
       );
-      debugPrint('✅ [SloRepository] Merged into chapter bank: ${newDoc.docId}');
+      debugPrint('✅ [SloRepository] Merged into chapter bank: ${cleanedNew.docId}');
     } catch (e) {
       debugPrint('⚠️ [SloRepository] Saved locally, Firestore sync deferred: $e');
     }

@@ -401,15 +401,26 @@ class _SloPaperBuilderScreenState extends ConsumerState<SloPaperBuilderScreen> {
     _selectedChapters
       ..clear()
       ..addAll(d.selectedChapters.isNotEmpty ? d.selectedChapters : {d.chapterNumber});
+
+    final cleanedBanks = <int, ChapterBankDoc>{};
+    d.cachedBanksByChapter.forEach((chKey, bankVal) {
+      final cleaned = SloRepository.cleanAndValidateBank(bankVal);
+      if (cleaned != null && cleaned.questions.isNotEmpty) {
+        cleanedBanks[chKey] = cleaned;
+      }
+    });
     _cachedBanksByChapter
       ..clear()
-      ..addAll(d.cachedBanksByChapter);
+      ..addAll(cleanedBanks);
+
     _chapterTitleCtrl.text = d.chapterTitle;
     _customPublisherCtrl.text = d.customPublisher;
-    _isRtlSubject = d.isRtlSubject;
+    _isRtlSubject = d.isRtlSubject ||
+        _selectedSubject == "Urdu" ||
+        _selectedSubject == "Islamiyat";
     _isCustomPublisher = d.isCustomPublisher;
-    _loadedBank = d.loadedBank;
-    _isCacheAvailable = d.loadedBank != null && d.loadedBank!.questions.isNotEmpty;
+    _loadedBank = SloRepository.cleanAndValidateBank(d.loadedBank);
+    _isCacheAvailable = _loadedBank != null && _loadedBank!.questions.isNotEmpty;
     if (_isCacheAvailable) {
       _statusMessage = "⚡ Instant SLO Bank Available (${_loadedBank!.questions.length} questions in cache)";
     }
@@ -431,17 +442,33 @@ class _SloPaperBuilderScreenState extends ConsumerState<SloPaperBuilderScreen> {
     _timeAllowedCtrl.text = d.timeAllowed;
     _totalMarks = d.totalMarks;
     _totalMarksCtrl.text = d.totalMarks.toString();
-    _activePaperQuestions = List<SloQuestion>.from(d.activePaperQuestions);
-    _activePaperDocId = d.activePaperDocId;
-    _submittedPaperId = d.submittedPaperId;
-    _step3ViewMode = d.step3ViewMode;
-    _previewIsAnswerKey = d.previewIsAnswerKey;
-    _slotHistory = {
-      for (final entry in d.slotHistory.entries) entry.key: List<SloQuestion>.from(entry.value),
-    };
-    _slotHistoryIndex = Map<int, int>.from(d.slotHistoryIndex);
-    _cachedPaperPdfBytes = d.cachedPaperPdfBytes;
-    _cachedAnswerKeyPdfBytes = d.cachedAnswerKeyPdfBytes;
+
+    final validActiveQuestions = d.activePaperQuestions
+        .where((q) => !SloRepository.isDummyOrCorruptedQuestion(q))
+        .toList();
+    _activePaperQuestions = validActiveQuestions;
+
+    if (validActiveQuestions.isEmpty && d.activePaperQuestions.isNotEmpty) {
+      // Previous draft contained dummy fallback questions -> reset to Step 1 cleanly
+      _currentStep = 0;
+      _activePaperDocId = null;
+      _slotHistory.clear();
+      _slotHistoryIndex.clear();
+      _cachedPaperPdfBytes = null;
+      _cachedAnswerKeyPdfBytes = null;
+    } else {
+      _activePaperDocId = d.activePaperDocId;
+      _submittedPaperId = d.submittedPaperId;
+      _step3ViewMode = d.step3ViewMode;
+      _previewIsAnswerKey = d.previewIsAnswerKey;
+      _slotHistory = {
+        for (final entry in d.slotHistory.entries)
+          entry.key: entry.value.where((q) => !SloRepository.isDummyOrCorruptedQuestion(q)).toList(),
+      };
+      _slotHistoryIndex = Map<int, int>.from(d.slotHistoryIndex);
+      _cachedPaperPdfBytes = d.cachedPaperPdfBytes;
+      _cachedAnswerKeyPdfBytes = d.cachedAnswerKeyPdfBytes;
+    }
 
     if (_loadedBank == null) {
       _checkFirestoreCache();
@@ -960,12 +987,17 @@ class _SloPaperBuilderScreenState extends ConsumerState<SloPaperBuilderScreen> {
         _statusMessage = "Saving to crowdsourced Firestore cache...";
       });
 
-      await SloRepository.saveOrMergeChapterBank(generatedBank);
+      await SloRepository.saveOrMergeChapterBank(generatedBank, replaceExisting: true);
       _startCooldown();
 
       if (mounted) {
         setState(() {
           _isGeneratingAi = false;
+          _activePaperQuestions.clear();
+          _slotHistory.clear();
+          _slotHistoryIndex.clear();
+          _cachedPaperPdfBytes = null;
+          _cachedAnswerKeyPdfBytes = null;
         });
         await _checkFirestoreCache();
         if (mounted && _isCacheAvailable) {
@@ -1031,12 +1063,17 @@ class _SloPaperBuilderScreenState extends ConsumerState<SloPaperBuilderScreen> {
         _statusMessage = "Saving to crowdsourced Firestore cache...";
       });
 
-      await SloRepository.saveOrMergeChapterBank(generatedBank);
+      await SloRepository.saveOrMergeChapterBank(generatedBank, replaceExisting: true);
       _startCooldown();
 
       if (mounted) {
         setState(() {
           _isGeneratingAi = false;
+          _activePaperQuestions.clear();
+          _slotHistory.clear();
+          _slotHistoryIndex.clear();
+          _cachedPaperPdfBytes = null;
+          _cachedAnswerKeyPdfBytes = null;
         });
         await _checkFirestoreCache();
         if (mounted && _isCacheAvailable) {
@@ -1771,25 +1808,52 @@ class _SloPaperBuilderScreenState extends ConsumerState<SloPaperBuilderScreen> {
 
     final logoBytes = _schoolLogoBytes ?? await _getSchoolLogoBytes();
 
+    // Defensive fallback ChapterBankDoc in case _loadedBank is temporarily null
+    final sortedChs = _selectedChapters.toList()..sort();
+    final firstCh = sortedChs.isNotEmpty ? sortedChs.first : _chapterNumber;
+    final fallbackTitle = _chapterTitleCtrl.text.trim().isNotEmpty
+        ? _chapterTitleCtrl.text.trim()
+        : (_loadedBank?.chapterTitle.isNotEmpty == true
+            ? _loadedBank!.chapterTitle
+            : "Chapters ${sortedChs.join(', ')}");
+
+    final safeBank = _loadedBank ??
+        ChapterBankDoc(
+          docId: ChapterBankDoc.generateDocId(
+            publisher: _effectivePublisher,
+            grade: _selectedGrade,
+            subject: _selectedSubject,
+            chapterNumber: firstCh,
+          ),
+          publisher: _effectivePublisher,
+          grade: _selectedGrade,
+          subject: _selectedSubject,
+          chapterNumber: firstCh,
+          chapterTitle: fallbackTitle,
+          isRtl: _isRtlSubject,
+          slos: const [],
+          questions: _activePaperQuestions,
+        );
+
     if (isAnswerKey) {
       return await SloPdfGenerator.generateAnswerKeyPdf(
         blueprint: blueprint,
-        chapterBank: _loadedBank!,
+        chapterBank: safeBank,
         questions: _activePaperQuestions,
-        schoolLogoBytes: logoBytes,
+        schoolLogoBytes: (logoBytes != null && logoBytes.isNotEmpty) ? logoBytes : null,
       );
     } else {
       return await SloPdfGenerator.generateQuestionPaperPdf(
         blueprint: blueprint,
-        chapterBank: _loadedBank!,
+        chapterBank: safeBank,
         questions: _activePaperQuestions,
-        schoolLogoBytes: logoBytes,
+        schoolLogoBytes: (logoBytes != null && logoBytes.isNotEmpty) ? logoBytes : null,
       );
     }
   }
 
   Future<void> _sendToPrincipal() async {
-    if (_loadedBank == null || _activePaperQuestions.isEmpty) {
+    if (_activePaperQuestions.isEmpty) {
       _showToast("No questions to send. Please generate paper first.");
       return;
     }
@@ -1902,33 +1966,42 @@ class _SloPaperBuilderScreenState extends ConsumerState<SloPaperBuilderScreen> {
       final teacherName = (teacherData?['fullName'] ?? teacherData?['name'] ?? teacherData?['displayName'] ?? "Subject Teacher").toString();
       final teacherUid = (teacherData?['uid'] ?? ref.read(currentUserProvider)?.uid ?? "").toString();
 
-      // 1. Generate Both Exact Vector Question Paper PDF & Answer Key PDF Together
-      final Uint8List pdfBytes = await _generatePdfBytes(isAnswerKey: false);
+      // 1. Generate Both Exact Vector Question Paper PDF & Answer Key PDF Together defensively
+      Uint8List? pdfBytes;
+      try {
+        pdfBytes = await _generatePdfBytes(isAnswerKey: false);
+      } catch (pdfErr) {
+        debugPrint("Question paper PDF generation notice: $pdfErr");
+      }
+
       Uint8List? answerPdfBytes;
       try {
         answerPdfBytes = await _generatePdfBytes(isAnswerKey: true);
       } catch (e) {
-        debugPrint("Answer key PDF generation error: $e");
+        debugPrint("Answer key PDF generation notice: $e");
       }
 
       // Reuse existing paper document ID if re-sending or create new
-      final paperDocRef = _submittedPaperId != null
-          ? FirebaseFirestore.instance.collection('schools').doc(schoolId).collection('exam_papers').doc(_submittedPaperId)
+      final bool hasValidExistingId = _submittedPaperId != null && _submittedPaperId!.trim().isNotEmpty;
+      final paperDocRef = hasValidExistingId
+          ? FirebaseFirestore.instance.collection('schools').doc(schoolId).collection('exam_papers').doc(_submittedPaperId!.trim())
           : FirebaseFirestore.instance.collection('schools').doc(schoolId).collection('exam_papers').doc();
 
       // 2. Upload both PDFs to Firebase Storage defensively
       String? downloadUrl;
       String? answerDownloadUrl;
       try {
-        final storagePath = 'schools/$schoolId/exam_papers/${paperDocRef.id}.pdf';
-        final storageRef = FirebaseStorage.instance.ref().child(storagePath);
-        final uploadTask = await storageRef.putData(
-          pdfBytes,
-          SettableMetadata(contentType: 'application/pdf'),
-        );
-        downloadUrl = await uploadTask.ref.getDownloadURL();
+        if (pdfBytes != null && pdfBytes.isNotEmpty) {
+          final storagePath = 'schools/$schoolId/exam_papers/${paperDocRef.id}.pdf';
+          final storageRef = FirebaseStorage.instance.ref().child(storagePath);
+          final uploadTask = await storageRef.putData(
+            pdfBytes,
+            SettableMetadata(contentType: 'application/pdf'),
+          );
+          downloadUrl = await uploadTask.ref.getDownloadURL();
+        }
 
-        if (answerPdfBytes != null) {
+        if (answerPdfBytes != null && answerPdfBytes.isNotEmpty) {
           final ansPath = 'schools/$schoolId/exam_papers/${paperDocRef.id}_answers.pdf';
           final ansRef = FirebaseStorage.instance.ref().child(ansPath);
           final ansTask = await ansRef.putData(
@@ -1938,7 +2011,7 @@ class _SloPaperBuilderScreenState extends ConsumerState<SloPaperBuilderScreen> {
           answerDownloadUrl = await ansTask.ref.getDownloadURL();
         }
       } catch (storageError) {
-        debugPrint("Warning: Firebase Storage upload failed: $storageError. Continuing with document payload.");
+        debugPrint("Warning: Firebase Storage upload notice: $storageError. Continuing with document payload.");
       }
 
       // 3. Serialize questions list for Canva rendering
@@ -1973,7 +2046,9 @@ class _SloPaperBuilderScreenState extends ConsumerState<SloPaperBuilderScreen> {
       final sortedChs = _selectedChapters.toList()..sort();
       final resolvedChapterTitle = (_loadedBank?.chapterTitle != null && _loadedBank!.chapterTitle.trim().isNotEmpty)
           ? _loadedBank!.chapterTitle.trim()
-          : "Chapters ${sortedChs.join(', ')}";
+          : (_chapterTitleCtrl.text.trim().isNotEmpty
+              ? _chapterTitleCtrl.text.trim()
+              : "Chapters ${sortedChs.join(', ')}");
 
       final paperPayload = <String, dynamic>{
         'examTitle': _examTitleCtrl.text.trim().isNotEmpty ? _examTitleCtrl.text.trim() : "First Term Examination 2026",
@@ -3532,7 +3607,7 @@ class _SloPaperBuilderScreenState extends ConsumerState<SloPaperBuilderScreen> {
 
                   // Instant 0ms Offline Native A4 Paper & Answer Key Canvas
                   Expanded(
-                    child: _activePaperQuestions.isEmpty || _loadedBank == null
+                    child: _activePaperQuestions.isEmpty
                         ? const SizedBox.shrink()
                         : _buildGalleryInteractiveCanvas(
                             context,
@@ -3555,7 +3630,31 @@ class _SloPaperBuilderScreenState extends ConsumerState<SloPaperBuilderScreen> {
 
   /// Builds 100% offline, 0ms instant vector A4 pages for Question Paper or Answer Key
   List<Widget> _buildDirectA4PreviewPages({required bool isAnswerKey}) {
-    final chapterBank = _loadedBank!;
+    final sortedChs = _selectedChapters.toList()..sort();
+    final firstCh = sortedChs.isNotEmpty ? sortedChs.first : _chapterNumber;
+    final fallbackTitle = _chapterTitleCtrl.text.trim().isNotEmpty
+        ? _chapterTitleCtrl.text.trim()
+        : (_loadedBank?.chapterTitle.isNotEmpty == true
+            ? _loadedBank!.chapterTitle
+            : "Chapters ${sortedChs.join(', ')}");
+
+    final chapterBank = _loadedBank ??
+        ChapterBankDoc(
+          docId: ChapterBankDoc.generateDocId(
+            publisher: _effectivePublisher,
+            grade: _selectedGrade,
+            subject: _selectedSubject,
+            chapterNumber: firstCh,
+          ),
+          publisher: _effectivePublisher,
+          grade: _selectedGrade,
+          subject: _selectedSubject,
+          chapterNumber: firstCh,
+          chapterTitle: fallbackTitle,
+          isRtl: _isRtlSubject,
+          slos: const [],
+          questions: _activePaperQuestions,
+        );
     final isRtl = chapterBank.isRtl;
     final mcqs = _activePaperQuestions.where((q) => q.type == 'MCQ').toList();
     final shorts = _activePaperQuestions.where((q) => q.type == 'SHORT').toList();
@@ -3609,7 +3708,7 @@ class _SloPaperBuilderScreenState extends ConsumerState<SloPaperBuilderScreen> {
                 : "NOTE: Attempt all questions. Each question carries $_mcqMarksEach ${_mcqMarksEach == 1 ? 'Mark' : 'Marks'}. Encircle the correct option (A / B / C / D). Overwriting or cutting will result in zero marks.",
             isRtl: isRtl,
           ),
-          46.0,
+          isRtl ? 56.0 : 48.0,
         ));
         blocks.add(MapEntry(
           Padding(
@@ -3625,13 +3724,15 @@ class _SloPaperBuilderScreenState extends ConsumerState<SloPaperBuilderScreen> {
               ),
             ),
           ),
-          20.0,
+          isRtl ? 24.0 : 20.0,
         ));
 
         for (int i = 0; i < mcqs.length; i++) {
           final q = mcqs[i];
           final diagH = q.diagramBytes != null ? 108.0 : 0.0;
-          final qH = estimateLines(q.questionText, 78, 13.5) + 22.0 + diagH;
+          final lineH = isRtl ? 18.0 : 14.5;
+          final charsPerL = isRtl ? 60 : 75;
+          final qH = estimateLines(q.questionText, charsPerL, lineH) + (isRtl ? 32.0 : 25.0) + diagH;
           blocks.add(MapEntry(_buildA4McqItem(i + 1, q, isRtl), qH));
         }
       }
@@ -3656,7 +3757,7 @@ class _SloPaperBuilderScreenState extends ConsumerState<SloPaperBuilderScreen> {
               isRtl: isRtl,
             ),
           ),
-          52.0,
+          isRtl ? 65.0 : 54.0,
         ));
         blocks.add(MapEntry(
           Padding(
@@ -3676,13 +3777,15 @@ class _SloPaperBuilderScreenState extends ConsumerState<SloPaperBuilderScreen> {
               ),
             ),
           ),
-          20.0,
+          isRtl ? 24.0 : 20.0,
         ));
 
         for (int i = 0; i < shorts.length; i++) {
           final q = shorts[i];
           final diagH = q.diagramBytes != null ? 108.0 : 0.0;
-          final qH = estimateLines(q.questionText, 72, 14.0) + 7.0 + diagH;
+          final lineH = isRtl ? 18.0 : 14.5;
+          final charsPerL = isRtl ? 55 : 70;
+          final qH = estimateLines(q.questionText, charsPerL, lineH) + (isRtl ? 12.0 : 8.0) + diagH;
           blocks.add(MapEntry(_buildA4ShortItem(i + 1, q, isRtl, _shortMarksEach), qH));
         }
       }
@@ -3707,19 +3810,21 @@ class _SloPaperBuilderScreenState extends ConsumerState<SloPaperBuilderScreen> {
               isRtl: isRtl,
             ),
           ),
-          52.0,
+          isRtl ? 65.0 : 54.0,
         ));
 
         for (int i = 0; i < longs.length; i++) {
           final q = longs[i];
           final diagH = q.diagramBytes != null ? 108.0 : 0.0;
-          final qH = estimateLines(q.questionText, 72, 14.0) + 8.0 + diagH;
+          final lineH = isRtl ? 18.0 : 14.5;
+          final charsPerL = isRtl ? 55 : 70;
+          final qH = estimateLines(q.questionText, charsPerL, lineH) + (isRtl ? 12.0 : 9.0) + diagH;
           blocks.add(MapEntry(_buildA4LongItem(i + 1, q, isRtl, _longMarksEach), qH));
         }
       }
 
       // Signature block
-      blocks.add(MapEntry(_buildA4SignatureBlock(isRtl), 50.0));
+      blocks.add(MapEntry(_buildA4SignatureBlock(isRtl), 55.0));
     } else {
       // Answer Key & Rubrics Blocks
       if (mcqs.isNotEmpty) {
@@ -3730,7 +3835,7 @@ class _SloPaperBuilderScreenState extends ConsumerState<SloPaperBuilderScreen> {
             instructions: "Official scoring options for objective sheet evaluation.",
             isRtl: false,
           ),
-          40.0,
+          42.0,
         ));
         final rows = (mcqs.length / 4).ceil().clamp(1, 20);
         blocks.add(MapEntry(
@@ -3758,7 +3863,7 @@ class _SloPaperBuilderScreenState extends ConsumerState<SloPaperBuilderScreen> {
               }).toList(),
             ),
           ),
-          rows * 26.0 + 16.0,
+          rows * 28.0 + 18.0,
         ));
       }
 
@@ -3770,15 +3875,15 @@ class _SloPaperBuilderScreenState extends ConsumerState<SloPaperBuilderScreen> {
             instructions: "Award marks based on core concepts and key terms.",
             isRtl: false,
           ),
-          40.0,
+          42.0,
         ));
         for (int i = 0; i < shorts.length; i++) {
           final q = shorts[i];
           final ansText = q.rubric.isNotEmpty ? q.rubric : q.correctAnswer;
           final diagH = q.diagramBytes != null ? 105.0 : 0.0;
-          final h = estimateLines(q.questionText, 75, 13.0) +
-              estimateLines(ansText, 80, 12.5) +
-              24.0 +
+          final h = estimateLines(q.questionText, 70, 14.5) +
+              estimateLines(ansText, 75, 14.0) +
+              28.0 +
               diagH;
           blocks.add(MapEntry(_buildA4RubricCard("Q.2 (${i + 1})", q, ansText, "Expected Answer / Rubric", isRtl), h));
         }
@@ -3792,15 +3897,15 @@ class _SloPaperBuilderScreenState extends ConsumerState<SloPaperBuilderScreen> {
             instructions: "Marking breakdown for comprehensive descriptive answers.",
             isRtl: false,
           ),
-          40.0,
+          42.0,
         ));
         for (int i = 0; i < longs.length; i++) {
           final q = longs[i];
           final ansText = q.rubric.isNotEmpty ? q.rubric : q.correctAnswer;
           final diagH = q.diagramBytes != null ? 105.0 : 0.0;
-          final h = estimateLines(q.questionText, 75, 13.0) +
-              estimateLines(ansText, 80, 12.5) +
-              24.0 +
+          final h = estimateLines(q.questionText, 70, 14.5) +
+              estimateLines(ansText, 75, 14.0) +
+              28.0 +
               diagH;
           blocks.add(MapEntry(_buildA4RubricCard("Q.${i + 3}", q, ansText, "Model Solution / Rubric", isRtl), h));
         }
@@ -3813,9 +3918,10 @@ class _SloPaperBuilderScreenState extends ConsumerState<SloPaperBuilderScreen> {
     double currentHeight = 0.0;
     int pageIndex = 0;
 
+    // Conservative maximum body height so widgets NEVER overflow or trigger Flutter layout overflow stripe
     double maxBodyHeightForPage(int pIdx) {
-      if (isAnswerKey) return 710.0;
-      return pIdx == 0 ? 635.0 : 735.0;
+      if (isAnswerKey) return 660.0;
+      return pIdx == 0 ? 540.0 : 680.0;
     }
 
     for (final block in blocks) {

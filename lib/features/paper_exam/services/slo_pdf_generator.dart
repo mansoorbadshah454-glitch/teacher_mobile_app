@@ -276,7 +276,7 @@ class SloPdfGenerator {
             children: [
               pw.Row(
                 children: [
-                  if (schoolLogoBytes != null)
+                  if (schoolLogoBytes != null && schoolLogoBytes.isNotEmpty)
                     pw.Container(
                       margin: const pw.EdgeInsets.only(right: 10),
                       child: pw.Image(pw.MemoryImage(schoolLogoBytes), width: 36, height: 36),
@@ -464,7 +464,7 @@ class SloPdfGenerator {
             crossAxisAlignment: pw.CrossAxisAlignment.center,
             children: [
               // Left Logo
-              if (schoolLogoBytes != null)
+              if (schoolLogoBytes != null && schoolLogoBytes.isNotEmpty)
                 pw.Container(
                   width: 58,
                   height: 58,
@@ -547,7 +547,7 @@ class SloPdfGenerator {
                 width: 58,
                 height: 58,
                 margin: const pw.EdgeInsets.only(left: 12),
-                child: schoolLogoBytes != null
+                child: (schoolLogoBytes != null && schoolLogoBytes.isNotEmpty)
                     ? pw.Image(pw.MemoryImage(schoolLogoBytes), fit: pw.BoxFit.contain)
                     : pw.Container(
                         decoration: pw.BoxDecoration(

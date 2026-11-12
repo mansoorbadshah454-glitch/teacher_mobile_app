@@ -38,7 +38,242 @@ class _ScanBookIndexScreenState extends ConsumerState<ScanBookIndexScreen> {
         s.contains('sindhi');
   }
 
-  Future<void> _scanIndexPages(ImageSource source) async {
+  Future<bool?> _askAppendOrReplace() async {
+    if (_extractedChapters.isEmpty) return false;
+    return showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+        title: const Row(
+          children: [
+            Icon(Icons.layers_rounded, color: Color(0xFF10b981)),
+            SizedBox(width: 8),
+            Text("Existing Chapters", style: TextStyle(fontSize: 17, fontWeight: FontWeight.bold)),
+          ],
+        ),
+        content: Text(
+          "Aapke paas pehle se ${_extractedChapters.length} chapters maujood hain. Kya aap naye scanned chapters ko is list ke aage (Next page) add karna chahte hain ya puraani list replace karni hai?",
+          style: const TextStyle(fontSize: 13.5),
+        ),
+        actions: [
+          TextButton(
+            onPressed: () => Navigator.pop(ctx, false),
+            child: const Text("Replace All", style: TextStyle(color: Colors.red)),
+          ),
+          ElevatedButton(
+            style: ElevatedButton.styleFrom(
+              backgroundColor: const Color(0xFF10b981),
+              foregroundColor: Colors.white,
+            ),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text("Add to Existing"),
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _startCameraFlow({bool isAppending = false}) async {
+    final assignment = _selectedAssignment;
+    if (assignment == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text("Please select a Class & Subject first.")),
+      );
+      return;
+    }
+
+    XFile? firstPhoto;
+    try {
+      firstPhoto = await _picker.pickImage(
+        source: ImageSource.camera,
+        maxWidth: 1600,
+        maxHeight: 1600,
+        imageQuality: 85,
+      );
+    } catch (e) {
+      debugPrint("Camera pick error: $e");
+    }
+
+    if (firstPhoto == null || !mounted) return;
+
+    final List<XFile> pages = [firstPhoto];
+
+    // Interactive Multi-Page Sheet: Teachers can snap Page 2, Page 3 or proceed
+    final shouldProceed = await showModalBottomSheet<bool>(
+      context: context,
+      isDismissible: false,
+      enableDrag: false,
+      backgroundColor: Theme.of(context).cardColor,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(22)),
+      ),
+      builder: (sheetCtx) {
+        return StatefulBuilder(
+          builder: (ctx, setSheetState) {
+            return Padding(
+              padding: const EdgeInsets.fromLTRB(20, 20, 20, 24),
+              child: Column(
+                mainAxisSize: MainAxisSize.min,
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  Row(
+                    mainAxisAlignment: MainAxisAlignment.spaceBetween,
+                    children: [
+                      Row(
+                        children: [
+                          const Icon(Icons.menu_book_rounded, color: Color(0xFF10b981), size: 22),
+                          const SizedBox(width: 8),
+                          Text(
+                            "Book Index Pages (${pages.length} Captured)",
+                            style: const TextStyle(fontSize: 16, fontWeight: FontWeight.w800),
+                          ),
+                        ],
+                      ),
+                      IconButton(
+                        visualDensity: VisualDensity.compact,
+                        icon: const Icon(Icons.close_rounded),
+                        onPressed: () => Navigator.pop(sheetCtx, false),
+                      ),
+                    ],
+                  ),
+                  const SizedBox(height: 6),
+                  Text(
+                    pages.length == 1
+                        ? "Agar index ka 2nd page bhi hai toh '+ Snap Next Page' dabayein, ya foran extract karein."
+                        : "${pages.length} pages captured in order. Sabhi pages ke chapters extract karne ke liye ready hain.",
+                    style: TextStyle(fontSize: 12.5, color: Colors.grey[600]),
+                  ),
+                  const SizedBox(height: 16),
+                  // Horizontal preview thumbnails
+                  SizedBox(
+                    height: 96,
+                    child: ListView.separated(
+                      scrollDirection: Axis.horizontal,
+                      itemCount: pages.length,
+                      separatorBuilder: (_, index) => const SizedBox(width: 12),
+                      itemBuilder: (_, idx) {
+                        return Stack(
+                          clipBehavior: Clip.none,
+                          children: [
+                            Container(
+                              width: 72,
+                              height: 96,
+                              decoration: BoxDecoration(
+                                borderRadius: BorderRadius.circular(10),
+                                border: Border.all(color: const Color(0xFF10b981), width: 1.5),
+                              ),
+                              child: ClipRRect(
+                                borderRadius: BorderRadius.circular(8),
+                                child: Image.file(
+                                  File(pages[idx].path),
+                                  fit: BoxFit.cover,
+                                ),
+                              ),
+                            ),
+                            Positioned(
+                              bottom: 4,
+                              left: 4,
+                              child: Container(
+                                padding: const EdgeInsets.symmetric(horizontal: 5, vertical: 2),
+                                decoration: BoxDecoration(
+                                  color: Colors.black87,
+                                  borderRadius: BorderRadius.circular(4),
+                                ),
+                                child: Text(
+                                  "P${idx + 1}",
+                                  style: const TextStyle(color: Colors.white, fontSize: 10, fontWeight: FontWeight.bold),
+                                ),
+                              ),
+                            ),
+                            if (pages.length > 1)
+                              Positioned(
+                                top: -6,
+                                right: -6,
+                                child: GestureDetector(
+                                  onTap: () {
+                                    setSheetState(() {
+                                      pages.removeAt(idx);
+                                    });
+                                  },
+                                  child: Container(
+                                    padding: const EdgeInsets.all(3),
+                                    decoration: const BoxDecoration(
+                                      color: Colors.red,
+                                      shape: BoxShape.circle,
+                                    ),
+                                    child: const Icon(Icons.close, color: Colors.white, size: 13),
+                                  ),
+                                ),
+                              ),
+                          ],
+                        );
+                      },
+                    ),
+                  ),
+                  const SizedBox(height: 18),
+                  Row(
+                    children: [
+                      Expanded(
+                        child: OutlinedButton.icon(
+                          onPressed: () async {
+                            final next = await _picker.pickImage(
+                              source: ImageSource.camera,
+                              maxWidth: 1600,
+                              maxHeight: 1600,
+                              imageQuality: 85,
+                            );
+                            if (next != null) {
+                              setSheetState(() {
+                                pages.add(next);
+                              });
+                            }
+                          },
+                          icon: const Icon(Icons.add_a_photo_rounded, size: 17),
+                          label: const Text("+ Snap Next Page"),
+                          style: OutlinedButton.styleFrom(
+                            foregroundColor: const Color(0xFF10b981),
+                            side: const BorderSide(color: Color(0xFF10b981), width: 1.5),
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          ),
+                        ),
+                      ),
+                      const SizedBox(width: 10),
+                      Expanded(
+                        child: ElevatedButton.icon(
+                          onPressed: () => Navigator.pop(sheetCtx, true),
+                          icon: const Icon(Icons.auto_awesome_rounded, size: 17),
+                          label: Text("Extract (${pages.length} ${pages.length == 1 ? 'Page' : 'Pages'})"),
+                          style: ElevatedButton.styleFrom(
+                            backgroundColor: const Color(0xFF10b981),
+                            foregroundColor: Colors.white,
+                            padding: const EdgeInsets.symmetric(vertical: 12),
+                            shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+                          ),
+                        ),
+                      ),
+                    ],
+                  ),
+                ],
+              ),
+            );
+          },
+        );
+      },
+    );
+
+    if (shouldProceed == true && pages.isNotEmpty) {
+      bool append = isAppending;
+      if (!append && _extractedChapters.isNotEmpty) {
+        final choice = await _askAppendOrReplace();
+        if (choice == null) return;
+        append = choice;
+      }
+      await _processIndexPages(pages, append: append);
+    }
+  }
+
+  Future<void> _startGalleryFlow({bool isAppending = false}) async {
     final assignment = _selectedAssignment;
     if (assignment == null) {
       ScaffoldMessenger.of(context).showSnackBar(
@@ -49,30 +284,35 @@ class _ScanBookIndexScreenState extends ConsumerState<ScanBookIndexScreen> {
 
     List<XFile> pickedFiles = [];
     try {
-      if (source == ImageSource.gallery) {
-        pickedFiles = await _picker.pickMultiImage(
-          maxWidth: 1600,
-          maxHeight: 1600,
-          imageQuality: 85,
-        );
-      } else {
-        final single = await _picker.pickImage(
-          source: ImageSource.camera,
-          maxWidth: 1600,
-          maxHeight: 1600,
-          imageQuality: 85,
-        );
-        if (single != null) pickedFiles = [single];
-      }
+      pickedFiles = await _picker.pickMultiImage(
+        maxWidth: 1600,
+        maxHeight: 1600,
+        imageQuality: 85,
+      );
     } catch (e) {
-      debugPrint("Image pick error: $e");
+      debugPrint("Gallery pick error: $e");
     }
 
-    if (pickedFiles.isEmpty) return;
+    if (pickedFiles.isEmpty || !mounted) return;
+
+    bool append = isAppending;
+    if (!append && _extractedChapters.isNotEmpty) {
+      final choice = await _askAppendOrReplace();
+      if (choice == null) return;
+      append = choice;
+    }
+    await _processIndexPages(pickedFiles, append: append);
+  }
+
+  Future<void> _processIndexPages(List<XFile> pickedFiles, {bool append = false}) async {
+    final assignment = _selectedAssignment;
+    if (assignment == null || pickedFiles.isEmpty) return;
 
     setState(() {
       _isScanning = true;
-      _statusMessage = 'Reading book index page...';
+      _statusMessage = pickedFiles.length > 1
+          ? 'Reading ${pickedFiles.length} book index pages...'
+          : 'Reading book index page...';
     });
 
     try {
@@ -91,7 +331,7 @@ class _ScanBookIndexScreenState extends ConsumerState<ScanBookIndexScreen> {
         for (int i = 0; i < pickedFiles.length; i++) {
           final fileObj = File(pickedFiles[i].path);
 
-          // 1. Free On-Device ML Kit OCR (0 Cost, Instant, Works Offline)
+          // 1. Free On-Device ML Kit OCR
           if (recognizer != null) {
             try {
               final inputImage = InputImage.fromFilePath(fileObj.path);
@@ -104,7 +344,7 @@ class _ScanBookIndexScreenState extends ConsumerState<ScanBookIndexScreen> {
             }
           }
 
-          // 2. Compress image in case we need Gemini Vision (for Urdu or complex layouts)
+          // 2. Compress image for Gemini Vision
           final compressed = await _compressImage(fileObj);
           if (compressed != null) {
             compressedImages.add(compressed);
@@ -125,7 +365,7 @@ class _ScanBookIndexScreenState extends ConsumerState<ScanBookIndexScreen> {
       // Try AI structured extraction first if online & API key exists
       try {
         setState(() {
-          _statusMessage = 'Extracting chapters & topics...';
+          _statusMessage = 'Extracting chapters & topics across all pages...';
         });
         chapters = await _extractWithGemini(
           subject: assignment.subject,
@@ -155,7 +395,21 @@ class _ScanBookIndexScreenState extends ConsumerState<ScanBookIndexScreen> {
         }
       } else {
         setState(() {
-          _extractedChapters = chapters;
+          if (append) {
+            // Append with duplicate protection
+            for (final ch in chapters) {
+              final title = ch['title']?.toString().toLowerCase().trim();
+              if (title != null &&
+                  !_extractedChapters.any(
+                    (existing) =>
+                        existing['title']?.toString().toLowerCase().trim() == title,
+                  )) {
+                _extractedChapters.add(ch);
+              }
+            }
+          } else {
+            _extractedChapters = chapters;
+          }
           _statusMessage = '';
         });
       }
@@ -204,18 +458,40 @@ class _ScanBookIndexScreenState extends ConsumerState<ScanBookIndexScreen> {
     }
 
     final prompt = """
-You are an expert school curriculum parser. Extract the list of chapters from this textbook Table of Contents / Index page for Class "$className" - Subject "$subject".
-Rules:
-1. Ignore preface, foreword, glossary, or answer key pages. Only extract actual chapters/units/poems/lessons.
-2. Clean out page numbers, dots (....), and serial noise from the chapter title.
-3. If sub-topics or sub-headings are listed under a chapter in the index, include up to 4 concise sub-topics in "topics".
-4. If the book index is in Urdu/Arabic script, keep the chapter titles and topics in pure authentic Urdu/Arabic script.
-5. Return STRICT JSON array:
+You are an expert school textbook syllabus parser.
+Examine this textbook Table of Contents / Index page carefully for Class "$className" - Subject "$subject".
+
+CRITICAL EXTRACTION RULES:
+1. Extract ONLY actual Units / Chapters / Lessons / Poems from the table or list across ALL provided index pages/images in continuous book order.
+2. If multiple pages/images are provided (e.g. Unit 1 to 5 on Page 1, Unit 6 to 10 on Page 2), combine all units from all pages into one seamless ordered list.
+3. IGNORE table column header words completely! NEVER extract words like:
+   - "Unit", "Page", "Title", "Theme", "Vocabulary", "Sr. No", "Contents", "Index", "Remarks", "Period".
+4. MULTI-LINE / WRAPPED TITLE MERGING (CRUCIAL):
+   - In textbook index tables, a chapter title often wraps onto 2 or 3 lines inside the "Title" column cell.
+   - For example:
+     Row 1: "Hazrat Muhammad the Model" followed by "of Tolerance" -> MUST be extracted as ONE single complete title: "Hazrat Muhammad the Model of Tolerance".
+     Row 2: "Iqbal's Message to Youth" -> "Iqbal's Message to Youth".
+     Row 3: "Quaid - A Great Leader" -> "Quaid - A Great Leader".
+     Row 4: "The Daffodils" -> "The Daffodils".
+     Row 5: "The Madina Charter" -> "The Madina Charter".
+     Row 6: "Nasiruddin" -> "Nasiruddin".
+     Row 7: "The Two Bargains" -> "The Two Bargains".
+   - NEVER split a single title across multiple chapters!
+5. CLEAN TITLE:
+   - Remove unit/chapter serial numbers (e.g. "01", "02", "Unit 1:", "1.") and page numbers (e.g. "12", "24", "33", "55").
+   - Remove any dots (....) or trailing noise.
+6. SUBTOPICS / THEMES:
+   - If a "Theme", "Subtopics", or "Vocabulary" column is present for that chapter, include concise relevant keywords in "topics" (e.g. ["Tolerance"], ["Patriotism"], ["Role model"], ["Nature poem"]).
+7. SCRIPT PURITY:
+   - If the book index is in Urdu/Arabic, preserve authentic Urdu/Arabic text.
+   - If in English, keep in clean English.
+
+Return a STRICT JSON array matching this exact schema:
 [
   {
-    "title": "Chapter Title",
+    "title": "Exact Full Chapter Title",
     "time": "2 Weeks",
-    "topics": ["Subtopic 1", "Subtopic 2"]
+    "topics": ["Theme / Subtopic 1"]
   }
 ]
 """;
@@ -224,21 +500,18 @@ Rules:
       {"text": prompt}
     ];
 
-    // Zero-cost optimization: if English/Latin OCR extracted >= 80 chars, send text ONLY (0 image bytes!)
-    if (!isRtl && ocrText.length >= 80) {
-      parts.add({"text": "\n=== BOOK INDEX OCR TEXT ===\n$ocrText"});
-    } else {
-      if (ocrText.isNotEmpty) {
-        parts.add({"text": "\n=== OCR HINT ===\n$ocrText"});
-      }
-      for (final img in images) {
-        parts.add({
-          "inline_data": {
-            "mime_type": "image/jpeg",
-            "data": base64Encode(img),
-          }
-        });
-      }
+    // Multimodal Vision First: Always include the crisp image so Gemini can see table columns and merged rows!
+    for (final img in images) {
+      parts.add({
+        "inline_data": {
+          "mime_type": "image/jpeg",
+          "data": base64Encode(img),
+        }
+      });
+    }
+
+    if (ocrText.isNotEmpty) {
+      parts.add({"text": "\n=== OCR TEXT HINT ===\n$ocrText"});
     }
 
     final requestBody = {
@@ -251,12 +524,7 @@ Rules:
       }
     };
 
-    final models = [
-      "gemini-2.5-flash",
-      "gemini-2.0-flash-lite",
-      "gemini-2.0-flash",
-      "gemini-1.5-flash",
-    ];
+    final models = await SloGeminiService.resolveCandidateModels(apiKey);
 
     for (final model in models) {
       try {
@@ -269,7 +537,7 @@ Rules:
               headers: {"Content-Type": "application/json"},
               body: jsonEncode(requestBody),
             )
-            .timeout(const Duration(seconds: 12));
+            .timeout(const Duration(seconds: 25));
 
         if (res.statusCode == 200) {
           final decoded = jsonDecode(res.body);
@@ -330,7 +598,7 @@ Rules:
         .toList();
 
     final ignoreWords = RegExp(
-      r'^(contents|table of contents|index|sr\.?\s*no|chapter\s*no|page\s*no|page|unit|chapters|preface|glossary|bibliography|answers|appendix)$',
+      r'^(contents|table of contents|index|sr\.?\s*no|chapter\s*no|page\s*no|page|unit|title|theme|vocabulary|chapters|preface|glossary|bibliography|answers|appendix|unit\s*page|unit\s*title)$',
       caseSensitive: false,
     );
 
@@ -345,16 +613,26 @@ Rules:
           .replaceAll(RegExp(r'\s+\d{1,3}$'), '')
           .trim();
 
-      // Remove leading serial/chapter prefix like "Chapter 1:", "Unit 02 -", "1."
+      // Remove leading serial/chapter prefix like "Chapter 1:", "Unit 02 -", "1.", "01", "02"
       cleaned = cleaned
           .replaceFirst(
             RegExp(
-              r'^(?:(?:chapter|unit|ch|lesson)\s*\d+\s*[:\-\.]?\s*|\d{1,2}\s*[\.\)\-:]\s*)',
+              r'^(?:(?:chapter|unit|ch|lesson)\s*\d+\s*[:\-\.]?\s*|\d{1,2}\s*[\.\)\-:]\s*|\b\d{1,2}\s+)',
               caseSensitive: false,
             ),
             '',
           )
           .trim();
+
+      // Filter out single hanging preposition lines like "of Tolerance" or table headers like "Title"
+      if (cleaned.toLowerCase() == 'title' ||
+          cleaned.toLowerCase() == 'theme' ||
+          cleaned.toLowerCase() == 'vocabulary' ||
+          cleaned.toLowerCase() == 'unit page' ||
+          cleaned.toLowerCase() == 'page' ||
+          cleaned.toLowerCase() == 'unit') {
+        continue;
+      }
 
       // Must contain letters and be a reasonable title length
       if (cleaned.length < 3 || cleaned.length > 90) continue;
@@ -755,13 +1033,12 @@ Rules:
                               children: [
                                 Expanded(
                                   child: ElevatedButton.icon(
-                                    onPressed: () =>
-                                        _scanIndexPages(ImageSource.camera),
+                                    onPressed: () => _startCameraFlow(),
                                     icon: const Icon(
                                       Icons.camera_alt_rounded,
                                       size: 18,
                                     ),
-                                    label: const Text("Camera"),
+                                    label: const Text("Camera (Multi-Page)"),
                                     style: ElevatedButton.styleFrom(
                                       backgroundColor: const Color(0xFF10b981),
                                       foregroundColor: Colors.white,
@@ -777,13 +1054,12 @@ Rules:
                                 const SizedBox(width: 10),
                                 Expanded(
                                   child: OutlinedButton.icon(
-                                    onPressed: () =>
-                                        _scanIndexPages(ImageSource.gallery),
+                                    onPressed: () => _startGalleryFlow(),
                                     icon: const Icon(
                                       Icons.photo_library_rounded,
                                       size: 18,
                                     ),
-                                    label: const Text("Gallery"),
+                                    label: const Text("Gallery (Multi-Pick)"),
                                     style: OutlinedButton.styleFrom(
                                       foregroundColor: const Color(0xFF10b981),
                                       side: const BorderSide(
@@ -821,21 +1097,45 @@ Rules:
                                 : const Color(0xFF475569),
                           ),
                         ),
-                        TextButton.icon(
-                          onPressed: () => _showEditOrAddChapterDialog(),
-                          icon: const Icon(
-                            Icons.add_circle_outline_rounded,
-                            size: 16,
-                            color: Color(0xFF10b981),
-                          ),
-                          label: const Text(
-                            "Add Manually",
-                            style: TextStyle(
-                              fontSize: 12,
-                              fontWeight: FontWeight.w700,
-                              color: Color(0xFF10b981),
+                        Row(
+                          children: [
+                            if (_extractedChapters.isNotEmpty) ...[
+                              TextButton.icon(
+                                onPressed: () =>
+                                    _startCameraFlow(isAppending: true),
+                                icon: const Icon(
+                                  Icons.add_a_photo_outlined,
+                                  size: 15,
+                                  color: Color(0xFF10b981),
+                                ),
+                                label: const Text(
+                                  "+ Snap Next Page",
+                                  style: TextStyle(
+                                    fontSize: 12,
+                                    fontWeight: FontWeight.w700,
+                                    color: Color(0xFF10b981),
+                                  ),
+                                ),
+                              ),
+                              const SizedBox(width: 4),
+                            ],
+                            TextButton.icon(
+                              onPressed: () => _showEditOrAddChapterDialog(),
+                              icon: const Icon(
+                                Icons.add_circle_outline_rounded,
+                                size: 15,
+                                color: Color(0xFF10b981),
+                              ),
+                              label: const Text(
+                                "Add Manually",
+                                style: TextStyle(
+                                  fontSize: 12,
+                                  fontWeight: FontWeight.w700,
+                                  color: Color(0xFF10b981),
+                                ),
+                              ),
                             ),
-                          ),
+                          ],
                         ),
                       ],
                     ),
