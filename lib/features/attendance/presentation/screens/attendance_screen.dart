@@ -223,22 +223,70 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
                 final teacherData = teacherDataAsync.value;
                 if (teacherData == null) return const SizedBox.shrink();
                 
-                final String schoolId = teacherData['schoolId'];
+                final String schoolId = teacherData['schoolId']?.toString() ?? '';
                 final Map<String, String> attendanceMap = attendanceState.value ?? {};
-                
-                int presentCount = attendanceMap.values.where((v) => v == 'present').length;
+                final String todayStr = DateFormat('yyyy-MM-dd').format(DateTime.now());
+
+                // Helper to resolve live status directly from Firestore student doc (updated live by Gatekeeper QR)
+                String resolveLiveStatus(Map<String, dynamic> s) {
+                  final sId = s['id']?.toString() ?? '';
+                  if (s['lastAttendanceDate']?.toString() == todayStr &&
+                      (s['status']?.toString().isNotEmpty ?? false)) {
+                    return s['status'].toString();
+                  }
+                  final activeLeave = s['activeLeave'];
+                  if (activeLeave is Map && activeLeave['status'] == 'granted') {
+                    final startStr = activeLeave['startDate']?.toString().split('T')[0] ?? '';
+                    final endStr = activeLeave['endDate']?.toString().split('T')[0] ?? '';
+                    if (startStr.isNotEmpty &&
+                        endStr.isNotEmpty &&
+                        todayStr.compareTo(startStr) >= 0 &&
+                        todayStr.compareTo(endStr) <= 0) {
+                      return 'leave_granted';
+                    }
+                  }
+                  return attendanceMap[sId] ?? 'absent';
+                }
+
+                bool hasPendingLeave(Map<String, dynamic> s, String liveStatus) {
+                  if (liveStatus == 'leave_granted') return false;
+                  final activeLeave = s['activeLeave'];
+                  if (activeLeave is Map && activeLeave['status'] == 'pending') {
+                    final endStr = activeLeave['endDate']?.toString().split('T')[0] ?? '';
+                    if (endStr.isNotEmpty && todayStr.compareTo(endStr) <= 0) {
+                      return true;
+                    }
+                  }
+                  return false;
+                }
+
+                int presentCount = students.where((s) => resolveLiveStatus(s) == 'present').length;
                 int absentCount = students.length - presentCount;
 
                 List<Map<String, dynamic>> filteredStudents = students.where((s) {
-                  final nameMatches = s['name'].toString().toLowerCase().contains(searchFilter.toLowerCase());
+                  final nameMatches = (s['name']?.toString() ?? '').toLowerCase().contains(searchFilter.toLowerCase());
                   final rollMatches = (s['rollNo']?.toString() ?? s['roll']?.toString() ?? '').toLowerCase().contains(searchFilter.toLowerCase());
                   final searchMatch = nameMatches || rollMatches;
 
-                  final status = attendanceMap[s['id']] ?? 'absent';
+                  final status = resolveLiveStatus(s);
                   if (statsFilter == 'present') return searchMatch && status == 'present';
                   if (statsFilter == 'absent') return searchMatch && (status == 'absent' || status == 'leave_granted');
                   return searchMatch;
                 }).toList();
+
+                // Sort: Pending Leave & Approved Leave ALWAYS at the TOP, then Present, then Absent
+                filteredStudents.sort((a, b) {
+                  int priority(Map<String, dynamic> s) {
+                    final st = resolveLiveStatus(s);
+                    if (hasPendingLeave(s, st)) return 0;
+                    if (st == 'leave_granted') return 1;
+                    if (st == 'present') return 2;
+                    return 3;
+                  }
+                  final pDiff = priority(a).compareTo(priority(b));
+                  if (pDiff != 0) return pDiff;
+                  return (a['name']?.toString() ?? '').compareTo(b['name']?.toString() ?? '');
+                });
 
                 return Stack(
                   children: [
@@ -287,11 +335,29 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
                                         crossAxisAlignment: CrossAxisAlignment.start,
                                         mainAxisSize: MainAxisSize.min,
                                         children: [
-                                          const Text(
-                                            "Mark Attendance",
-                                            style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: Colors.white),
-                                            maxLines: 1,
-                                            overflow: TextOverflow.ellipsis,
+                                          Row(
+                                            children: [
+                                              const Flexible(
+                                                child: Text(
+                                                  "Class Attendance",
+                                                  style: TextStyle(fontSize: 18, fontWeight: FontWeight.w800, color: Colors.white),
+                                                  maxLines: 1,
+                                                  overflow: TextOverflow.ellipsis,
+                                                ),
+                                              ),
+                                              const SizedBox(width: 6),
+                                              Container(
+                                                padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                                                decoration: BoxDecoration(
+                                                  color: Colors.white.withOpacity(0.22),
+                                                  borderRadius: BorderRadius.circular(8),
+                                                ),
+                                                child: const Text(
+                                                  "VIEW ONLY",
+                                                  style: TextStyle(fontSize: 9, fontWeight: FontWeight.w800, color: Colors.white, letterSpacing: 0.4),
+                                                ),
+                                              ),
+                                            ],
                                           ),
                                           Text(
                                             "${assignedClass['name']} • ${DateFormat('EEEE, MMMM d').format(DateTime.now())}",
@@ -452,13 +518,27 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
                           child: filteredStudents.isEmpty
                               ? const Center(child: Text("No records found.", style: TextStyle(color: Colors.grey)))
                               : ListView.builder(
-                                  padding: const EdgeInsets.only(left: 16, right: 16, bottom: 100),
+                                  padding: const EdgeInsets.only(left: 16, right: 16, bottom: 24),
                                   itemCount: filteredStudents.length,
                                   itemBuilder: (context, index) {
                                     final student = filteredStudents[index];
-                                    final sId = student['id'];
-                                    final status = attendanceMap[sId] ?? 'absent';
+                                    final sId = student['id']?.toString() ?? '';
+                                    final status = resolveLiveStatus(student);
                                     final isPresent = status == 'present';
+                                    final isLeave = status == 'leave_granted' || hasPendingLeave(student, status);
+
+                                    final gateLogs = student['gateLogs'] is Map ? student['gateLogs'] as Map : null;
+                                    final todayGate = (gateLogs != null && gateLogs[todayStr] is Map)
+                                        ? Map<String, dynamic>.from(gateLogs[todayStr] as Map)
+                                        : <String, dynamic>{};
+                                    final String? gateInTime = (student['gateInDate']?.toString() == todayStr &&
+                                            (student['gateInTime']?.toString().isNotEmpty ?? false))
+                                        ? student['gateInTime'].toString()
+                                        : todayGate['inTime']?.toString();
+                                    final String? gateOutTime = (student['gateOutDate']?.toString() == todayStr &&
+                                            (student['gateOutTime']?.toString().isNotEmpty ?? false))
+                                        ? student['gateOutTime'].toString()
+                                        : todayGate['outTime']?.toString();
 
                                     return Container(
                                       margin: const EdgeInsets.only(bottom: 12),
@@ -466,8 +546,14 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
                                       decoration: BoxDecoration(
                                         color: isDark ? Colors.white.withOpacity(0.03) : Colors.white,
                                         borderRadius: BorderRadius.circular(22),
-                                        border: Border.all(color: isPresent ? const Color(0xFF6366f1) : (isDark ? Colors.white.withOpacity(0.05) : Colors.black.withOpacity(0.05))),
-                                        boxShadow: !isDark ? [BoxShadow(color: (isPresent ? const Color(0xFF6366f1) : Colors.black).withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 4))] : [],
+                                        border: Border.all(
+                                          color: isLeave
+                                              ? Colors.orangeAccent
+                                              : (isPresent
+                                                  ? const Color(0xFF10b981)
+                                                  : (isDark ? Colors.white.withOpacity(0.05) : Colors.black.withOpacity(0.05))),
+                                        ),
+                                        boxShadow: !isDark ? [BoxShadow(color: (isPresent ? const Color(0xFF10b981) : Colors.black).withOpacity(0.05), blurRadius: 10, offset: const Offset(0, 4))] : [],
                                       ),
                                       child: Row(
                                         children: [
@@ -484,6 +570,39 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
                                                 Text(student['name'] ?? 'Unknown', style: TextStyle(fontWeight: FontWeight.bold, fontSize: 16, color: isDark ? Colors.white : Colors.indigo[900])),
                                                 const SizedBox(height: 4),
                                                 Text("Roll: ${student['rollNo'] ?? student['roll'] ?? '-'} • Class: ${assignedClass['name']}", style: TextStyle(fontSize: 12, color: isDark ? Colors.grey : Colors.grey[600], fontWeight: FontWeight.w500)),
+                                                if ((gateInTime != null && gateInTime.isNotEmpty) || (gateOutTime != null && gateOutTime.isNotEmpty)) ...[
+                                                  const SizedBox(height: 6),
+                                                  Wrap(
+                                                    spacing: 6,
+                                                    runSpacing: 4,
+                                                    children: [
+                                                      if (gateInTime != null && gateInTime.isNotEmpty)
+                                                        Container(
+                                                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                                                          decoration: BoxDecoration(
+                                                            color: const Color(0xFF10b981).withOpacity(0.12),
+                                                            borderRadius: BorderRadius.circular(8),
+                                                          ),
+                                                          child: Text(
+                                                            'In: $gateInTime',
+                                                            style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, color: Color(0xFF059669)),
+                                                          ),
+                                                        ),
+                                                      if (gateOutTime != null && gateOutTime.isNotEmpty)
+                                                        Container(
+                                                          padding: const EdgeInsets.symmetric(horizontal: 7, vertical: 2),
+                                                          decoration: BoxDecoration(
+                                                            color: Colors.deepOrange.withOpacity(0.12),
+                                                            borderRadius: BorderRadius.circular(8),
+                                                          ),
+                                                          child: Text(
+                                                            'Out: $gateOutTime',
+                                                            style: const TextStyle(fontSize: 10.5, fontWeight: FontWeight.w700, color: Colors.deepOrange),
+                                                          ),
+                                                        ),
+                                                    ],
+                                                  ),
+                                                ],
                                               ],
                                             ),
                                           ),
@@ -525,6 +644,8 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
                                                       final todayStr = DateFormat('yyyy-MM-dd').format(DateTime.now());
                                                       final Map<String, dynamic> updatePayload = {
                                                         'activeLeave.status': 'granted',
+                                                        'status': 'leave_granted',
+                                                        'lastAttendanceDate': todayStr,
                                                         'attendanceHistory.$todayStr': 'leave_granted',
                                                       };
 
@@ -581,93 +702,28 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
                                               );
                                             }
 
-                                            return GestureDetector(
-                                              onTap: () async {
-                                                if (isMarkedToday && !isPresent) {
-                                                  final studentName = student['name'] ?? 'Student';
-                                                  final confirm = await showDialog<bool>(
-                                                    context: context,
-                                                    builder: (ctx) => AlertDialog(
-                                                      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
-                                                      backgroundColor: isDark ? const Color(0xFF1E1E2E) : Colors.white,
-                                                      title: Row(
-                                                        children: const [
-                                                          Icon(Icons.access_time_filled, color: Color(0xFF6366f1)),
-                                                          SizedBox(width: 8),
-                                                          Text("Late Arrival", style: TextStyle(fontSize: 18, fontWeight: FontWeight.bold)),
-                                                        ],
-                                                      ),
-                                                      content: Text(
-                                                        "Mark $studentName as Present (Late Entry)? This will update today's record and notify the parent.",
-                                                        style: TextStyle(color: isDark ? Colors.white70 : Colors.black87),
-                                                      ),
-                                                      actions: [
-                                                        TextButton(
-                                                          onPressed: () => Navigator.pop(ctx, false),
-                                                          child: const Text("Cancel"),
-                                                        ),
-                                                        ElevatedButton(
-                                                          style: ElevatedButton.styleFrom(
-                                                            backgroundColor: const Color(0xFF6366f1),
-                                                            foregroundColor: Colors.white,
-                                                            elevation: 0,
-                                                            padding: const EdgeInsets.symmetric(horizontal: 20, vertical: 12),
-                                                            shape: RoundedRectangleBorder(
-                                                              borderRadius: BorderRadius.circular(14),
-                                                            ),
-                                                          ),
-                                                          onPressed: () => Navigator.pop(ctx, true),
-                                                          child: const Text(
-                                                            "Mark Present",
-                                                            style: TextStyle(
-                                                              color: Colors.white,
-                                                              fontWeight: FontWeight.bold,
-                                                              fontSize: 14,
-                                                            ),
-                                                          ),
-                                                        ),
-                                                      ],
-                                                    ),
-                                                  );
-
-                                                  if (confirm == true && mounted) {
-                                                    final bool synced = await ref.read(attendanceProvider.notifier).updateLateStudent(
-                                                      studentId: sId,
-                                                      newStatus: 'present',
-                                                    );
-                                                    if (mounted) {
-                                                      ScaffoldMessenger.of(context).showSnackBar(
-                                                        SnackBar(
-                                                          content: Text(synced
-                                                              ? "$studentName marked Present! Parent notified."
-                                                              : "⚡ $studentName marked Present offline! Will auto-sync when online."),
-                                                          backgroundColor: synced ? Colors.green : Colors.orange,
-                                                        ),
-                                                      );
-                                                    }
-                                                  }
-                                                } else {
-                                                  ref.read(attendanceProvider.notifier).toggleStatus(sId);
-                                                }
-                                              },
-                                              child: AnimatedContainer(
-                                                duration: const Duration(milliseconds: 200),
-                                                width: 90,
-                                                padding: const EdgeInsets.symmetric(vertical: 12),
-                                                decoration: BoxDecoration(
-                                                  color: isPresent ? const Color(0xFF6366f1) : (isDark ? Colors.white.withOpacity(0.03) : Colors.black.withOpacity(0.03)),
-                                                  borderRadius: BorderRadius.circular(14),
-                                                  border: Border.all(color: isPresent ? Colors.transparent : (isDark ? Colors.white.withOpacity(0.05) : Colors.black.withOpacity(0.05))),
-                                                  boxShadow: isPresent ? [BoxShadow(color: const Color(0xFF6366f1).withOpacity(isDark ? 0.4 : 0.3), blurRadius: 8, offset: const Offset(0, 4))] : [],
+                                            // View-Only Attendance Badge (Managed automatically by Gatekeeper QR Scanner)
+                                            return Container(
+                                              width: 90,
+                                              padding: const EdgeInsets.symmetric(vertical: 10),
+                                              decoration: BoxDecoration(
+                                                color: isPresent
+                                                    ? const Color(0xFF10b981).withOpacity(0.14)
+                                                    : Colors.redAccent.withOpacity(0.10),
+                                                borderRadius: BorderRadius.circular(14),
+                                                border: Border.all(
+                                                  color: isPresent
+                                                      ? const Color(0xFF10b981)
+                                                      : Colors.redAccent.withOpacity(0.45),
                                                 ),
-                                                alignment: Alignment.center,
-                                                child: Text(
-                                                  isPresent ? "PRESENT" : "MARK",
-                                                  style: TextStyle(
-                                                    color: isPresent ? Colors.white : Colors.grey,
-                                                    fontWeight: FontWeight.bold,
-                                                    fontSize: 12,
-                                                  ),
+                                              ),
+                                              alignment: Alignment.center,
+                                              child: Text(
+                                                isPresent ? "PRESENT" : "ABSENT",
+                                                style: TextStyle(
+                                                  color: isPresent ? const Color(0xFF059669) : Colors.redAccent,
+                                                  fontWeight: FontWeight.w800,
+                                                  fontSize: 11.5,
                                                 ),
                                               ),
                                             );
@@ -679,70 +735,6 @@ class _AttendanceScreenState extends ConsumerState<AttendanceScreen> {
                                 ),
                         ),
                       ],
-                    ),
-
-                    // Bottom Floating Button
-                    Positioned(
-                      left: 24,
-                      right: 24,
-                      bottom: 24,
-                      child: GestureDetector(
-                        onTap: () async {
-                          if (_saving) return;
-                          setState(() => _saving = true);
-                          try {
-                            final bool synced = await ref.read(attendanceProvider.notifier).saveAttendance();
-                            if (mounted) {
-                              if (synced) {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text("✅ Attendance marked & parents notified!"),
-                                    backgroundColor: Colors.green,
-                                  ),
-                                );
-                              } else {
-                                ScaffoldMessenger.of(context).showSnackBar(
-                                  const SnackBar(
-                                    content: Text("⚡ Attendance saved offline! Will auto-sync when online."),
-                                    backgroundColor: Colors.orange,
-                                  ),
-                                );
-                              }
-                              context.pop();
-                            }
-                          } catch (e) {
-                            if (mounted) {
-                              ScaffoldMessenger.of(context).showSnackBar(
-                                SnackBar(content: Text("Error: $e"), backgroundColor: Colors.red),
-                              );
-                            }
-                          } finally {
-                            if (mounted) setState(() => _saving = false);
-                          }
-                        },
-                        child: Container(
-                          height: 60,
-                          decoration: BoxDecoration(
-                            color: const Color(0xFF6366f1),
-                            borderRadius: BorderRadius.circular(20),
-                            boxShadow: [BoxShadow(color: const Color(0xFF6366f1).withOpacity(isDark ? 0.5 : 0.3), blurRadius: 20, offset: const Offset(0, 10))],
-                          ),
-                          alignment: Alignment.center,
-                          child: _saving 
-                               ? const SizedBox(width: 24, height: 24, child: CircularProgressIndicator(color: Colors.white, strokeWidth: 3))
-                               : Row(
-                                   mainAxisAlignment: MainAxisAlignment.center,
-                                   children: [
-                                     Icon(isMarkedToday ? Icons.sync_alt : Icons.how_to_reg, color: Colors.white),
-                                     const SizedBox(width: 8),
-                                     Text(
-                                       isMarkedToday ? "UPDATE ATTENDANCE" : "CONFIRM ATTENDANCE",
-                                       style: const TextStyle(color: Colors.white, fontSize: 16, fontWeight: FontWeight.w900),
-                                     ),
-                                   ],
-                                 ),
-                        ),
-                      ),
                     ),
                   ],
                 );

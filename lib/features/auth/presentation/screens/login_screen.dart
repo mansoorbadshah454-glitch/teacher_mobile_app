@@ -5,6 +5,8 @@ import 'package:go_router/go_router.dart';
 import 'package:flutter_secure_storage/flutter_secure_storage.dart';
 import 'package:local_auth/local_auth.dart';
 import 'package:flutter/services.dart';
+import 'package:firebase_auth/firebase_auth.dart';
+import 'package:teacher_mobile_app/features/gatekeeper/services/gatekeeper_service.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -116,10 +118,23 @@ class _LoginScreenState extends ConsumerState<LoginScreen> {
         await _storage.write(key: 'saved_email', value: _emailController.text.trim());
         await _storage.write(key: 'saved_password', value: _passwordController.text.trim());
         await _storage.write(key: 'saved_school_id', value: _schoolIdController.text.trim());
+
+        // Role check: Route Gatekeeper directly to restricted Gate QR Scanner
+        bool isGatekeeper = false;
+        try {
+          final currentUser = FirebaseAuth.instance.currentUser;
+          if (currentUser != null) {
+            final token = await currentUser.getIdTokenResult(true);
+            final sid = token.claims?['schoolId']?.toString() ?? _schoolIdController.text.trim();
+            if (sid.isNotEmpty) {
+              isGatekeeper = await GatekeeperService.isGatekeeperUser(currentUser.uid, sid);
+            }
+          }
+        } catch (_) {}
         
         // Navigation ONLY on success
         if (mounted) {
-           context.go('/dashboard');
+           context.go(isGatekeeper ? '/gatekeeper' : '/dashboard');
         }
 
       } catch (e) {

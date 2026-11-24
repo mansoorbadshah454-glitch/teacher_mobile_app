@@ -55,6 +55,15 @@ class _DashboardScreenState extends ConsumerState<DashboardScreen> {
     }
 
     if (teacherDataAsync.hasValue && teacherDataAsync.value != null) {
+       if (teacherDataAsync.value!['appRole']?.toString().toLowerCase() == 'gatekeeper') {
+         WidgetsBinding.instance.addPostFrameCallback((_) {
+           if (mounted) context.go('/gatekeeper');
+         });
+         return const Scaffold(
+           backgroundColor: Color(0xFF0F172A),
+           body: Center(child: CircularProgressIndicator(color: Colors.white)),
+         );
+       }
        // Intentionally call it smoothly if we already have the payload locally
        initPushSafely(teacherDataAsync.value);
     }

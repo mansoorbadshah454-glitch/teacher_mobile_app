@@ -30,6 +30,7 @@ import 'package:teacher_mobile_app/features/exam/presentation/screens/marks_entr
 import 'package:teacher_mobile_app/features/exam/models/exam_model.dart';
 import 'package:teacher_mobile_app/features/paper_exam/presentation/screens/paper_exam_hub_screen.dart';
 import 'package:teacher_mobile_app/features/paper_exam/presentation/screens/slo_paper_builder_screen.dart';
+import 'package:teacher_mobile_app/features/gatekeeper/presentation/screens/gatekeeper_scanner_screen.dart';
 final GlobalKey<ScaffoldMessengerState> rootScaffoldMessengerKey = GlobalKey<ScaffoldMessengerState>();
 final GlobalKey<NavigatorState> navigatorKey = GlobalKey<NavigatorState>();
 
@@ -52,6 +53,10 @@ final appRouter = GoRouter(
     GoRoute(
       path: '/login',
       builder: (context, state) => const LoginScreen(),
+    ),
+    GoRoute(
+      path: '/gatekeeper',
+      builder: (context, state) => const GatekeeperScannerScreen(),
     ),
     GoRoute(
       path: '/dashboard',

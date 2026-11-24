@@ -50,10 +50,10 @@ class _AttendanceReportScreenState extends ConsumerState<AttendanceReportScreen>
       final List<Map<String, dynamic>> studentsTrack = students.map((s) => {
         ...s,
         'absentCount': 0,
-        'leaveCount': 0
+        'leaveCount': 0,
       }).toList();
 
-      // 2. Fetch Attendance
+      // 2. Fetch legacy class attendance docs (preserves all historical manual records)
       final attendanceSnap = await FirebaseFirestore.instance
           .collection('schools')
           .doc(schoolId)
@@ -61,26 +61,87 @@ class _AttendanceReportScreenState extends ConsumerState<AttendanceReportScreen>
           .where('classId', isEqualTo: classId)
           .get();
 
-      // 3. Process Attendance based on Report Type
-      // Selected date formatting strings
+      // 3. Process Attendance (merges Legacy Records + Gatekeeper QR attendanceHistory & gateLogs)
       final monthStr = _selectedMonth.toString().padLeft(2, '0');
       final targetPrefix = _reportType == 'monthly' ? '$_selectedYear-$monthStr' : '$_selectedYear';
+      final todayStr = DateTime.now().toIso8601String().split('T')[0];
 
-      for (var doc in attendanceSnap.docs) {
+      final Set<String> activeSchoolDates = <String>{};
+      final Map<String, Map<String, String>> legacyByDate = <String, Map<String, String>>{};
+
+      for (final doc in attendanceSnap.docs) {
         final data = doc.data();
-        final date = data['date'] as String;
-        
-        if (date.startsWith(targetPrefix)) {
-          final records = data['records'] as List<dynamic>? ?? [];
-          for (var r in records) {
-             final studentMap = studentsTrack.firstWhere((s) => s['id'] == r['id'], orElse: () { return <String, dynamic>{}; });
-             if (studentMap.isNotEmpty) {
-                 if (r['status'] == 'absent') {
-                    studentMap['absentCount'] = (studentMap['absentCount'] as int) + 1;
-                 } else if (r['status'] == 'leave_granted') {
-                    studentMap['leaveCount'] = (studentMap['leaveCount'] as int) + 1;
-                 }
-             }
+        final date = data['date']?.toString() ?? '';
+        if (date.startsWith(targetPrefix) && date.compareTo(todayStr) <= 0) {
+          activeSchoolDates.add(date);
+          final records = data['records'] as List<dynamic>? ?? <dynamic>[];
+          final dateMap = legacyByDate.putIfAbsent(date, () => <String, String>{});
+          for (final r in records) {
+            if (r is Map) {
+              final rId = r['id']?.toString() ?? '';
+              final rStatus = r['status']?.toString() ?? '';
+              if (rId.isNotEmpty && rStatus.isNotEmpty) {
+                dateMap[rId] = rStatus;
+              }
+            }
+          }
+        }
+      }
+
+      // Discover all Gatekeeper QR / Leave active dates from student records
+      for (final st in studentsTrack) {
+        final rawHist = st['attendanceHistory'];
+        if (rawHist is Map) {
+          rawHist.forEach((k, v) {
+            final d = k.toString();
+            if (d.startsWith(targetPrefix) && d.compareTo(todayStr) <= 0) {
+              activeSchoolDates.add(d);
+            }
+          });
+        }
+        final rawGate = st['gateLogs'];
+        if (rawGate is Map) {
+          rawGate.forEach((k, v) {
+            final d = k.toString();
+            if (d.startsWith(targetPrefix) && d.compareTo(todayStr) <= 0) {
+              activeSchoolDates.add(d);
+            }
+          });
+        }
+      }
+
+      // Compute accurate absent & leave counts across every active school day
+      for (final date in activeSchoolDates) {
+        final legacyForDate = legacyByDate[date] ?? <String, String>{};
+        for (final st in studentsTrack) {
+          final sId = st['id']?.toString() ?? '';
+          String status = '';
+
+          final rawHist = st['attendanceHistory'];
+          if (rawHist is Map && rawHist[date] != null) {
+            status = rawHist[date].toString();
+          }
+
+          if (status.isEmpty) {
+            final rawGate = st['gateLogs'];
+            if (rawGate is Map && rawGate[date] is Map) {
+              final dayGate = rawGate[date] as Map;
+              if (dayGate['inTime'] != null && dayGate['inTime'].toString().isNotEmpty) {
+                status = 'present';
+              }
+            }
+          }
+
+          if (status.isEmpty && legacyForDate.containsKey(sId)) {
+            status = legacyForDate[sId] ?? '';
+          }
+
+          if (status == 'present') {
+            continue;
+          } else if (status == 'leave_granted') {
+            st['leaveCount'] = (st['leaveCount'] as int) + 1;
+          } else {
+            st['absentCount'] = (st['absentCount'] as int) + 1;
           }
         }
       }

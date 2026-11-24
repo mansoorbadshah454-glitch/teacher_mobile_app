@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:teacher_mobile_app/core/theme/app_theme.dart';
 import 'package:firebase_auth/firebase_auth.dart';
+import 'package:teacher_mobile_app/features/gatekeeper/services/gatekeeper_service.dart';
 
 class WelcomeScreen extends StatefulWidget {
   const WelcomeScreen({super.key});
@@ -38,9 +39,14 @@ class _WelcomeScreenState extends State<WelcomeScreen> with SingleTickerProvider
       final user = FirebaseAuth.instance.currentUser;
       if (user != null) {
         try {
-          print("🔍 [WelcomeScreen] User found: ${user.uid}. Refreshing token...");
-          // FORCE refresh the token to retrieve the latest Custom Claims
-          final tokenResult = await user.getIdTokenResult(true);
+          print("🔍 [WelcomeScreen] User found: ${user.uid}. Checking token...");
+          IdTokenResult tokenResult;
+          try {
+            // Try fresh token first; fallback to cached token when starting offline!
+            tokenResult = await user.getIdTokenResult(true);
+          } catch (_) {
+            tokenResult = await user.getIdTokenResult(false);
+          }
           final claims = tokenResult.claims ?? {};
           
           if (!claims.containsKey('schoolId') || claims['schoolId'] == null) {
@@ -49,8 +55,16 @@ class _WelcomeScreenState extends State<WelcomeScreen> with SingleTickerProvider
              if (mounted) context.go('/login');
              return;
           }
+
+          final schoolId = claims['schoolId'].toString();
+          final isGatekeeper = await GatekeeperService.isGatekeeperUser(user.uid, schoolId);
+          if (isGatekeeper) {
+            print("🛡️ [WelcomeScreen] Gatekeeper role detected. Routing to Gate Scanner...");
+            if (mounted) context.go('/gatekeeper');
+            return;
+          }
           
-          print("🚀 [WelcomeScreen] Access authorized for School: ${claims['schoolId']}. Loading Dashboard...");
+          print("🚀 [WelcomeScreen] Access authorized for School: $schoolId. Loading Dashboard...");
           if (mounted) context.go('/dashboard');
         } catch (e) {
           print("🚨 [WelcomeScreen] Token verification failed or session expired: $e");
